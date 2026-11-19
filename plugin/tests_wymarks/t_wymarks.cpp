@@ -1,4 +1,4 @@
-// t_wymarks.cpp -- WyMarks.h 1.0.0. Build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. t_wymarks.cpp -o t && ./t
+// t_wymarks.cpp -- WyMarks.h 1.0.0 / 2.0.0. Build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. t_wymarks.cpp -o t && ./t
 #include "../WyMarks.h"
 #include <fstream>
 #include <iostream>
@@ -30,5 +30,29 @@ int main(int argc, char** argv) {
     if (argc > 1) { std::ifstream f(argv[1], std::ios::binary); std::stringstream ss; ss << f.rdbuf(); const std::string t = ss.str();
         int scan = 0; std::istringstream in(t); std::string l; while (std::getline(in, l)) if (l.find("|I|") != std::string::npos) ++scan;
         const int n = wyi::parse(t, m); CHECK(n == scan && n > 0, "real ES file: every I line read"); std::cout << "real ES file: " << n << " I\n"; }
+    // (2.0.0) the 5-field lines: stamp|letter|dir|level|px; Bk / Sw / Cx; the I first on its candle; bad fields skipped
+    { std::map<long long, std::vector<wyi::M> > all;
+      const int n = wyi::parseAll("WY|1|ES|180|0.19.0\n100|Sw|1|PDL|29221\n100|I|1|PDL|29221\n200|Bk|-1|PDH|29555\n300|Cx|1||0\n400|I|1\n500|Bk|2|PDH|1\n600|Zz|1|X|1\n700|Bk|1|TOOLONGNAME|5\n", all);
+      CHECK(n == 5, "5-field file: 5 marks");
+      CHECK(all[100].size() == 2 && all[100][0].code == 'I' && all[100][0].lv == "PDL" && all[100][1].code == 'S', "the I first, then Sw, levels kept");
+      CHECK(all[200][0].code == 'B' && all[200][0].dir == -1 && all[200][0].px == 29555, "Bk PDH bearish");
+      CHECK(all[300][0].code == 'C' && all[300][0].lv.empty(), "Cx with no level");
+      CHECK(all[400][0].code == 'I' && all[400][0].lv.empty(), "an old 3-field I line still read");
+      CHECK(!all.count(500) && !all.count(600) && !all.count(700), "bad dir / unknown letter / too-long level skipped");
+      std::map<long long, int> im; CHECK(wyi::parse("WY|1|ES|180|0.19.0\n100|Sw|1|PDL|29221\n100|I|1|PDL|29221\n400|I|-1\n", im) == 2 && im[100] == 1 && im[400] == -1, "the 1.0.0 parse: only the I's"); }
+    // (2.0.0) the layout: 400 random crowded candles with 1-2 tags each - no tag covers a candle or another tag, all inside the pane
+    { unsigned s = 7; auto rnd = [&]() { s = s * 1103515245u + 12345u; return (int)((s >> 8) % 1000); };
+      std::vector<wyi::Candle> C; std::vector<wyi::Want> W;
+      for (int i = 0; i < 400; ++i) { wyi::Candle c; c.x = 20 + i * 9; int a = 100 + rnd() % 400, b = a + 5 + rnd() % 120; c.yHigh = a; c.yLow = b; c.halfW = 3; c.green = rnd() % 2; C.push_back(c);
+        if (rnd() % 3 == 0) { wyi::Want w; w.candle = i; w.w = 12; w.h = 24; W.push_back(w); if (rnd() % 2) { wyi::Want w2 = w; w2.w = 26; W.push_back(w2); } } }
+      const std::vector<wyi::Box> P = wyi::layout(C, W, 0, 800, 20 + 400 * 9);
+      int bad = 0, drawn = 0; for (size_t k = 0; k < P.size(); ++k) { if (!P[k].ok) continue; ++drawn; if (P[k].t < 1 || P[k].b > 799) ++bad;
+          for (const wyi::Candle& c : C) { wyi::Box cb; cb.l = c.x - c.halfW; cb.r = c.x + c.halfW; cb.t = c.yHigh; cb.b = c.yLow; if (wyi::hit(P[k], cb)) ++bad; }
+          for (size_t j = 0; j < k; ++j) if (P[j].ok && wyi::hit(P[k], P[j])) ++bad; }
+      CHECK(bad == 0 && drawn > (int)W.size() * 8 / 10, "layout: " + std::to_string(drawn) + "/" + std::to_string(W.size()) + " tags placed, no overlaps (" + std::to_string(bad) + ")"); }
+    { std::vector<wyi::Candle> C(1); C[0].x = 100; C[0].yHigh = 300; C[0].yLow = 340; C[0].green = true; std::vector<wyi::Want> W(2); W[0].w = 10; W[0].h = 13; W[1].w = 20; W[1].h = 24;
+      const auto P = wyi::layout(C, W, 0, 800, 1000); CHECK(P[0].ok && P[0].b < 300 && P[1].ok && P[1].b <= P[0].t, "green candle: the I over it, the level mark further out");
+      C[0].green = false; const auto Q = wyi::layout(C, W, 0, 800, 1000); CHECK(Q[0].t > 340 && Q[1].t >= Q[0].b, "red candle: under it");
+      const auto R = wyi::layout(C, W, 0, 800, 90); CHECK(!R[0].ok, "nothing right of the last bar"); }
     std::cout << (fail ? "FAILED " : "ALL PASS ") << pass << " pass, " << fail << " fail\n"; return fail ? 1 : 0;
 }

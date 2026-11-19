@@ -23,11 +23,13 @@
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace wyr {
 
-static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-19 09:19-09:22 CT "there needs to be a break that tries to trade above a high or below a low that fails, just like the concept of a spring or upthrust ... all of these are springs and upthrusts because they attempt to break a level and are met by a reversal instead", "yes"): Sp / Ut use the SAME levels and rules as the I - a prior hour high / low or a key / volume level, broken 1+ tick by the leg into the pivot (the leg started on the other side), its first break, closed back within 3 candles, no follow-through, order flow confirms; the old 15-candle local floor / ceiling is gone. The rejection I closes back through that same level
+static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-19 10:37 CT "yes, put level under I too", 10:40 "go"): the level each I reclaimed is kept in Out.ilv (candle stamp -> level) so the candle tag can name it (I / PHL); hour levels carry how many hours back they are (Lvl.hb) and their side (Lvl.high). No rule change
+// was VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-19 09:19-09:22 CT "there needs to be a break that tries to trade above a high or below a low that fails, just like the concept of a spring or upthrust ... all of these are springs and upthrusts because they attempt to break a level and are met by a reversal instead", "yes"): Sp / Ut use the SAME levels and rules as the I - a prior hour high / low or a key / volume level, broken 1+ tick by the leg into the pivot (the leg started on the other side), its first break, closed back within 3 candles, no follow-through, order flow confirms; the old 15-candle local floor / ceiling is gone. The rejection I closes back through that same level
 // was VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-19 09:14 CT "it needs to be the first break, otherwise the level was already traded before right"): the pivot's leg must be the FIRST break of the level - since the level formed (the end of its hour; the session start for key / volume levels) no candle before that leg traded through it
 // was VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-19 09:09 CT with a sketch "it should be coming from the pivot break high or low ... the break and reclaim from the pivot low that broke"): the level must be broken BY THE LEG INTO THE PIVOT - at the leg's start (the pivot high before a bullish I's low) price closed above the level and no candle closed below it until the pivot candle; then the first close back above it = the I. A level price was already living under before that leg no longer counts. Same for the rejection I (the leg into the spring) and mirrored for highs
 // was VERSION = "1.3.1";   // (1.3.1, Rassul 2026-11-19 09:05 CT "then lets drop the 4 hour": 4-hour highs / lows no longer count (measured -0.38R vs -0.15R for hour levels); the I reclaims a prior hour high / low or a key / volume level
@@ -69,7 +71,8 @@ struct Bar {
 struct Mark { char k = 0; int dir = 0; };   // k: 'E' 'A' 'S' (Sp) 'U' (Ut) 'I'; dir: +1 green (buyers / a low), -1 red (sellers / a top)
 inline std::string label(const Mark& m) { return m.k == 'S' ? "Sp" : m.k == 'U' ? "Ut" : std::string(1, m.k); }
 struct Read { std::string head; int dir = 0; std::vector<std::string> lines; };
-struct Out { std::map<long long, std::vector<Mark> > marks; std::map<long long, Read> reads; };
+struct Lvl;
+struct Out { std::map<long long, std::vector<Mark> > marks; std::map<long long, Read> reads; std::map<long long, std::pair<long long, std::string> > ilv; std::map<long long, int> ilvHb; };   // (1.7.0) ilv: the I candle stamp -> the level it reclaimed (px in ticks, name); ilvHb: its hours back (0 = not an hour level)
 
 // ---- small helpers
 inline double median(std::vector<double> v) { if (v.empty()) return 0; std::sort(v.begin(), v.end()); const size_t n = v.size(); return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2.0; }
@@ -79,7 +82,7 @@ inline std::string sgn(long long v) { return (v > 0 ? "+" : "") + std::to_string
 inline std::string px(long long ticks, double tick, int dec) { char b[32]; std::snprintf(b, sizeof b, "%.*f", dec, (double)ticks * tick); return b; }
 inline std::string pts(long long ticks, double tick, int dec) { char b[32]; std::snprintf(b, sizeof b, "%.*f", dec, (double)ticks * tick); return b; }
 
-struct Lvl { long long px = 0; std::string name; int from = 0; };   // (1.5.0) from = the first candle after the level formed (0 = the session start)   // (1.1.0) a key / volume level in ticks, with its name
+struct Lvl { long long px = 0; std::string name; int from = 0; int hb = 0; bool high = false; };   // (1.7.0) hb = hours back for an hour level (1 = the prior hour, 0 = not an hour level), high = a high   // (1.5.0) from = the first candle after the level formed (0 = the session start)   // (1.1.0) a key / volume level in ticks, with its name
 struct Ctx {
     const std::vector<Bar>& B; const Params& P; double tick; int dec; std::vector<Lvl> lv;   // (1.1.0) lv = the key / volume levels for these candles (empty = local pivots only)
     std::vector<double> medDl, medRg, medBig[2];   // per candle: the median |delta| / range / biggest order of the 20 candles BEFORE it
@@ -189,7 +192,7 @@ inline void blockLevels(const std::vector<Bar>& B, int ex, int side, long long p
         while (k >= 0 && blockOf(B[(size_t)k].t, per, off) > h) --k;
         const int lastK = k;   // (1.5.0) the block's last candle
         while (k >= 0 && blockOf(B[(size_t)k].t, per, off) == h) { const long long x = lo ? B[(size_t)k].l : B[(size_t)k].h; if (!any || (lo ? x < v : x > v)) v = x; any = true; --k; }
-        if (any) { Lvl z; z.px = v; z.from = lastK + 1; z.name = "the " + hourName((h * per + off) / 3600) + (per == 3600 ? " hour " : " 4h ") + (lo ? "low" : "high"); out.push_back(z); ++got; }
+        if (any) { Lvl z; z.px = v; z.from = lastK + 1; z.hb = per == 3600 ? (int)(hp - h) : 0; z.high = !lo; z.name = "the " + hourName((h * per + off) / 3600) + (per == 3600 ? " hour " : " 4h ") + (lo ? "low" : "high"); out.push_back(z); ++got; }
         --h; }
 }
 inline void hourLevels(const std::vector<Bar>& B, int ex, int side, std::vector<Lvl>& out) {
@@ -272,7 +275,7 @@ inline void springs(const Ctx& X, const std::vector<Leg>& L, Out& o, std::vector
                     ri.lines.push_back("Strong rejection: " + std::string(lo ? "+" : "-") + pts(std::llabs(q.c - q.o), X.tick, X.dec) + " pts, " + fx((double)q.range() / mr) + " normal range,");
                     ri.lines.push_back("closed through the " + std::string(lo ? "spring" : "upthrust") + " candle, reclaimed " + ri_lvl + ".");
                     ri.lines.push_back("Watch: entry at a key level (Rev, PB, Cob).");
-                    add(o, k, B, 'I', side, ri); rejI.push_back(k); break; } }
+                    add(o, k, B, 'I', side, ri); o.ilv[B[(size_t)k].t] = std::make_pair(lvz.px, lvz.name); o.ilvHb[B[(size_t)k].t] = lvz.hb; rejI.push_back(k); break; } }
         }
     }
 }
@@ -320,7 +323,7 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
             r.lines.push_back(std::string(lo ? "Buyers" : "Sellers") + " hit hard (" + fx((double)dl / md) + " normal delta),");
             r.lines.push_back("reclaimed " + got->name + " " + px(got->px, X.tick, X.dec) + " after the " + B[(size_t)ex].when + (lo ? " low swept it." : " high swept it."));
             r.lines.push_back("Watch: entry at a key level (Rev, PB, Cob).");
-            add(o, i, B, 'I', side, r);
+            add(o, i, B, 'I', side, r); o.ilv[b.t] = std::make_pair(got->px, got->name); o.ilvHb[b.t] = got->hb;
         }
     }
 }

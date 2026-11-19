@@ -1,20 +1,30 @@
-// WyMarks.h 1.0.0 (2026-11-18) -- the Reversal Read I on the price candles (lsRevReadMarks 0.18.0). SDK-free, tested (tests_wymarks).
-// Rassul 2026-11-18 17:06 CT "I also want the I indicator on the candle, put it on top of green candle and below red candles"; 17:11 "go"
-// on the mockup (i-on-candles.html: a small tag, green = bullish I, red = bearish I, white letter).
-// Source: lsFlexLevels\RevRead\wy-<MKT>-<secs>.txt, written by the lsRevRead pane once per closed candle (WyRead.h letters: header
-// WY|1|MKT|secs|version, then stamp|letter|dir) - so the candle and the pane always agree, and a decided I never changes (no repaint).
+// WyMarks.h 2.0.0 (2026-11-19) -- the Reversal Read marks on the price candles (lsRevReadMarks 0.19.0). SDK-free, tested (tests_wymarks).
+// 1.0.0 (2026-11-18 17:06 / 17:11 CT, Rassul "I also want the I indicator on the candle, put it on top of green candle and below red candles"):
+// the I tag. 2.0.0 (2026-11-19 10:20-10:40 CT, mockup level-marks-mockup.html v8, "go"): Bk / Sw / Cx too (LevelMarks.h), each tag = the code on
+// line 1 and ONE short level name on line 2 ("I / PHL", "Sw / PDL"); over a green candle, under a red one; the I first, the level mark stacked
+// outward; tags never cover a candle (wick to wick) or another tag: rows outward, a few pixels sideways, then the other side; a short dashed
+// line at the level price.
+// Source: lsFlexLevels\RevRead\wy-<MKT>-<secs>.txt, written by the lsRevRead pane once per closed candle: header WY|1|MKT|secs|version, then
+// stamp|letter|dir[|level|levelPx] lines (3 fields = the old file; 5 = with the level). Decided letters only: a mark never changes (no repaint).
 #pragma once
+#include <algorithm>
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace wyi {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "2.0.0";
 static const int TAG_H = 13, PAD_X = 3, GAP = 3, CX_STEP = 16;
+static const int LINE1_H = 13, LINE2_H = 11;   // (2.0.0) a two-line tag: 13 px for the code, 11 px for the level name
 static const size_t MAX_BYTES = 1024 * 1024;
 
-// the I letters of the file: candle stamp -> +1 bullish / -1 bearish. -1 = not a letters file (torn / foreign: keep the last good set).
-inline int parse(const std::string& txt, std::map<long long, int>& out) {
+struct M { char code = 0; int dir = 0; std::string lv; long long px = 0; };   // code 'I' / 'B' (Bk) / 'S' (Sw) / 'C' (Cx)
+inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : 0; }
+inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : ""; }
+
+// every candle mark of the file: candle stamp -> its marks (the I first). -1 = not a letters file (torn / foreign: keep the last good set).
+inline int parseAll(const std::string& txt, std::map<long long, std::vector<M> >& out) {
     out.clear(); size_t a = 0; int n = 0; bool head = false;
     while (a < txt.size()) {
         size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size();
@@ -22,18 +32,26 @@ inline int parse(const std::string& txt, std::map<long long, int>& out) {
         if (!l.empty() && l[l.size() - 1] == '\r') l.erase(l.size() - 1);
         if (l.empty()) continue;
         if (!head) { if (l.compare(0, 5, "WY|1|") != 0) return -1; head = true; continue; }
-        const size_t p1 = l.find('|'); if (p1 == std::string::npos) continue;
-        const size_t p2 = l.find('|', p1 + 1); if (p2 == std::string::npos) continue;
-        char* end = nullptr; const long long t = std::strtoll(l.c_str(), &end, 10); if (!end || *end != '|' || t <= 0) continue;
-        if (l.substr(p1 + 1, p2 - p1 - 1) != "I") continue;
-        char* e2 = nullptr; const long d = std::strtol(l.c_str() + p2 + 1, &e2, 10); if (!e2 || *e2 != 0 || (d != 1 && d != -1)) continue;
-        out[t] = (int)d; ++n;
+        std::vector<std::string> f; size_t p = 0; while (true) { const size_t q = l.find('|', p); f.push_back(l.substr(p, q == std::string::npos ? std::string::npos : q - p)); if (q == std::string::npos) break; p = q + 1; }
+        if (f.size() != 3 && f.size() != 5) continue;
+        char* end = nullptr; const long long t = std::strtoll(f[0].c_str(), &end, 10); if (!end || *end != 0 || t <= 0) continue;
+        const char c = codeOf(f[1]); if (!c) continue;
+        char* e2 = nullptr; const long d = std::strtol(f[2].c_str(), &e2, 10); if (!e2 || *e2 != 0 || (d != 1 && d != -1)) continue;
+        M m; m.code = c; m.dir = (int)d;
+        if (f.size() == 5) { if (f[3].size() > 8) continue; m.lv = f[3]; char* e3 = nullptr; const long long px = std::strtoll(f[4].c_str(), &e3, 10); if (!e3 || *e3 != 0 || px < 0) continue; m.px = px; }
+        std::vector<M>& v = out[t]; bool dup = false; for (const M& x : v) if (x.code == m.code) dup = true; if (dup) continue;
+        if (c == 'I') v.insert(v.begin(), m); else v.push_back(m); ++n;
     }
     return head ? n : -1;
 }
+// (1.0.0 interface, kept) the I letters only: candle stamp -> +1 / -1
+inline int parse(const std::string& txt, std::map<long long, int>& out) {
+    out.clear(); std::map<long long, std::vector<M> > all; const int n = parseAll(txt, all); if (n < 0) return -1; int k = 0;
+    for (const auto& kv : all) for (const M& m : kv.second) if (m.code == 'I') { out[kv.first] = m.dir; ++k; }
+    return k;
+}
 
-// where the tag goes: OVER a green candle (close >= open), UNDER a red one (his rule). cxSameSide = a Cx already sits on that side of
-// this candle (lsRevReadMarks draws Cx 16 px beyond the extreme): the I steps one row further out so the two never overlap.
+// (1.0.0) where an I tag goes: OVER a green candle (close >= open), UNDER a red one
 struct Tag { int l = 0, t = 0, r = 0, b = 0; bool ok = false; bool over = false; };
 inline Tag place(int x, int yHigh, int yLow, bool greenCandle, int textW, bool cxSameSide, int paneTop, int paneBottom) {
     Tag g; g.over = greenCandle; const int w = (textW > 0 ? textW : 4) + 2 * PAD_X; const int step = cxSameSide ? CX_STEP : 0;
@@ -41,5 +59,31 @@ inline Tag place(int x, int yHigh, int yLow, bool greenCandle, int textW, bool c
     if (greenCandle) { g.b = yHigh - GAP - step; g.t = g.b - TAG_H; } else { g.t = yLow + GAP + step; g.b = g.t + TAG_H; }
     g.ok = g.t >= paneTop + 1 && g.b <= paneBottom - 1;
     return g;
+}
+
+// (2.0.0) the layout of every tag in view, so none overlaps a candle or another tag
+struct Candle { int x = 0, yHigh = 0, yLow = 0, halfW = 2; bool green = true; };
+struct Want { int candle = 0; int w = 0, h = TAG_H; };            // one tag of a candle (the I first, then the level mark), its size in px
+struct Box { int l = 0, t = 0, r = 0, b = 0; bool ok = false; };
+inline bool hit(const Box& a, const Box& b) { return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b); }
+inline std::vector<Box> layout(const std::vector<Candle>& C, const std::vector<Want>& W, int paneTop, int paneBottom, int xRight) {
+    std::vector<Box> placed; placed.reserve(C.size() + W.size());
+    for (const Candle& c : C) { Box b; b.l = c.x - c.halfW; b.r = c.x + c.halfW; b.t = std::min(c.yHigh, c.yLow); b.b = std::max(c.yHigh, c.yLow); placed.push_back(b); }
+    std::vector<Box> out(W.size());
+    for (size_t k = 0; k < W.size(); ++k) {
+        const Want& w = W[k]; if (w.candle < 0 || w.candle >= (int)C.size()) continue; const Candle& c = C[(size_t)w.candle];
+        Box got; bool found = false;
+        for (int sidePass = 0; sidePass < 2 && !found; ++sidePass) {
+            const bool over = sidePass == 0 ? c.green : !c.green;
+            for (int r = 0; r < 14 && !found; ++r) {
+                const int t = over ? std::min(c.yHigh, c.yLow) - GAP - w.h - r * (w.h + 3) : std::max(c.yHigh, c.yLow) + GAP + r * (w.h + 3);
+                if (t < paneTop + 1 || t + w.h > paneBottom - 1) continue;
+                for (int nx : { 0, -5, 5, -9, 9 }) {
+                    Box b; b.l = c.x + nx - w.w / 2; b.r = b.l + w.w; b.t = t; b.b = t + w.h; if (b.r > xRight) continue;
+                    bool clear = true; for (const Box& p : placed) if (hit(b, p)) { clear = false; break; }
+                    if (clear) { got = b; got.ok = true; found = true; break; } } } }
+        if (found) { placed.push_back(got); out[k] = got; }
+    }
+    return out;
 }
 } // namespace wyi
