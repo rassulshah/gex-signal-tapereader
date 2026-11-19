@@ -27,7 +27,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.0.1";   // (1.0.1, 09:21 CT) a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
+static const char* const VERSION = "1.0.2";   // (1.0.2, Rassul 2026-11-18 20:17 CT "the low of the green I candle should not be greater than 1 atr from the pivot low and vice versa": a bullish I candle's low is within 1 ATR(13) of the pivot low, a bearish I candle's high within 1 ATR(13) of the pivot high (ATR = Wilder 13 as of the candle before), both I paths
+// was VERSION = "1.0.1";   // (1.0.1, 09:21 CT) a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
 
 // the cut-offs (starting values, ES 2026-11-18 overnight; LRA-WyRead-<MKT>.csv may override - see Params)
 struct Params {
@@ -143,8 +144,23 @@ inline bool fractal(const std::vector<Bar>& B, int k, int side) {   // side +1 =
     for (int q : { k - 2, k - 1, k + 1, k + 2 }) { if (side > 0 ? !(B[(size_t)k].l < B[(size_t)q].l) : !(B[(size_t)k].h > B[(size_t)q].h)) return false; }
     return true;
 }
+// (1.0.2) ATR(13), Wilder, in ticks: a[i] = the ATR as of candle i (seeded with the mean true range of the first candles)
+inline std::vector<double> atr13(const std::vector<Bar>& B) {
+    std::vector<double> a(B.size(), 0.0); double v = 0; const int N = 13;
+    for (size_t i = 0; i < B.size(); ++i) { const Bar& b = B[i];
+        double tr = (double)b.range(); if (i > 0) { const long long pc = B[i - 1].c; tr = std::max(tr, (double)std::max(std::llabs(b.h - pc), std::llabs(b.l - pc))); }
+        if ((int)i < N) v = (v * (double)i + tr) / (double)(i + 1); else v = (v * (N - 1) + tr) / N;
+        a[i] = v; }
+    return a;
+}
+// (1.0.2) the I candle stays near its pivot: bullish = its low no more than 1 ATR above the pivot low, bearish = its high no more than 1 ATR below the pivot high
+inline bool nearPivot(const Bar& b, const Bar& piv, int side, double atr) {
+    if (!(atr > 0)) return true;
+    return side > 0 ? (double)(b.l - piv.l) <= atr : (double)(piv.h - b.h) <= atr;
+}
+
 inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
-    const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P;
+    const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; const std::vector<double> A = atr13(B);   // (1.0.2)
     for (int side : { 1, -1 }) {   // +1 spring (a false break DOWN), -1 upthrust (a false break UP)
         const int att = side > 0 ? 0 : 1;   // the breakers hit the resting side att: a spring = sellers hitting the bids [0]; an upthrust = buyers lifting the offers [1]
         const int def = att, own = 1 - att;  // defenders rest on side att (bids for a spring); the breakers' own resting orders on the other side
@@ -194,6 +210,7 @@ inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
             // the strong rejection: a wide candle right after, closing back through the spring / upthrust candle
             for (int k = d + 1; k <= d + 2 && k < n; ++k) { const Bar& q = B[(size_t)k]; const double mr = X.medRg[(size_t)k];
                 const bool wide = mr > 0 && (double)q.range() >= P.rejR * mr, through = lo ? (q.c > b.h && q.c > q.o && q.l < b.h) : (q.c < b.l && q.c < q.o && q.h > b.l);   // (1.0.1) and it starts at the pivot: its low under the spring candle's high (its high over the upthrust candle's low)
+                if (wide && through && !nearPivot(q, b, side, A[(size_t)k - 1])) continue;   // (1.0.2) the rejection I also within 1 ATR of the spring / upthrust candle's extreme
                 if (wide && through) { Read ri; ri.dir = side; ri.head = std::string(lo ? "Buyers" : "Sellers") + " took over";
                     ri.lines.push_back("Strong rejection: " + std::string(lo ? "+" : "-") + pts(std::llabs(q.c - q.o), X.tick, X.dec) + " pts, " + fx((double)q.range() / mr) + " normal range,");
                     ri.lines.push_back("closed through the " + std::string(lo ? "spring" : "upthrust") + " candle.");
@@ -205,7 +222,7 @@ inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
 
 // ---- I: the other side took over right after a leg extreme
 inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const std::vector<int>& rejI) {
-    const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; int last[2] = { -10, -10 };
+    const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; int last[2] = { -10, -10 }; const std::vector<double> A = atr13(B);
     for (int i = 4; i < n; ++i) {
         const Bar& b = B[(size_t)i]; const Bar& p = B[(size_t)i - 1]; const double md = X.medDl[(size_t)i]; if (md <= 0) continue;
         for (int side : { 1, -1 }) {   // +1 buyers take over after a LOW, -1 sellers after a HIGH
@@ -218,6 +235,7 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
             // (1.0.1, Rassul 09:21 CT "a bullish I should have its low below the high of the dnpivot and vice versa") the turn bar starts AT the pivot:
             // a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
             if (side > 0 ? !(b.l < B[(size_t)ex].h) : !(b.h > B[(size_t)ex].l)) continue;
+            if (!nearPivot(b, B[(size_t)ex], side, A[(size_t)i - 1])) continue;   // (1.0.2) within 1 ATR of the pivot
             const int si = side > 0 ? 0 : 1; if (i - last[si] < 4) continue;
             if (std::find(rejI.begin(), rejI.end(), i) != rejI.end()) continue;
             last[si] = i; (void)L;
