@@ -37,6 +37,17 @@ int main() {
       std::vector<wyr::Lvl> v; wyr::blockLevels(B, 81, 1, 14400, 3600, 2, v); C(v.size() == 1 && v[0].px == 100 && v[0].name == "the 1 AM 4h low", "the 1 AM 4h low = 100");
       auto o = wyr::run(B, 0.25, 2); C(hasI(o, B[82].t, 1), "swept the 4 AM hour low (also the 1 AM 4h low), closed back above = I");
       C(line1(o, B[82].t).find("the 4 AM hour low") != std::string::npos && line1(o, B[82].t).find("4h") == std::string::npos, "1.3.1: no 4h level - the read names the 4 AM hour low"); }
+    { // 1.4.0: the level was already broken BEFORE the leg into the pivot (closes under 100 earlier, a bounce back under it, then the pivot) = no I
+      std::vector<wyr::Bar> B; int k = 0; const long long base = 3600LL * 25;
+      auto mk = [&](long long o, long long h, long long l, long long c, long long by, long long sl) { wyr::Bar b; b.t = base + (k + 1) * 180; b.o = o; b.h = h; b.l = l; b.c = c; b.buy = by; b.sell = sl; b.when = std::to_string(k); B.push_back(b); ++k; };
+      for (int j = 0; j < 19; ++j) mk(140 - 2 * j, 140 - 2 * j, 137 - 2 * j, 138 - 2 * j, 40, 60);   // 1 AM hour drifting down
+      mk(102, 102, 100, 101, 40, 60);                                                                   // 1 AM hour low 100 (bar 19, ends 2:00)
+      mk(101, 101, 95, 96, 30, 70); mk(96, 97, 94, 95, 30, 70); mk(95, 96, 93, 94, 30, 70);              // 2 AM: broke 100 and LIVED under it
+      mk(94, 98, 94, 97, 60, 40); mk(97, 99, 96, 98, 60, 40); mk(98, 99, 96, 97, 50, 50);                // bounce, still under 100
+      mk(97, 97, 94, 95, 30, 70); mk(95, 95, 91, 92, 30, 70);                                            // down leg to the pivot 91 (bar 27)
+      mk(92, 103, 92, 102, 400, 20);                                                                     // bar 28: closes back over 100 with heavy buying
+      for (int j = 0; j < 3; ++j) mk(102, 104, 101, 103, 50, 50);
+      auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[28].t, 1), "1.4.0: 100 was broken before the leg into the pivot = not a break from the pivot = no I"); }
     C(wyr::hourName(26) == "2 AM" && wyr::hourName(24) == "12 AM" && wyr::hourName(36) == "12 PM" && wyr::hourName(15) == "3 PM", "hour names");
     C(wyr::hourOf(3600 * 3) == 2 && wyr::hourOf(3600 * 3 + 180) == 3, "the 3:00 candle END belongs to the 2 AM hour");
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;

@@ -27,7 +27,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.3.1";   // (1.3.1, Rassul 2026-11-19 09:05 CT "then lets drop the 4 hour": 4-hour highs / lows no longer count (measured -0.38R vs -0.15R for hour levels); the I reclaims a prior hour high / low or a key / volume level
+static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-19 09:09 CT with a sketch "it should be coming from the pivot break high or low ... the break and reclaim from the pivot low that broke"): the level must be broken BY THE LEG INTO THE PIVOT - at the leg's start (the pivot high before a bullish I's low) price closed above the level and no candle closed below it until the pivot candle; then the first close back above it = the I. A level price was already living under before that leg no longer counts. Same for the rejection I (the leg into the spring) and mirrored for highs
+// was VERSION = "1.3.1";   // (1.3.1, Rassul 2026-11-19 09:05 CT "then lets drop the 4 hour": 4-hour highs / lows no longer count (measured -0.38R vs -0.15R for hour levels); the I reclaims a prior hour high / low or a key / volume level
 // was VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-19 09:02 CT "yes. you want some form of higher timeframe breakout failure"): the I needs a FAILED HIGHER-TIMEFRAME BREAKOUT - the level reclaimed must be a prior hour / 4-hour high or low or a key / volume level; a local pivot alone no longer makes an I. The strong-rejection I after Sp / Ut also needs its spring / upthrust candle to have swept such a level and the rejection candle to close back through it
 // was VERSION = "1.2.1";   // (1.2.1, Rassul 2026-11-19 08:59 CT "the 4 hour high and low is also a key level": the high / low of the 2 completed 4-hour candles before the pivot's (anchored on the 5 PM CT session open: 5 PM, 9 PM, 1 AM, 5 AM, 9 AM, 1 PM) are levels the I can reclaim too ("the 9 PM 4h low"); on a tie with an hour level the 4h name is used)
 // was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 08:41-08:42 CT on the ES 3:36 AM I "lets include this. so there is always some reclaim after a sweep of some htf level, in this case it was an hourly level. build", "the key is that there is a htf breakout failure as indicated by the reclaim of a level"): the high / low of each of the 3 completed clock hours before the pivot's hour is a level the I can reclaim ("the 2 AM hour low"), computed from the candles themselves (every session, not only the current one)
@@ -192,7 +193,15 @@ inline void hourLevels(const std::vector<Bar>& B, int ex, int side, std::vector<
     // (1.3.1) 4-hour candles dropped (blockLevels(B, ex, side, 14400, 3600, 2, out) was 1.2.1 - 1.3.0)
     blockLevels(B, ex, side, 3600, 0, 3, out);
 }
-inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
+// (1.4.0) the break came FROM THE PIVOT: the leg into the pivot candle ex started on the right side of the level (its start candle closed
+// above it for a low) - the leg broke it on the way down; price was not already living beyond the level before that leg
+inline bool brokeFromPivot(const std::vector<Bar>& B, const std::vector<Leg>& L, int ex, int side, long long lvl) {
+    if (ex < 1 || ex >= (int)B.size()) return false;
+    const bool lo = side > 0;
+    int a = (ex < (int)L.size() && L[(size_t)ex].dir == -side) ? L[(size_t)ex].a : ex - 10; if (a < 0) a = 0; if (a >= ex) a = ex - 1;
+    return lo ? B[(size_t)a].c > lvl : B[(size_t)a].c < lvl;   // the leg into the pivot STARTED above the level (below it for a high); it may break it anywhere on the way
+}
+inline void springs(const Ctx& X, const std::vector<Leg>& L, Out& o, std::vector<int>& rejI) {
     const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; const std::vector<double> A = atr13(B);   // (1.0.2)
     for (int side : { 1, -1 }) {   // +1 spring (a false break DOWN), -1 upthrust (a false break UP)
         const int att = side > 0 ? 0 : 1;   // the breakers hit the resting side att: a spring = sellers hitting the bids [0]; an upthrust = buyers lifting the offers [1]
@@ -246,7 +255,7 @@ inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
                 if (wide && through && !nearPivot(q, b, side, A[(size_t)k - 1])) continue;   // (1.0.2) the rejection I also within 1 ATR of the spring / upthrust candle's extreme
                 const Lvl* htf = nullptr;   // (1.3.0) the spring / upthrust candle swept a higher-timeframe level and the rejection closes back through it
                 if (wide && through) { std::vector<Lvl> hl = X.lv; hourLevels(B, d, side, hl);
-                    for (const Lvl& z : hl) if ((lo ? b.l < z.px && q.c > z.px : b.h > z.px && q.c < z.px) && (!htf || (lo ? z.px > htf->px : z.px < htf->px))) htf = &z;
+                    for (const Lvl& z : hl) if ((lo ? b.l < z.px && q.c > z.px : b.h > z.px && q.c < z.px) && brokeFromPivot(B, L, d, side, z.px) && (!htf || (lo ? z.px > htf->px : z.px < htf->px))) htf = &z;
                     if (!htf) continue;
                     ri_lvl = htf->name + " " + px(htf->px, X.tick, X.dec); }
                 if (wide && through) { Read ri; ri.dir = side; ri.head = std::string(lo ? "Buyers" : "Sellers") + " took over";
@@ -266,7 +275,6 @@ inline std::vector<int> pivotsBefore(const std::vector<Leg>& L, int upTo, int si
     std::reverse(v.begin(), v.end()); return v;
 }
 inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const std::vector<int>& rejI) {
-    (void)L;   // (1.3.0) local pivots no longer feed the I
     const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; int last[2] = { -10, -10 }; const std::vector<double> A = atr13(B);
     for (int i = 4; i < n; ++i) {
         const Bar& b = B[(size_t)i]; const Bar& p = B[(size_t)i - 1]; const double md = X.medDl[(size_t)i]; if (md <= 0) continue;
@@ -290,6 +298,7 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
                 if (lo ? !(b.c > z.px) : !(b.c < z.px)) continue;               // the I candle closes back through it
                 bool first = true; for (int k = ex; k < i; ++k) if (lo ? B[(size_t)k].c > z.px : B[(size_t)k].c < z.px) { first = false; break; }
                 if (!first) continue;                                           // the FIRST close back = the reclaim
+                if (!brokeFromPivot(B, L, ex, side, z.px)) continue;            // (1.4.0) the break came from the leg into this pivot
                 if (!got || (lo ? z.px > got->px : z.px < got->px)) got = &z;   // the most important = the furthest level reclaimed
             }
             if (!got) continue;
@@ -309,7 +318,7 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
 inline Out run(const std::vector<Bar>& B, double tick, int dec, const Params& P = Params(), const std::vector<Lvl>& lv = std::vector<Lvl>()) {
     Out o; if (B.size() < 15 || !(tick > 0)) return o;
     Ctx X(B, P, tick, dec); X.lv = lv; const std::vector<Leg> L = legs(B); std::vector<int> rejI;
-    springs(X, o, rejI); pushes(X, L, o); initiation(X, L, o, rejI);
+    springs(X, L, o, rejI); pushes(X, L, o); initiation(X, L, o, rejI);
     for (auto& kv : o.marks) {   // the strip order, top to bottom: Sp / Ut, A, E, I (the turn bar last, as it reads)
         auto rank = [](char k) { return k == 'S' || k == 'U' ? 0 : k == 'A' ? 1 : k == 'E' ? 2 : 3; };
         std::stable_sort(kv.second.begin(), kv.second.end(), [&](const Mark& a, const Mark& b) { return rank(a.k) < rank(b.k); }); }

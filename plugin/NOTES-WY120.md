@@ -42,3 +42,13 @@ Not verified: needs his IRT restart (File -> Exit, wait for "installed", reopen)
 - Tests: t_hourly 13/13 (the 4h case now reads "the 4 AM hour low"), t_reclaim 6/6, t_wyread_102 19/19, MinGW OK.
 - Measured: I's 1,070 -> 987 (-83 that only reclaimed a 4h level). All I's ~-0.21R (was ~-0.22R): the 4h I's that remain are
   credited to the hour level they also reclaimed, so the hour group is now 901, 38%, -0.20R.
+
+## 1.4.0 (09:09-09:10 CT, his sketch "it should be coming from the pivot break high or low", and the ES 11-18 10:21 AM example)
+- The level must be broken BY THE LEG INTO THE PIVOT: the candle that starts that leg (the ZigZag pivot high before a bullish I's low)
+  closed above the level; the leg breaks it anywhere on the way down; the first close back above it = the I. A level price was already
+  living under before that leg no longer counts. Same for the rejection I (the leg into the spring); mirrored for highs.
+- ES 11-18 10:21 AM: kept - the leg from the 9:5x high started above the 8 AM / 9 AM hour lows (7323.25 / 7321.00), the 10:18 low
+  7305.25 swept them, 10:21 closed 7324.50 -> "reclaimed the 8 AM hour low 7323.25". (The research bars have a gap 9:51-10:12.)
+- Tests: t_hourly 14/14 (new: level broken before the leg = no I), t_reclaim 6/6, t_wyread_102 19/19, MinGW OK.
+- Measured: I's 987 -> 942 (-45). All about -0.22R; hour 864, 38%, -0.21R. By market: CL -0.02, HG -0.06, NQ -0.14, GC -0.19,
+  NG -0.23, ES -0.30, EU -0.40.
