@@ -53,7 +53,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.9.0";   // (1.9.0) the CoB sweep = a 3-hour level OR a named key level   // was "1.8.3";   // (1.8.3, 2026-11-16 Rassul 10:54 CT) draws lsRevRead 0.9.0's accumulation / distribution boxes on the price chart (outline + the absorbed price)   // was "1.8.2";   // (1.8.2) the 3-hour S / R lines: one line each across the chart, no past steps   // was "1.8.1";   // (1.8.1) review fixes: the status text is built at most once a second; a REV line is keyed by its bar AND its CoB   // was "1.8.0";   // (1.8.0) + the CoB pullback Rev ("Rev" on the bar, REV record lines)   // was "1.7.1":   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
+static const char* CS_VERSION = "1.9.1";   // (1.9.1, Rassul 2026-11-18 19:54 CT "get rid of the accumulation and distribution boxes": the boxes are no longer read or drawn - CS_ACCUM_BOXES false; lsRevRead still keeps the zones in the background)   // was "1.9.0";   // (1.9.0) the CoB sweep = a 3-hour level OR a named key level   // was "1.8.3";   // (1.8.3, 2026-11-16 Rassul 10:54 CT) draws lsRevRead 0.9.0's accumulation / distribution boxes on the price chart (outline + the absorbed price)   // was "1.8.2";   // (1.8.2) the 3-hour S / R lines: one line each across the chart, no past steps   // was "1.8.1";   // (1.8.1) review fixes: the status text is built at most once a second; a REV line is keyed by its bar AND its CoB   // was "1.8.0";   // (1.8.0) + the CoB pullback Rev ("Rev" on the bar, REV record lines)   // was "1.7.1":   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
 // was "1.5.1";   // (1.5.1) CQG roots mapped (cobs::mktKey) - it never ran on his CQG charts before   // (1.5.0) + the CoB Fib lines (targets 1.272 / 1.618 / 2.0, entry 50%, stop 0)   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -205,11 +205,12 @@ void CobSignal::status(CSState& S, long long now) {
     csMkdir(csFlex()); csPublish(S.statusPath, body);
 }
 
+static const bool CS_ACCUM_BOXES = false;   // (1.9.1, Rassul 19:54 CT) the accumulation / distribution boxes are gone from the price chart
 void CobSignal::pump() {
     CSState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
     feed(*S); flush(*S); status(*S, csMs());
-    {   // (1.8.3) lsRevRead's zones: read (bounded) only when the file's size / time changed; never from the draw
+    if (CS_ACCUM_BOXES) {   // (1.8.3) lsRevRead's zones: read (bounded) only when the file's size / time changed; never from the draw - (1.9.1) off
         const long long now = csMs(); if (now - S->acMs >= 2000 || now < S->acMs) { S->acMs = now;
             const std::string d = csFlex(); const std::string p = d.empty() || S->E.mkt.empty() ? std::string() : d + CS_SEP "RevRead" CS_SEP "accum-" + S->E.mkt + "-" + std::to_string(S->spb) + ".txt";
             if (p != S->acPath) { S->acPath = p; S->acSig.clear(); S->acZ.clear(); }
@@ -274,7 +275,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.9.0 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a named key level (in RTH) or a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Rev = the CoB pullback Rev: the first bar that closes above the prior bar's high (below its low for a bear CoB) while the pullback has carried 0.5x of the CoB wave's volume or less; up to 3 Revs on 3 separate pullbacks, until a bar closes through the CoB origin. Decided at the bar close, never repainted.");
-    p->setVersion("1.9.0");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.9.1 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a named key level (in RTH) or a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Rev = the CoB pullback Rev: the first bar that closes above the prior bar's high (below its low for a bear CoB) while the pullback has carried 0.5x of the CoB wave's volume or less; up to 3 Revs on 3 separate pullbacks, until a bar closes through the CoB origin. Decided at the bar close, never repainted.");
+    p->setVersion("1.9.1");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }
