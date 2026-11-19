@@ -21,8 +21,9 @@ int main() {
     { auto B = base(97, 102, 400); auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[18].t, 1), "1.3.0: a local pivot alone (no higher-timeframe level) = no I"); }
     { auto B = base(97, 99, 400); auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[18].t, 1), "no close back above 100 = no I"); }
     { auto B = base(100, 102, 400); for (auto& b : B) if (b.l < 100) b.l = 100; auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[18].t, 1), "a touch of 100, never through it = no sweep = no I"); }
-    { auto B = base(97, 102, 400); std::vector<wyr::Lvl> lv(1); lv[0].px = 101; lv[0].name = "VAH"; auto o = wyr::run(B, 0.25, 2, wyr::Params(), lv); C(hasI(o, B[18].t, 1), "key level 101 swept and reclaimed = I");
-      auto r = o.reads.find(B[18].t); C(r != o.reads.end() && r->second.lines.size() > 1 && r->second.lines[1].find("VAH") != std::string::npos, "the read names the furthest reclaimed level (VAH 101 over the 100 low)"); }
+    { auto B = base(97, 102, 400); std::vector<wyr::Lvl> lv(1); lv[0].px = 101; lv[0].name = "VAH"; auto o = wyr::run(B, 0.25, 2, wyr::Params(), lv); C(!hasI(o, B[18].t, 1), "1.5.0: key level 101 was already traded through (the 100 low at bar 8) = not the first break = no I"); }
+    { auto B = base(97, 102, 400); std::vector<wyr::Lvl> lv(1); lv[0].px = 99; lv[0].name = "VAL"; auto o = wyr::run(B, 0.25, 2, wyr::Params(), lv); C(hasI(o, B[18].t, 1), "key level 99, first broken by the leg into the pivot, reclaimed = I");
+      auto r = o.reads.find(B[18].t); C(r != o.reads.end() && r->second.lines.size() > 1 && r->second.lines[1].find("VAL 99") == std::string::npos && r->second.lines[1].find("VAL") != std::string::npos, "the read names VAL"); }
     { auto B = base(97, 102, 60); auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[18].t, 1), "weak buying (not 2x delta) = no I"); }
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;
 }

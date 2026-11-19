@@ -52,3 +52,12 @@ Not verified: needs his IRT restart (File -> Exit, wait for "installed", reopen)
 - Tests: t_hourly 14/14 (new: level broken before the leg = no I), t_reclaim 6/6, t_wyread_102 19/19, MinGW OK.
 - Measured: I's 987 -> 942 (-45). All about -0.22R; hour 864, 38%, -0.21R. By market: CL -0.02, HG -0.06, NQ -0.14, GC -0.19,
   NG -0.23, ES -0.30, EU -0.40.
+
+## 1.5.0 (09:14 CT "it needs to be the first break, otherwise the level was already traded before right")
+- The pivot's leg must be the FIRST break of the level: since the level formed (the end of its hour; the session start for key / volume
+  levels) no candle before that leg traded through it. Applies to the rejection I too.
+- Tests: t_hourly 16/16 (new: the second break of the same hour low = no I), t_reclaim 7/7 (a key level traded through earlier = no I),
+  t_wyread_102 19/19, MinGW OK. ES 11-18 10:21 AM still an I (the 8 AM hour low's first break).
+- Measured: I's 942 -> 723 (fewer than the 267 the 09:12 split suggested: when the furthest level was already traded, another hour level
+  that was not often still qualifies). Hour 668, 36%, -0.25R (halves -0.26 / -0.25) - no better than 1.4.0 (-0.21R) in this sample.
+  CL -0.06, GC -0.13, HG -0.18, NQ -0.26, NG -0.31, ES -0.33, EU -0.41.

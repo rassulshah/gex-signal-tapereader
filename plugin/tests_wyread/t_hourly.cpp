@@ -48,6 +48,14 @@ int main() {
       mk(92, 103, 92, 102, 400, 20);                                                                     // bar 28: closes back over 100 with heavy buying
       for (int j = 0; j < 3; ++j) mk(102, 104, 101, 103, 50, 50);
       auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[28].t, 1), "1.4.0: 100 was broken before the leg into the pivot = not a break from the pivot = no I"); }
+    { // 1.5.0: the 2 AM hour low 100 was broken and reclaimed earlier in the 3 AM hour (a first break), then the second break + reclaim = no I
+      auto B = down(97, 102, 400); // first break at bar 21, I at 22 (kept)
+      std::vector<wyr::Bar> C2(B.begin(), B.begin() + 26); int k = 26; const long long T0b = 3600LL * 26;
+      auto mk = [&](long long o, long long h, long long l, long long c, long long by, long long sl) { wyr::Bar b; b.t = T0b + (k + 1) * 180; b.o = o; b.h = h; b.l = l; b.c = c; b.buy = by; b.sell = sl; b.when = std::to_string(k); C2.push_back(b); ++k; };
+      mk(103, 108, 102, 107, 60, 40); mk(107, 110, 105, 109, 60, 40); mk(109, 110, 104, 105, 30, 70); mk(105, 106, 101, 102, 30, 70); mk(102, 102, 96, 97, 30, 80);   // up, then down through 100 again (bar 30)
+      mk(97, 104, 97, 103, 500, 20); for (int j = 0; j < 3; ++j) mk(103, 105, 102, 104, 50, 50);
+      auto o = wyr::run(C2, 0.25, 2); C(hasI(o, C2[22].t, 1), "the first break of the 2 AM hour low = I");
+      C(!hasI(o, C2[31].t, 1), "1.5.0: the second break of the same hour low = already traded = no I"); }
     C(wyr::hourName(26) == "2 AM" && wyr::hourName(24) == "12 AM" && wyr::hourName(36) == "12 PM" && wyr::hourName(15) == "3 PM", "hour names");
     C(wyr::hourOf(3600 * 3) == 2 && wyr::hourOf(3600 * 3 + 180) == 3, "the 3:00 candle END belongs to the 2 AM hour");
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;
