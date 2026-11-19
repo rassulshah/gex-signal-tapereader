@@ -27,7 +27,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.0.2";   // (1.0.2, Rassul 2026-11-18 20:17 CT "the low of the green I candle should not be greater than 1 atr from the pivot low and vice versa": a bullish I candle's low is within 1 ATR(13) of the pivot low, a bearish I candle's high within 1 ATR(13) of the pivot high (ATR = Wilder 13 as of the candle before), both I paths
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-18 22:33-22:37 CT "modify the I so it is a reclaim of a key level, volume level or a local level", "it needs to close above it", "yes its a sweep", "it can happen anytime as long as it reclaims", "go" on i-reclaim-mockup.html): a bullish I = the pivot low SWEPT a level (1+ tick below it) and the I candle is the FIRST close back above it; the level = a prior pivot low (1, 2 or 3 pivots back - a further one only when it is lower than the nearer ones), a key level or a volume level (the host's level files); plus the delta / close-through / 1-ATR rules; any time after the pivot (no 3-candle window, no pivot-candle-high rule). Bearish mirror.
+// was VERSION = "1.0.2";   // (1.0.2, Rassul 2026-11-18 20:17 CT "the low of the green I candle should not be greater than 1 atr from the pivot low and vice versa": a bullish I candle's low is within 1 ATR(13) of the pivot low, a bearish I candle's high within 1 ATR(13) of the pivot high (ATR = Wilder 13 as of the candle before), both I paths
 // was VERSION = "1.0.1";   // (1.0.1, 09:21 CT) a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
 
 // the cut-offs (starting values, ES 2026-11-18 overnight; LRA-WyRead-<MKT>.csv may override - see Params)
@@ -71,8 +72,9 @@ inline std::string sgn(long long v) { return (v > 0 ? "+" : "") + std::to_string
 inline std::string px(long long ticks, double tick, int dec) { char b[32]; std::snprintf(b, sizeof b, "%.*f", dec, (double)ticks * tick); return b; }
 inline std::string pts(long long ticks, double tick, int dec) { char b[32]; std::snprintf(b, sizeof b, "%.*f", dec, (double)ticks * tick); return b; }
 
+struct Lvl { long long px = 0; std::string name; };   // (1.1.0) a key / volume level in ticks, with its name
 struct Ctx {
-    const std::vector<Bar>& B; const Params& P; double tick; int dec;
+    const std::vector<Bar>& B; const Params& P; double tick; int dec; std::vector<Lvl> lv;   // (1.1.0) lv = the key / volume levels for these candles (empty = local pivots only)
     std::vector<double> medDl, medRg, medBig[2];   // per candle: the median |delta| / range / biggest order of the 20 candles BEFORE it
     Ctx(const std::vector<Bar>& b, const Params& p, double t, int d) : B(b), P(p), tick(t), dec(d) {
         const int n = (int)B.size(); medDl.assign((size_t)n, 0); medRg.assign((size_t)n, 0); medBig[0].assign((size_t)n, 0); medBig[1].assign((size_t)n, 0);
@@ -220,28 +222,48 @@ inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
     }
 }
 
-// ---- I: the other side took over right after a leg extreme
+// ---- I: the other side took over by RECLAIMING a level the pivot swept (1.1.0)
+// the confirmed pivots up to candle i (no look-ahead): leg starts known at i; side +1 = pivot lows, -1 = pivot highs; newest first
+inline std::vector<int> pivotsBefore(const std::vector<Leg>& L, int upTo, int side) {
+    std::vector<int> v; int lastA = -1;
+    for (int k = 0; k <= upTo && k < (int)L.size(); ++k) if (L[(size_t)k].a != lastA) { lastA = L[(size_t)k].a; if (L[(size_t)k].dir == side && k > 0) v.push_back(lastA); }
+    std::reverse(v.begin(), v.end()); return v;
+}
 inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const std::vector<int>& rejI) {
     const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; int last[2] = { -10, -10 }; const std::vector<double> A = atr13(B);
     for (int i = 4; i < n; ++i) {
         const Bar& b = B[(size_t)i]; const Bar& p = B[(size_t)i - 1]; const double md = X.medDl[(size_t)i]; if (md <= 0) continue;
         for (int side : { 1, -1 }) {   // +1 buyers take over after a LOW, -1 sellers after a HIGH
+            const bool lo = side > 0;
             const long long dl = b.delta() * side; if ((double)dl < P.iX * md) continue;
-            if (side > 0 ? !(b.c > p.h) : !(b.c < p.l)) continue;
-            int ex = -1; for (int k = i - 3; k < i; ++k) { if (k < 0) continue; bool isExt = true;
-                for (int q = std::max(0, k - 10); q < i; ++q) if (q != k && (side > 0 ? B[(size_t)q].l < B[(size_t)k].l : B[(size_t)q].h > B[(size_t)k].h)) { isExt = false; break; }
-                if (isExt) { ex = k; break; } }
-            if (ex < 0) continue;
-            // (1.0.1, Rassul 09:21 CT "a bullish I should have its low below the high of the dnpivot and vice versa") the turn bar starts AT the pivot:
-            // a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
-            if (side > 0 ? !(b.l < B[(size_t)ex].h) : !(b.h > B[(size_t)ex].l)) continue;
-            if (!nearPivot(b, B[(size_t)ex], side, A[(size_t)i - 1])) continue;   // (1.0.2) within 1 ATR of the pivot
-            const int si = side > 0 ? 0 : 1; if (i - last[si] < 4) continue;
+            if (lo ? !(b.c > p.h) : !(b.c < p.l)) continue;
+            // the pivot: the lowest low (highest high) of the 40 candles before, itself the extreme of the 10 candles before it
+            int ex = -1; for (int k = std::max(0, i - 40); k < i; ++k) if (ex < 0 || (lo ? B[(size_t)k].l <= B[(size_t)ex].l : B[(size_t)k].h >= B[(size_t)ex].h)) ex = k;
+            if (ex < 1) continue;
+            { bool isExt = true; for (int q = std::max(0, ex - 10); q < ex; ++q) if (lo ? B[(size_t)q].l < B[(size_t)ex].l : B[(size_t)q].h > B[(size_t)ex].h) { isExt = false; break; } if (!isExt) continue; }
+            const long long pv = lo ? B[(size_t)ex].l : B[(size_t)ex].h;
+            if (!nearPivot(b, B[(size_t)ex], side, A[(size_t)i - 1])) continue;   // (1.0.2) the I candle within 1 ATR of the pivot
+            // the levels it can reclaim: prior pivot lows (highs) 1-3 back, a further one only when beyond the nearer ones; key / volume levels
+            std::vector<Lvl> cand; { const std::vector<int> pv0 = pivotsBefore(L, ex, side); long long best = 0; int m = 0;
+                for (int a : pv0) { if (a >= ex) continue; if (m >= 3) break; const long long v = lo ? B[(size_t)a].l : B[(size_t)a].h;
+                    if (m == 0 || (lo ? v < best : v > best)) { Lvl z; z.px = v; z.name = std::string("the ") + B[(size_t)a].when + (lo ? " low" : " high"); cand.push_back(z); best = v; }
+                    ++m; } }
+            for (const Lvl& z : X.lv) cand.push_back(z);
+            const Lvl* got = nullptr;
+            for (const Lvl& z : cand) {
+                if (lo ? !(pv < z.px) : !(pv > z.px)) continue;                 // swept: 1+ tick through it
+                if (lo ? !(b.c > z.px) : !(b.c < z.px)) continue;               // the I candle closes back through it
+                bool first = true; for (int k = ex; k < i; ++k) if (lo ? B[(size_t)k].c > z.px : B[(size_t)k].c < z.px) { first = false; break; }
+                if (!first) continue;                                           // the FIRST close back = the reclaim
+                if (!got || (lo ? z.px > got->px : z.px < got->px)) got = &z;   // the most important = the furthest level reclaimed
+            }
+            if (!got) continue;
+            const int si = lo ? 0 : 1; if (i - last[si] < 4) continue;
             if (std::find(rejI.begin(), rejI.end(), i) != rejI.end()) continue;
-            last[si] = i; (void)L;
-            Read r; r.dir = side; r.head = std::string(side > 0 ? "Buyers" : "Sellers") + " took over";
-            r.lines.push_back(std::string(side > 0 ? "Buyers" : "Sellers") + " hit hard (" + fx((double)dl / md) + " normal delta),");
-            r.lines.push_back("closed through the prior candle, " + std::string(side > 0 ? "off the " + B[(size_t)ex].when + " low." : "off the " + B[(size_t)ex].when + " high."));
+            last[si] = i;
+            Read r; r.dir = side; r.head = std::string(lo ? "Buyers" : "Sellers") + " took over";
+            r.lines.push_back(std::string(lo ? "Buyers" : "Sellers") + " hit hard (" + fx((double)dl / md) + " normal delta),");
+            r.lines.push_back("reclaimed " + got->name + " " + px(got->px, X.tick, X.dec) + " after the " + B[(size_t)ex].when + (lo ? " low swept it." : " high swept it."));
             r.lines.push_back("Watch: entry at a key level (Rev, PB, Cob).");
             add(o, i, B, 'I', side, r);
         }
@@ -249,9 +271,9 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
 }
 
 // the whole read of a session's closed candles (oldest first). tick > 0; dec = the price decimals.
-inline Out run(const std::vector<Bar>& B, double tick, int dec, const Params& P = Params()) {
+inline Out run(const std::vector<Bar>& B, double tick, int dec, const Params& P = Params(), const std::vector<Lvl>& lv = std::vector<Lvl>()) {
     Out o; if (B.size() < 15 || !(tick > 0)) return o;
-    const Ctx X(B, P, tick, dec); const std::vector<Leg> L = legs(B); std::vector<int> rejI;
+    Ctx X(B, P, tick, dec); X.lv = lv; const std::vector<Leg> L = legs(B); std::vector<int> rejI;
     springs(X, o, rejI); pushes(X, L, o); initiation(X, L, o, rejI);
     for (auto& kv : o.marks) {   // the strip order, top to bottom: Sp / Ut, A, E, I (the turn bar last, as it reads)
         auto rank = [](char k) { return k == 'S' || k == 'U' ? 0 : k == 'A' ? 1 : k == 'E' ? 2 : 3; };
