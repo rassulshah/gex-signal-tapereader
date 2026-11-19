@@ -167,8 +167,8 @@ inline bool levelNear(const std::vector<wyr::Bar>& B, int i, const std::vector<w
     if (i < 0 || i >= (int)B.size()) return false;
     std::vector<std::pair<long long, Cand> > in;
     for (const Lv& z : levelsAt(B, i, key)) {
-        const bool inside = B[(size_t)i].l <= z.px && z.px <= B[(size_t)i].h, near = std::llabs(z.px - ext) <= tol;
-        if (!inside && !near) continue;
+        const bool inside = B[(size_t)i].l <= z.px && z.px <= B[(size_t)i].h, closeBy = std::llabs(z.px - ext) <= tol;   // (never "near": a Windows macro)
+        if (!inside && !closeBy) continue;
         Cand c; c.px = z.px; c.name = z.name; c.hb = z.hb; c.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), c)); }
     std::stable_sort(in.begin(), in.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first < b.first; });
     std::vector<Cand> cs; for (const auto& x : in) cs.push_back(x.second);
