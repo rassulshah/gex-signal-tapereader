@@ -25,7 +25,7 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 10:50 CT "ok build": the BO indicator's Rly gets its level too - levelNear(); same priority / short names)
 
 struct Mark { char code = 0; int dir = 0; long long px = 0; std::string lv; };   // code 'B' Bk / 'S' Sw / 'C' Cx; lv = the short level name ("" = none)
 inline const char* codeText(char c) { return c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : ""; }
@@ -158,6 +158,22 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
         out[B[(size_t)i].t] = m;
     }
     return out;
+}
+
+
+// (1.1.0) the one level AT candle i for another indicator's tag (the BO indicator's Rly): a level inside the candle's range or within tol ticks of
+// its extreme ext; same priority / short names as the marks; false = none
+inline bool levelNear(const std::vector<wyr::Bar>& B, int i, const std::vector<wyr::Lvl>& key, long long ext, long long tol, std::string& shortOut, long long& pxOut) {
+    if (i < 0 || i >= (int)B.size()) return false;
+    std::vector<std::pair<long long, Cand> > in;
+    for (const Lv& z : levelsAt(B, i, key)) {
+        const bool inside = B[(size_t)i].l <= z.px && z.px <= B[(size_t)i].h, near = std::llabs(z.px - ext) <= tol;
+        if (!inside && !near) continue;
+        Cand c; c.px = z.px; c.name = z.name; c.hb = z.hb; c.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), c)); }
+    std::stable_sort(in.begin(), in.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first < b.first; });
+    std::vector<Cand> cs; for (const auto& x : in) cs.push_back(x.second);
+    Cand c; if (!pick(cs, c)) return false;
+    shortOut = shortName(c.name, c.hb, c.high); pxOut = c.px; return true;
 }
 
 // the I's level as a short name ("" when its level does not label marks)

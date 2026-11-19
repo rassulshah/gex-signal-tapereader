@@ -54,5 +54,13 @@ int main(int argc, char** argv) {
       const auto P = wyi::layout(C, W, 0, 800, 1000); CHECK(P[0].ok && P[0].b < 300 && P[1].ok && P[1].b <= P[0].t, "green candle: the I over it, the level mark further out");
       C[0].green = false; const auto Q = wyi::layout(C, W, 0, 800, 1000); CHECK(Q[0].t > 340 && Q[1].t >= Q[0].b, "red candle: under it");
       const auto R = wyi::layout(C, W, 0, 800, 90); CHECK(!R[0].ok, "nothing right of the last bar"); }
+    // (2.1.0) the level lines, the board key, taken boxes
+    { std::vector<std::pair<long long, std::string> > L; const int n = wyi::parseLevels("WY|1|ES|180|0.19.0\nL|29221|PFL/PDL\nL|x|bad\nL|29555|PDH\n100|I|1\n", L);
+      CHECK(n == 2 && L[0].first == 29221 && L[0].second == "PFL/PDL" && L[1].second == "PDH", "level lines read, bad skipped");
+      std::map<long long, std::vector<wyi::M> > all; CHECK(wyi::parseAll("WY|1|ES|180|0.19.0\nL|29221|PFL/PDL\n100|I|1\n", all) == 1, "level lines are not marks");
+      CHECK(wyi::civilDays(2026, 11, 19) == 20776 && wyi::civilDays(1970, 1, 1) == 0, "civil days");
+      std::vector<wyi::Candle> C(1); C[0].x = 100; C[0].yHigh = 300; C[0].yLow = 340; C[0].green = true; std::vector<wyi::Want> W(1); W[0].w = 10; W[0].h = 13;
+      std::vector<wyi::Box> T(1); T[0].l = 86; T[0].r = 114; T[0].b = 300; T[0].t = 268;   // the BO indicator's letter over the candle (32 px)
+      const auto P = wyi::layout(C, W, 0, 800, 1000, T); CHECK(P[0].ok && (P[0].b < 268 || P[0].t > 340 || P[0].r < 86 || P[0].l > 114), "a tag never covers another indicator's letter"); }
     std::cout << (fail ? "FAILED " : "ALL PASS ") << pass << " pass, " << fail << " fail\n"; return fail ? 1 : 0;
 }

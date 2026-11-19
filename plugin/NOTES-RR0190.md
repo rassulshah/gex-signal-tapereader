@@ -30,3 +30,19 @@ passing; MinGW syntax check of RevRead.cpp / RevReadMarks.cpp against the real i
 
 Risks / not verified: not seen on his chart yet - needs an IRT restart (File -> Exit, wait for "installed", reopen). Times above are candle
 starts (IRT labels candle ends, +3 min). Sw beats Bk on the same candle (as in the mockup). The key file's PHL / PHH are used as given.
+
+## + lsBreakout / lsBreakout1 1.28.0 and coordination (Rassul 10:50 CT "ok build", 10:51 "remember placement of other signals like cmx so you have to coordinate everything")
+- BreakoutLogic.h 1.28.0: a fired BO / BD with a Reversal Read Bk of the same direction on its candle or the next one is NOT drawn (Bk + level
+  carries it; Pb / Rev / records / decisions unchanged; no letters file, a torn file or a Bk the other way = BO / BD drawn as before). The Rly
+  carries its level on a 2nd line (8 pt): LevelMarks 1.1.0 levelNear - a level inside the wave-extreme candle or within 2 ticks of its extreme,
+  same priority / short names; the key levels come from the letters file (L|px|name lines lsRevRead now writes); hour levels from the candles.
+- Breakout.cpp feedWy: reads RevRead\wy-<MKT>-<secs>.txt every 3 s, bounded 1 MB, re-read on size / time change, last good copy kept.
+- WyMarks 2.1.0: parseLevels, civilDays (SignalBoard bar key); layout(..., taken) never covers a taken box. lsRevReadMarks reads SignalBoard
+  'L' (the BO indicator's letters as drawn: candle, side, px out from the wick) and places Bk / Sw / Cx / I around them.
+- Tests: tests_bo1280/t_merge 10/10, tests_levelmarks 17/17 (+ levelNear: 9:39 AM low = PDL), tests_wymarks 29/29; MinGW syntax check of
+  Breakout.cpp / Breakout1.cpp / RevRead.cpp / RevReadMarks.cpp: 0 errors.
+- Coordination inventory (price-chart tags): lsBreakout / lsBreakout1 BO BD Pb Rev Rly FT BI % - COORDINATED (SignalBoard 'L');
+  lsZzoComboMarks CB / CB35 / CB99 over the Cob bar, SR under / over the stop-run candle (wave tags Cmx / AR / ST / Ab are logged, not drawn,
+  SHOW_WAVE_TAGS false) - NOT YET (no published positions; needs a small publish); lsCobSignal Cob / Cob+R / +V / +C labels and Lvp - NOT YET
+  (same); lsRevReadMarks I - its own. Line / box indicators (SessionVWAP, WavePOC, StepTrend, HtfSR, HodLod box, EventCal box, ZoneDefense,
+  DeltaProfile circles, FirstExtreme) do not put letter tags on candles.

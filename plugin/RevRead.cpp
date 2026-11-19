@@ -264,7 +264,7 @@ public:
         long long parMs = -100000; long long parSig = -2; int parKeys = 0; int pbBits = 0; long long pbMs = -100000;
         long long drawn = 0; std::string lastRead;
         long long wySig = -1; wyr::Out wy; int wyBars = 0;
-        std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::pair<std::string, long long> > iLv;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
+        std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::pair<std::string, long long> > iLv; std::vector<std::pair<long long, std::string> > lvKey;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
         // (0.7.0) the six checks
         rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
         int pvDir = 0; long long pvTp = 0, pvExt = 0, pvW = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000; long long mPostMs = -100000; int mPosts = 0;   // (0.14.0) fact M: the forming candle's market orders
@@ -644,6 +644,7 @@ public:
                     // (0.19.0, Rassul 10:20-10:40 CT, mockup v8, "go") Bk / Sw / Cx with one level each - the current session with the level files, earlier ones with their hour levels
                     try { const std::map<long long, lvm::Mark> lm = lvm::run(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>()); for (const auto& kv : lm) lvAll[kv.first] = kv.second; } catch (...) {}
                     segEnd = first - 1; }
+                    e.lvKey.clear(); for (const wyr::Lvl& z : lvNow) if (lvm::pri(z.name, 0) >= 0 && z.name.find('|') == std::string::npos) e.lvKey.push_back(std::make_pair(z.px, z.name.substr(0, 24)));   // (0.19.0) the key / volume levels the BO indicator labels its Rly with
                     e.wyBars = nBars; e.wy.marks.swap(all.marks); e.wy.reads.swap(all.reads); e.lvMarks.swap(lvAll); e.iLv.swap(iLvAll);
                     // (0.17.5, Rassul 13:08 CT "yes, just like the mockup" - the I letters on the SDMO pane too) the session's letters are published
                     // once per closed candle to lsFlexLevels\RevRead\wy-<MKT>-<secs>.txt (candle stamp|letter|dir); lsSDMO draws the I's from it, so the
@@ -654,6 +655,7 @@ public:
                             for (const auto& kv : e.wy.marks) for (const wyr::Mark& m : kv.second) { txt += std::to_string(kv.first) + "|" + wyr::label(m) + "|" + std::to_string(m.dir);
                                 if (m.k == 'I') { const auto il = e.iLv.find(kv.first); if (il != e.iLv.end()) txt += "|" + il->second.first + "|" + std::to_string(il->second.second); }   // (0.19.0) the I's level: 5 fields
                                 txt += "\n"; }
+                            for (const auto& z : e.lvKey) txt += "L|" + std::to_string(z.first) + "|" + z.second + "\n";   // (0.19.0) the levels (WyMarks parseLevels)
                             for (const auto& kv : e.lvMarks) txt += std::to_string(kv.first) + "|" + lvm::codeText(kv.second.code) + "|" + std::to_string(kv.second.dir) + "|" + kv.second.lv + "|" + std::to_string(kv.second.px) + "\n";   // (0.19.0) Bk / Sw / Cx
                             const std::string path = rvh::recDir(flex) + "\\wy-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", tmp = path + ".tmp";
                             bool ok = false; { std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc); if (f) { f << txt; f.flush(); ok = f.good(); } }
@@ -934,7 +936,16 @@ public:
                     const std::string a1 = wyi::textOf(m.code), a2 = m.lv; setFont(f1); int w = (int)getTextWidth(a1.c_str(), -1); if (!a2.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a2.c_str(), -1)); }
                     wyi::Want wt; wt.candle = (int)C.size() - 1; wt.w = w + 2 * wyi::PAD_X; wt.h = a2.empty() ? wyi::LINE1_H : wyi::LINE1_H + wyi::LINE2_H; W.push_back(wt); WM.push_back(&m); l1.push_back(a1); l2.push_back(a2); } }
             if (W.empty()) return RTX_OK;
-            const std::vector<wyi::Box> P = wyi::layout(C, W, (int)pane.top, (int)pane.bottom, xLast);
+            // (0.19.0, Rassul 10:51 CT "remember placement of other signals like cmx so you have to coordinate everything") the BO indicator's letters
+            // as drawn (SignalBoard 'L': candle, side, px from the extreme to the letter's outer edge) are taken boxes: our tags go around them
+            std::vector<wyi::Box> taken;
+            try { const char* sy = getSymbol(); const char* chl = getChartLabel(); std::vector<sb::Ev> ev;
+                if (sb::readAll('L', sy ? sy : "", getSecondsPerBar(), chl ? chl : "", rmSteadyMs(), ev) && !ev.empty()) {
+                    std::map<long long, size_t> at; for (size_t q = 0; q < barOf.size(); ++q) { struct tm m; std::memset(&m, 0, sizeof m); if (!getLocaltime((RTDATE)times[barOf[q]], &m)) continue;
+                        at[wyi::civilDays(m.tm_year + 1900, (unsigned)(m.tm_mon + 1), (unsigned)m.tm_mday) * 86400LL + m.tm_hour * 3600 + m.tm_min * 60 + m.tm_sec] = q; }
+                    for (const sb::Ev& x : ev) { const auto it = at.find(x.bar); if (it == at.end() || !(x.val > 0) || x.val > 400) continue; const wyi::Candle& cd = C[it->second];
+                        wyi::Box b; b.l = cd.x - 14; b.r = cd.x + 14; if (x.side > 0) { b.b = std::min(cd.yHigh, cd.yLow); b.t = b.b - (int)x.val; } else { b.t = std::max(cd.yHigh, cd.yLow); b.b = b.t + (int)x.val; } taken.push_back(b); } } } catch (...) {}
+            const std::vector<wyi::Box> P = wyi::layout(C, W, (int)pane.top, (int)pane.bottom, xLast, taken);
             double rmTick_ = (double)getProperty(SYM_TICKINCR); if (!std::isfinite(rmTick_) || rmTick_ <= 0 || rmTick_ >= 1000) rmTick_ = 0;   // the only tick source
             for (size_t k = 0; k < W.size(); ++k) { const wyi::Box& g = P[k]; if (!g.ok) continue; const wyi::M& m = *WM[k];
                 const COLOR col = m.dir > 0 ? rvh::C_GREEN : rvh::C_RED;

@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.0.0";
+static const char* const VERSION = "2.1.0";   // (2.1.0, Rassul 10:50-10:51 CT "ok build", "remember placement of other signals like cmx so you have to coordinate everything"): the key levels published in the file (L|px|name lines, read by the BO indicator for its Rly level); the layout also keeps clear of boxes other indicators occupy (the BO indicator's letters from SignalBoard 'L')
 static const int TAG_H = 13, PAD_X = 3, GAP = 3, CX_STEP = 16;
 static const int LINE1_H = 13, LINE2_H = 11;   // (2.0.0) a two-line tag: 13 px for the code, 11 px for the level name
 static const size_t MAX_BYTES = 1024 * 1024;
@@ -33,6 +33,7 @@ inline int parseAll(const std::string& txt, std::map<long long, std::vector<M> >
         if (l.empty()) continue;
         if (!head) { if (l.compare(0, 5, "WY|1|") != 0) return -1; head = true; continue; }
         std::vector<std::string> f; size_t p = 0; while (true) { const size_t q = l.find('|', p); f.push_back(l.substr(p, q == std::string::npos ? std::string::npos : q - p)); if (q == std::string::npos) break; p = q + 1; }
+        if (f.size() == 3 && f[0] == "L") continue;   // (2.1.0) a level line (parseLevels)
         if (f.size() != 3 && f.size() != 5) continue;
         char* end = nullptr; const long long t = std::strtoll(f[0].c_str(), &end, 10); if (!end || *end != 0 || t <= 0) continue;
         const char c = codeOf(f[1]); if (!c) continue;
@@ -44,6 +45,28 @@ inline int parseAll(const std::string& txt, std::map<long long, std::vector<M> >
     }
     return head ? n : -1;
 }
+
+// (2.1.0) the key / volume levels the pane published: L|px(ticks)|name lines (names <= 24 chars)
+inline int parseLevels(const std::string& txt, std::vector<std::pair<long long, std::string> >& out) {
+    out.clear(); size_t a = 0; bool head = false; int n = 0;
+    while (a < txt.size()) {
+        size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size();
+        std::string l = txt.substr(a, e - a); a = e + 1;
+        if (!l.empty() && l[l.size() - 1] == '\r') l.erase(l.size() - 1);
+        if (l.empty()) continue;
+        if (!head) { if (l.compare(0, 5, "WY|1|") != 0) return -1; head = true; continue; }
+        if (l.compare(0, 2, "L|") != 0) continue;
+        const size_t p2 = l.find('|', 2); if (p2 == std::string::npos) continue;
+        char* end = nullptr; const long long px = std::strtoll(l.c_str() + 2, &end, 10); if (!end || *end != '|' || px <= 0) continue;
+        const std::string nm = l.substr(p2 + 1); if (nm.empty() || nm.size() > 24 || nm.find('|') != std::string::npos) continue;
+        out.push_back(std::make_pair(px, nm)); ++n;
+    }
+    return head ? n : -1;
+}
+// (2.1.0) Central wall-clock seconds of a candle (days since 1970-01-01 x 86400 + seconds of the day) - the SignalBoard bar key every plugin uses
+inline long long civilDays(int y, unsigned m, unsigned d) { y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
+    const unsigned doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1; const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; return era * 146097 + (long long)doe - 719468; }
+
 // (1.0.0 interface, kept) the I letters only: candle stamp -> +1 / -1
 inline int parse(const std::string& txt, std::map<long long, int>& out) {
     out.clear(); std::map<long long, std::vector<M> > all; const int n = parseAll(txt, all); if (n < 0) return -1; int k = 0;
@@ -66,8 +89,8 @@ struct Candle { int x = 0, yHigh = 0, yLow = 0, halfW = 2; bool green = true; };
 struct Want { int candle = 0; int w = 0, h = TAG_H; };            // one tag of a candle (the I first, then the level mark), its size in px
 struct Box { int l = 0, t = 0, r = 0, b = 0; bool ok = false; };
 inline bool hit(const Box& a, const Box& b) { return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b); }
-inline std::vector<Box> layout(const std::vector<Candle>& C, const std::vector<Want>& W, int paneTop, int paneBottom, int xRight) {
-    std::vector<Box> placed; placed.reserve(C.size() + W.size());
+inline std::vector<Box> layout(const std::vector<Candle>& C, const std::vector<Want>& W, int paneTop, int paneBottom, int xRight, const std::vector<Box>& taken = std::vector<Box>()) {
+    std::vector<Box> placed(taken); placed.reserve(taken.size() + C.size() + W.size());   // (2.1.0) taken = other indicators' tags: never covered
     for (const Candle& c : C) { Box b; b.l = c.x - c.halfW; b.r = c.x + c.halfW; b.t = std::min(c.yHigh, c.yLow); b.b = std::max(c.yHigh, c.yLow); placed.push_back(b); }
     std::vector<Box> out(W.size());
     for (size_t k = 0; k < W.size(); ++k) {

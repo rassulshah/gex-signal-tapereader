@@ -89,6 +89,7 @@
 #undef near
 #endif
 #include "BreakoutLogic.h"
+#include "WyMarks.h"         // (1.28.0) lsRevRead's letters file (Bk lines + the levels) - SDK-free, tests_wymarks
 #include "BreakoutHide.h"   // (1.11.1) lsCobSignal's Cob / Lvp natively: which Rly / Pb letters to hide (display only)
 #include "HostSlot.h"
 #ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
@@ -125,7 +126,8 @@
 #endif
 
 static const bool BKO_REV_LINES = false;   // (1.27.5, Rassul 19:55 CT) no Stop / T1 / T2 lines on the Rev signals
-#define BKO_VERSION "1.27.5"   // (1.27.5, Rassul 2026-11-18 19:55 CT "get rid of the stop and targets for rev signals": the Rev Stop / T1 / T2 lines are no longer drawn; Rev decisions, records and facts unchanged)   // was "1.27.4"   // (1.27.4) Rev = (> 0.8 x ATR and closes beyond the prior bar) or >= 1.2 x ATR   // was "1.27.3"   // (1.27.3) Rev must close beyond the prior bar's high / low   // was "1.27.2"   // (1.27.2) Rev range bigger than 0.8 x ATR(13)   // was "1.27.1"   // (1.27.1) FT within 3 candles   // was "1.27.0"   // (1.27.0) FT label on the follow-through candle; Rev range >= 1.0 x ATR(13) required; Rev bigger than a same-colour bar before it   // was "1.26.0"   // (1.26.0) "Rev N" + the BT / P / S marks from lsRevRead (fact X), the Stop / T1 / 1.382 lines, fact W for lsRevRead   // was "1.25.0"   // (1.25.0) no Pboc after a Rly without a BO / BD   // was "1.24.0"   // (1.24.0) Rly without the vwapTrend condition (aligned with the hourly breakout bar)   // was "1.23.2"   // (1.23.0) book gate off; RevA   // was "1.22.0"   // (1.22.0) a Rev needs the book to agree (lsBookFlow fact F)   // was "1.21.0"   // (1.21.0) Rly only inside an hourly breakout bar
+#define BKO_VERSION "1.28.0"   // (1.28.0, Rassul 2026-11-19 10:50 CT "ok build"): a BO / BD that lsRevRead marks Bk (same direction, its candle or the next) is not drawn; the Rly carries its level on a 2nd line (BreakoutLogic.h 1.28.0)
+// was #define BKO_VERSION "1.27.5"   // (1.27.5, Rassul 2026-11-18 19:55 CT "get rid of the stop and targets for rev signals": the Rev Stop / T1 / T2 lines are no longer drawn; Rev decisions, records and facts unchanged)   // was "1.27.4"   // (1.27.4) Rev = (> 0.8 x ATR and closes beyond the prior bar) or >= 1.2 x ATR   // was "1.27.3"   // (1.27.3) Rev must close beyond the prior bar's high / low   // was "1.27.2"   // (1.27.2) Rev range bigger than 0.8 x ATR(13)   // was "1.27.1"   // (1.27.1) FT within 3 candles   // was "1.27.0"   // (1.27.0) FT label on the follow-through candle; Rev range >= 1.0 x ATR(13) required; Rev bigger than a same-colour bar before it   // was "1.26.0"   // (1.26.0) "Rev N" + the BT / P / S marks from lsRevRead (fact X), the Stop / T1 / 1.382 lines, fact W for lsRevRead   // was "1.25.0"   // (1.25.0) no Pboc after a Rly without a BO / BD   // was "1.24.0"   // (1.24.0) Rly without the vwapTrend condition (aligned with the hourly breakout bar)   // was "1.23.2"   // (1.23.0) book gate off; RevA   // was "1.22.0"   // (1.22.0) a Rev needs the book to agree (lsBookFlow fact F)   // was "1.21.0"   // (1.21.0) Rly only inside an hourly breakout bar
 // was "1.20.0"   // (1.20.0) the retracement % under every decided pullback label
 // was "1.19.0"   // (1.19.0) Rev: range >= 1.2 x ATR(13) OR a close beyond the prior bar; drawn after every pullback label incl. the Rly Pboc
 // was "1.18.0"   // (1.18.0) the origin is broken by a CLOSE; PbT / PbocT (a pullback that tested a Step Trend level)
@@ -177,6 +179,7 @@ struct BState {
     // (1.3.0) records: lsBigBidAsk's market / contract names; keys known to be in each file; the engine run last written; counters
     std::string recMkt, recSym; std::map<std::string, std::set<std::string>> recHave; int recRuns = -1; long long recMs = -1;
     long long recAdded = 0, recFails = 0; long recPend = 0;
+    long long wyCk = -100000; std::string wySig; int wyRead = -1;   // (1.28.0) lsRevRead's letters file: checked every 3 s, re-read only when its size / time changed
     bkh::Cob cob;   // (1.11.1) the Cob / Lvp letters lsCobSignal draws on this chart
     long long bkMs = -1; int bkFacts = -1, bkDecided = 0;   // (1.22.0) fact kind F (lsBookFlow's defend ratios): last read (steady ms), facts read (-1 = none on this chart), Revs decided
     size_t wPosted = 0; int xRead = -1;   // (1.26.0) fact W posted / fact X read (-1 = lsRevRead is not on this chart)
@@ -198,6 +201,7 @@ public:
     bool identify(BState& S);
     void feed(BState& S);
     void feedCob(BState& S, int first, const std::vector<bko::In>& B);
+    void feedWy(BState& S);   // (1.28.0)
     int vapRows(BState& S, int chartBar, std::vector<wpc::VRow>& out);   // (1.12.0) lsWavePOC's reader
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
     static int readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
@@ -261,6 +265,25 @@ void Breakout::feed(BState& S) {
     try { S.E.update(B, n, (long long)times[0], S.tick, S.spb, S.openMin, S.closeMin); } catch (...) { S.E.vapAt = nullptr; throw; }
     S.E.vapAt = nullptr;
     try { feedCob(S, first, B); } catch (...) { S.E.hideRly.clear(); S.E.hidePb.clear(); }   // (1.11.1) display only: a fault hides nothing
+    try { feedWy(S); } catch (...) { S.E.wyOk = false; }   // (1.28.0) display only: a fault = every BO / BD drawn as before
+}
+
+// (1.28.0) lsRevRead's letters file lsFlexLevels\RevRead\wy-<MKT>-<secs>.txt (bounded 1 MB, looked at every 3 s, re-read only when its size or
+// time changed; a torn / foreign file keeps the last good copy; gone = nothing merged): the Bk directions and the key / volume levels
+void Breakout::feedWy(BState& S) {
+    const long long ms = bkoMs(); if (ms - S.wyCk < 3000 && ms >= S.wyCk) return; S.wyCk = ms;
+    const std::string f = bkoFlex(), mk = mkey::norm(S.mkt); if (f.empty() || mk.empty() || S.spb <= 0) return;
+    const std::string path = f + BKO_SEP "RevRead" BKO_SEP "wy-" + mk + "-" + std::to_string((long long)S.spb) + ".txt";
+    struct stat st; if (stat(path.c_str(), &st) != 0) { S.wySig.clear(); S.E.bkDir.clear(); S.E.lvKey.clear(); S.E.wyOk = false; S.wyRead = -1; return; }
+    const std::string sig = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sig == S.wySig) return;
+    if ((size_t)st.st_size > wyi::MAX_BYTES) { S.wyRead = -2; return; }
+    std::ifstream in(path.c_str(), std::ios::binary); if (!in) return;
+    const std::string txt((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::map<long long, std::vector<wyi::M> > all; const int n = wyi::parseAll(txt, all); if (n < 0) return;   // torn / foreign: keep the last good copy
+    std::vector<std::pair<long long, std::string> > L; wyi::parseLevels(txt, L);
+    std::map<long long, int> bk; for (const auto& kv : all) for (const wyi::M& m : kv.second) if (m.code == 'B') bk[kv.first] = m.dir;
+    std::vector<wyr::Lvl> lv; for (const auto& z : L) { wyr::Lvl x; x.px = z.first; x.name = z.second; lv.push_back(x); }
+    S.E.bkDir.swap(bk); S.E.lvKey.swap(lv); S.E.wyOk = true; S.wySig = sig; S.wyRead = n;
 }
 
 // (1.11.1, Rassul HG 10:13 "if there is a cob you dont need to show a rly and if there is an lvp, you dont need to show a pb, otherwise
@@ -437,11 +460,13 @@ int Breakout::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         v.Y = [this](double px) { return (int)getVerticalDrawPosition((float)px); };
         FONT f0; f0.id = HELVETICA; f0.size = bko::FONT_BO; f0.style = BOLD;
         FONT f1 = f0; f1.size = bko::FONT_RLY;
+        FONT f2 = f0; f2.size = bko::FONT_RLY2; f2.style = PLAIN;   // (1.28.0) the Rly level
         int lh[2] = { 0, 0 }, lift[2] = { 1, 1 };
         for (int k = 0; k < 2; ++k) { FONT& f = k ? f1 : f0; setFont(f); int ll = 0, la = 0, ld = 0; getFontMetrics(&ll, &la, &ld);
             lh[k] = std::max((int)f.size + 5, la + ld); lift[k] = std::max(1, (ll + ld + 1) / 2); }
         v.lh[0] = lh[0]; v.lh[1] = lh[1];
-        v.textW = [this, &f0, &f1](const char* s, int font) { setFont(font == bko::FONT_RLY ? f1 : f0); return (int)getTextWidth(s, -1); };
+        int lift2 = 1; { setFont(f2); int ll = 0, la = 0, ld = 0; getFontMetrics(&ll, &la, &ld); v.lh2 = std::max((int)f2.size + 3, la + ld); lift2 = std::max(1, (ll + ld + 1) / 2); }
+        v.textW = [this, &f0, &f1, &f2](const char* s, int font) { setFont(font == bko::FONT_RLY ? f1 : font == bko::FONT_RLY2 ? f2 : f0); return (int)getTextWidth(s, -1); };
         S->last = bko::layout(S->E, v);
         if (BKO_REV_LINES) {   // (1.27.5) off - (1.26.0) the Rev trade lines under the letters, his CoB style: a thin solid line from the Rev candle, the name at its right end
             FONT fs = f0; fs.size = 8; fs.style = PLAIN; setFont(fs);
@@ -455,7 +480,11 @@ int Breakout::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
             for (int d = 0; d < 4; ++d) { const int dx = d == 0 ? -1 : d == 1 ? 1 : 0, dy = d == 2 ? -1 : d == 3 ? 1 : 0;
                 RCT r; r.set(bkoC(T.f.l + dx), bkoC(T.f.t - lf + dy), bkoC(T.f.r + dx), bkoC(T.f.b - lf + dy)); r.drawText(T.s.c_str(), true, false); }
             setTextColor((COLOR)T.col);
-            RCT r; r.set(bkoC(T.f.l), bkoC(T.f.t - lf), bkoC(T.f.r), bkoC(T.f.b - lf)); r.drawText(T.s.c_str(), true, false);
+            const int b1 = T.s2.empty() ? T.f.b : T.f.t + v.lh[k];   // (1.28.0) a Rly with its level: "Rly" on the first line, the level under it
+            RCT r; r.set(bkoC(T.f.l), bkoC(T.f.t - lf), bkoC(T.f.r), bkoC(b1 - lf)); r.drawText(T.s.c_str(), true, false);
+            if (!T.s2.empty()) { setFont(f2); setTextColor(0x00000000);
+                for (int d = 0; d < 4; ++d) { const int dx = d == 0 ? -1 : d == 1 ? 1 : 0, dy = d == 2 ? -1 : d == 3 ? 1 : 0; RCT q; q.set(bkoC(T.f.l + dx), bkoC(b1 - lift2 + dy), bkoC(T.f.r + dx), bkoC(T.f.b - lift2 + dy)); q.drawText(T.s2.c_str(), true, false); }
+                setTextColor((COLOR)T.col); RCT q; q.set(bkoC(T.f.l), bkoC(b1 - lift2), bkoC(T.f.r), bkoC(T.f.b - lift2)); q.drawText(T.s2.c_str(), true, false); }
         }
         std::vector<sb::Ev> ev;   // SignalBoard 'L' (SignalBoard.h 1.3.0): bar (CT wall seconds), side, px from the extreme to the outer edge
         for (const bko::Board& b : S->last.board) { long d = 0; int e = 0; if (!parts((RTDATE)b.t, d, e)) continue;
@@ -474,6 +503,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA BO v1.14.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.27.5");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.28.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }

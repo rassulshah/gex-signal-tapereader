@@ -32,6 +32,11 @@ int main(int argc, char** argv) {
     { const wyr::Out o = wyr::run(B, 0.25, 2, wyr::Params(), K); std::string got; for (const auto& kv : o.ilv) if (kv.first >= t700) { const auto hb = o.ilvHb.find(kv.first);
         got += startOf[kv.first] + " " + lvm::iLevel(kv.second.second, hb != o.ilvHb.end() ? hb->second : 0, kv.second.second.find("high") != std::string::npos) + "; "; }
       std::printf("I levels: %s\n", got.c_str()); C(got.find("7:51 PHL") != std::string::npos || got.find("7:54 PHL") != std::string::npos, "the 7:54 AM I = I / PHL"); }
+    // (1.1.0) levelNear: the Rly at the 9:39 AM low (7293.00) - PDL 7305.25 is inside the candle -> "PDL"
+    { int i = -1; for (size_t q = 0; q < B.size(); ++q) if (startOf[B[q].t] == "9:39" && B[q].t > t700) i = (int)q;
+      std::string sn; long long px = 0; C(i >= 0 && lvm::levelNear(B, i, K, B[(size_t)i].l, 8, sn, px) && sn == "PDL" && px == 29221, "levelNear: the 9:39 AM low = PDL (" + sn + ")");
+      int j = -1; for (size_t q = 0; q < B.size(); ++q) if (startOf[B[q].t] == "8:00" && B[q].t > t700) j = (int)q;
+      std::string s2; long long p2 = 0; const bool any = lvm::levelNear(B, j, std::vector<wyr::Lvl>(), B[(size_t)j].h, 0, s2, p2); C(!any || !s2.empty(), "levelNear: hour levels only still gives a short name or nothing"); }
     // rule cases (stamps on the clock: 2 AM, 3-min)
     const long long T = 3600LL * 24 * 100 + 2 * 3600;
     auto flat = [&](int n, long long p) { std::vector<wyr::Bar> v; for (int i = 0; i < n; ++i) v.push_back(bar(T + (i + 1) * 180, p, p + 2, p - 2, p, 100)); return v; };

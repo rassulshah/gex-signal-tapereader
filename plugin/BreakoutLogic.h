@@ -102,6 +102,7 @@
 #include "RallyLogic.h"
 #include "WavePOCLogic.h"    // (1.12.0) wpc::rowTicksFor / buildRows / median2 / pickNodes = lsWavePOC's wave volume POC rule, natively (Pboc)
 #include "StepTrendLogic.h"   // (1.18.0) stp::Engine = lsStepTrend's hourly steps, natively (PbT / PbocT)
+#include "LevelMarks.h"      // (1.28.0) the Rly level (lvm::levelNear) - SDK-free, tests_levelmarks
 #include "ZzoDeltaLogic.h"   // (1.1.0) zzd::Engine::step = the 3-bar High / Low ZigZag of lsZzoCombo 2.1.0 (COMBO_REV_BARS)
 #include <algorithm>
 #include <cmath>
@@ -127,7 +128,8 @@ namespace bko {
 static const bool SHOW_PB_VARIANTS = false;   // (1.27.5, Rassul 2026-11-18 19:55 CT "PB has a lot of variations, lets get rid of them for now and just keep PB": Pboc / PbocT / PbT / Pdoc all draw as "Pb"; their decisions and records are unchanged
 static const bool SHOW_RLY_PBOC = false;   // (1.25.0, Rassul 2026-11-13 14:24-14:25 CT "right now the pb signal works with rly, but it needs a bo", "dont show pboc, because pboc requires a pb") a pullback label needs a BO / BD: the no-BO Rly Pboc / PbocT is no longer drawn (still judged + recorded, BPO| lines)
 static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
-static const char* const VERSION = "1.27.5";   // (1.27.5, Rassul 2026-11-18 19:55 CT "get rid of the stop and targets for rev signals": the Rev Stop / T1 / T2 lines are no longer drawn; "PB has a lot of variations ... just keep PB": every pullback label is "Pb"; decisions, records and facts unchanged)
+static const char* const VERSION = "1.28.0";   // (1.28.0, Rassul 2026-11-19 10:50 CT "ok build" on level-marks-bo-mockup.html): (1) a fired BO / BD with a Reversal Read Bk of the same direction on its candle or the next one is NOT drawn - the Bk with its level carries it (lsRevRead's letters file RevRead\\wy-<MKT>-<secs>.txt; no file / torn = drawn as before); (2) the Rly gets its level on a 2nd line (LevelMarks.h levelNear: a level inside the wave-extreme candle or within 2 ticks of its extreme, session > PD > PF > volume > weekly > hours, short names). Decisions, records, Pb / Rev unchanged
+// was static const char* const VERSION = "1.27.5";   // (1.27.5, Rassul 2026-11-18 19:55 CT "get rid of the stop and targets for rev signals": the Rev Stop / T1 / T2 lines are no longer drawn; "PB has a lot of variations ... just keep PB": every pullback label is "Pb"; decisions, records and facts unchanged)
 // was static const char* const VERSION = "1.27.4";   // (1.27.4, 2026-11-14 Rassul 17:03 CT "bigger than 0.8x ATR and closes beyond the prior bar or >= 1.2*ATR"): Rev = (range > 0.8 x ATR(13) AND a close beyond the prior bar's high / low) OR range >= 1.2 x ATR(13); rule 7 unchanged   // was "1.27.3":   // (1.27.3, 2026-11-14 Rassul 16:52-16:54 CT "how does this bar qualify ? it doesnt close above any bar", "it must close above prior bar high"): a Rev candle must ALSO close above the high of the bar before it (BD: below its low)   // was "1.27.2":   // (1.27.2, 2026-11-14 Rassul 13:22 CT "it has to be bigger than .8 atr that way we can account for variability"): Rev = range bigger than 0.8 x ATR(13) (was at least 1.0 x), still required   // was "1.27.1":   // (1.27.1, 2026-11-14 Rassul 13:10 CT "the ft should be within 3 bars"): the FT candle must be one of the 3 candles after the BO / BD candle (FT_MAX_BARS), else no FT label   // was "1.27.0":   // (1.27.0, 2026-11-14 Rassul 11:07-11:28 CT "also implement the ft bar label on the ft bar that closes above the bo bar high", "the followht through candle is a green candle that closes above the bo bar high or at the bo bar [high] with a high above the bo high" (he chose reading A), "the rev size must be at least the size of the ATR", "update 7 , rev candles range bigger than the prior bar if the prior bar is the same color"): (1) the FT label on the follow-through candle of a drawn BO / BD (ftPass; a label only, no BO / Pb / Rev decision uses it); (2) Rev = range >= 1.0 x ATR(13), REQUIRED (the 1.19.0 "or closes beyond the prior bar" is gone); (3) rule 7: when the bar before the Rev candle has the Rev's colour, the Rev's range must be bigger than that bar's   // was "1.26.0":   // (1.26.0, 2026-11-13 Rassul 22:05-22:27 CT "update it to indicate the number of checks", "make the T green .. add P for pulled. Put S for Seller", "update T to BT", "make P red", "next thing is to have the stop line , target 1 and target 2 lines", "target 1 is the high and target two can be an extenstion like 1.38", "1. pullback only. 2. use a similar approach as the cob"): the Rev label carries the count of the six checks ("Rev 4", from lsRevRead's fact X); the marks BT / P / S (ST / P / B on a long) at the big buyer's price, the prior candle's extreme and the big seller's price when their check passed; the lines Stop / T1 / 1.382 from the Rev candle (revLines); no Pb / Rev decision changed   // was "1.25.0":   // (1.25.0, 2026-11-13 Rassul 14:25 CT "dont show pboc, because pboc requires a pb"): no pullback label after a Rly wave that has no BO / BD (SHOW_RLY_PBOC false; display only, the decision and its records unchanged)   // was "1.24.0":   // (1.24.0, 2026-11-11 Rassul 20:26-20:27 CT "you dont need the vwap, if we are using the hourly trend", "remove the vwap contidion. we need to align witht he hbo instead"): a Rly no longer needs vwapTrend (RallyLogic 1.5.0 needTrend = false); it still has to sit inside an hourly breakout bar of its direction
 // was static const char* const VERSION = "1.23.2";   // (1.23.2, 2026-11-11 Rassul 15:08 CT "when you have a bearish retracement, the label should be above the pb and its variants and vice versa"): the retracement % sits on the OUTER side of the pullback label - above a label drawn over the candle, below one drawn under it   // was "1.23.1";   // (1.23.1, 2026-11-11 Rassul 14:55 CT "pb and its variants are suppose to be completely seperate"): RevA switched OFF - the BO indicator shows no Delta Profile absorption; Rev is "Rev" again   // was "1.23.0";   // (1.23.0, 2026-11-11 Rassul 14:41 CT "1. switch it off. 2. ok and only delta profile"): the book gate is OFF (the verdict is still decided, status only); a Rev with an absorbed delta node at its pullback pivot is drawn "RevA"   // was "1.22.0";   // (1.22.0, 2026-11-11 Rassul "I want the signal on rev to utilize this also", "Require it"): a Rev is drawn only when the order book agrees (lsBookFlow fact F)   // was "1.21.0";   // (1.21.0, 2026-11-11 Rassul 12:51 CT "Build") a Rly is displayed only when the candle it sits on is inside an hourly breakout bar of its direction (lsStepTrend's step rule), decided once when that hour has closed; a Rly Pboc needs such a Rly
 // was "1.20.0";   // (1.20.0, 2026-11-11 Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the pullback's retracement of its wave, two digits + "%", right under every decided pullback label
@@ -153,7 +155,9 @@ static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW
 static const int PB_ROWS = 1;          // (1.9.5) right under the wave-time label (row 0); was 2 (1.1.1) Pb sits this many rows beyond the wick row: clear of the wave-time label (row 0) and A / Ae (row 1)
 static const int PB_OFF = GAP + PB_ROWS * ROW_OUT;   // (1.1.1) = 35 px from the wick end to the Pb letter's near edge
 static const int FONT_BO = 7;          // ~9 px letters (Rassul: small, smaller than lsBigBidAsk's 10)
-static const int FONT_RLY = 9;         // the mockup's Rly size
+static const int FONT_RLY = 9;
+static const int FONT_RLY2 = 8;        // (1.28.0) the Rly level on its 2nd line
+static const int RLY_LEVEL_TICKS = 2;  // (1.28.0) a level within 2 ticks of the wave extreme counts (or inside the candle)         // the mockup's Rly size
 static const unsigned long C_UP = 0x0022C55E, C_DN = 0x00EF4444;   // green bullish / red bearish (his C_BUY / C_SELL)
 static const int MAX_BARS = 20000;     // bars considered (as lsBigBidAsk's Rly pass)
 static const int PB_REV_BARS = zzd::COMBO_REV_BARS;   // (1.1.0) the Pb pivots: 3-bar High / Low ZigZag (lsZzoCombo 2.1.0)
@@ -342,6 +346,23 @@ struct Engine {
     long long biAtt = 0;                       // attempts looked at in the last BI pass (status)
     bool cancelled(long long t0) const { return boCancel.count(t0) != 0; }
     bool shownBo(const bba::BoDec& D) const { return D.fired && D.dir != 0 && !cancelled(D.t0); }   // a BO / BD letter that is drawn
+    // (1.28.0) lsRevRead's candle marks / levels (its letters file): candle stamp -> Bk direction; the key / volume levels (ticks, names)
+    std::map<long long, int> bkDir; std::vector<wyr::Lvl> lvKey; bool wyOk = false;
+    int barOf(long long t) const { const auto it = std::lower_bound(bars.begin(), bars.end(), t, [](const In& b, long long x) { return b.t < x; }); return it != bars.end() && it->t == t ? (int)(it - bars.begin()) : -1; }
+    bool bkMerged(const bba::BoDec& D) const {   // a Bk of the same direction on the BO / BD candle or the next one
+        if (!wyOk || bkDir.empty()) return false;
+        const int i = barOf(D.t0); if (i < 0) return false;
+        for (int k = i; k <= i + 1 && k < (int)bars.size(); ++k) { const auto it = bkDir.find(bars[(size_t)k].t); if (it != bkDir.end() && it->second == (D.dir > 0 ? 1 : -1)) return true; }
+        return false; }
+    std::string rlyLevel(int bar, int dir) const {   // the Rly's level short name ("" = none): a window of the session's candles up to the wave-extreme candle
+        if (bar < 0 || bar >= (int)bars.size() || !(tick > 0)) return std::string();
+        const long long hp = wyr::hourOf(bars[(size_t)bar].t), sess = hp - (((hp % 24) - 17 + 24) % 24);   // the 17:00 CT session's first hour
+        const long long from = std::max(hp - 4, sess);
+        int a = bar; while (a > 0 && wyr::hourOf(bars[(size_t)a - 1].t) >= from) --a;
+        std::vector<wyr::Bar> W; W.reserve((size_t)(bar - a + 1));
+        for (int k = a; k <= bar; ++k) { const In& b = bars[(size_t)k]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) return std::string(); wyr::Bar x; x.t = b.t; x.o = std::llround(b.o / tick); x.h = std::llround(b.h / tick); x.l = std::llround(b.l / tick); x.c = std::llround(b.c / tick); x.buy = b.vol / 2; x.sell = b.vol - b.vol / 2; W.push_back(x); }
+        std::string sn; long long px = 0; const long long ext = dir > 0 ? W.back().h : W.back().l;
+        return lvm::levelNear(W, (int)W.size() - 1, lvKey, ext, RLY_LEVEL_TICKS, sn, px) ? sn : std::string(); }
     long long lastClosedT = 0, firstT = 0; long count = -1; bool full = true;   // firstT / count = the CHART's first bar stamp and bar count
     int runs = 0, fullRuns = 0; long long boDup = 0;
     void reset() { *this = Engine(); }
@@ -944,7 +965,7 @@ struct Engine {
 struct Box { int l = 0, t = 0, r = 0, b = 0; };
 inline bool hits(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 inline bool inside(const Box& a, const Box& in) { return a.l >= in.l && a.r <= in.r && a.t >= in.t && a.b <= in.b; }
-struct Txt { std::string s; Box f; unsigned long col = 0; int font = 0; int bar = 0; int dir = 0; int kind = 0; int row = 0; };   // kind 0 BO / BD, 1 Rly, 2 Pb (1.1.0), 3 BI (1.5.0), 4 Rev (1.9.0; row = rows out from the wick)
+struct Txt { std::string s2; std::string s; Box f; unsigned long col = 0; int font = 0; int bar = 0; int dir = 0; int kind = 0; int row = 0; };   // kind 0 BO / BD, 1 Rly, 2 Pb (1.1.0), 3 BI (1.5.0), 4 Rev (1.9.0; row = rows out from the wick)
 struct View {
     int first = 0, last = -1;                       // visible chart bars (inclusive)
     Box area;                                       // where letters may go (price area, below the IRT title row)
@@ -952,10 +973,11 @@ struct View {
     std::function<int(int)> X;                      // bar -> centre x
     std::function<int(double)> Y;                   // price -> y
     std::function<int(const char*, int)> textW;     // text, font -> px
+    int lh2 = 0;                                    // (1.28.0) the Rly level line height (FONT_RLY2); 0 = no 2nd line
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int ftShown = 0; int sixMarks = 0; int revNoBook = 0, revAShown = 0; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int ftShown = 0; int sixMarks = 0; int revNoBook = 0, revAShown = 0; int boMerged = 0, rlyLevels = 0; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -986,9 +1008,11 @@ inline Scene layout(const Engine& E, const View& v) {
         const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) return;
         const char* tx = txo ? txo : kind == 2 ? "Pb" : kind == 1 ? "Rly" : (dir > 0 ? "BO" : "BD"); const int font = kind == 1 ? FONT_RLY : FONT_BO;
         const int w = v.textW(tx, font) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl);
-        const int lh = v.lh[kind == 1 ? 1 : 0], off = kind == 1 ? GAP + std::max(RLY_ROW, v.lh[0] + 3) : kind == 2 ? PB_OFF : GAP;   // (1.1.1) Pb two rows out
+        int lh = v.lh[kind == 1 ? 1 : 0]; const int off = kind == 1 ? GAP + std::max(RLY_ROW, v.lh[0] + 3) : kind == 2 ? PB_OFF : GAP;   // (1.1.1) Pb two rows out
         Txt T; T.s = tx; T.font = font; T.bar = bar; T.dir = dir; T.kind = kind; T.col = dir > 0 ? C_UP : C_DN;
         T.f.l = cx - w / 2; T.f.r = T.f.l + w;
+        if (kind == 1 && v.lh2 > 0 && !txo) { T.s2 = E.rlyLevel(bar, dir);   // (1.28.0) the Rly's level on a 2nd line (smaller)
+            if (!T.s2.empty()) { const int w2 = v.textW(T.s2.c_str(), FONT_RLY2) + 2; if (w2 > w) { T.f.l = cx - w2 / 2; T.f.r = T.f.l + w2; } lh += v.lh2; } }
         if (dir > 0) { T.f.b = top - off; T.f.t = T.f.b - lh; } else { T.f.t = bot + off; T.f.b = T.f.t + lh; }
         if (kind == 2)   // (1.1.0) Pb never on another letter: one row further out (lh + 1 px) until it is clear (1.1.1: starting PB_OFF out)
             for (int tries = 0; tries < 4; ++tries) {
@@ -999,7 +1023,7 @@ inline Scene layout(const Engine& E, const View& v) {
         bool ok = inside(T.f, v.area); for (const Box& k : v.keepOut) if (k.r > k.l && k.b > k.t && hits(T.f, k)) ok = false;
         if (kind == 2) for (const Txt& o : S.txt) if (hits(T.f, o.f)) ok = false;
         if (!ok) { ++S.noRoom; return; }
-        S.txt.push_back(T); if (kind == 2) ++S.pbShown; else if (kind == 1) ++S.rlyShown; else ++S.boShown;
+        S.txt.push_back(T); if (kind == 2) ++S.pbShown; else if (kind == 1) { ++S.rlyShown; if (!T.s2.empty()) ++S.rlyLevels; } else ++S.boShown;
         int& r = reach[std::make_pair(bar, dir > 0 ? 1 : -1)]; r = std::max(r, dir > 0 ? top - T.f.t : T.f.b - bot);
     };
     // (1.20.0, Rassul 2026-11-11 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the
@@ -1020,7 +1044,7 @@ inline Scene layout(const Engine& E, const View& v) {
         if (!ok) { ++S.pctNoRoom; return; }
         S.txt.push_back(T); ++S.pctShown; };
     std::vector<std::pair<int, int>> boBars;
-    for (const auto& kv : E.bo) { const bba::BoDec& D = kv.second; if (!E.shownBo(D)) continue;   /* (1.5.0) not a BO / BD a BI cancelled */ const auto it = idx.find(D.t0); if (it == idx.end()) continue; put(it->second, D.dir, 0); boBars.push_back({ it->second, D.dir > 0 ? 1 : -1 }); }
+    for (const auto& kv : E.bo) { const bba::BoDec& D = kv.second; if (!E.shownBo(D)) continue; if (E.bkMerged(D)) { ++S.boMerged; continue; }   /* (1.28.0) the Bk + level carries it */   /* (1.5.0) not a BO / BD a BI cancelled */ const auto it = idx.find(D.t0); if (it == idx.end()) continue; put(it->second, D.dir, 0); boBars.push_back({ it->second, D.dir > 0 ? 1 : -1 }); }
     for (const auto& kv : E.rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const auto it = idx.find(R.te); if (it == idx.end()) continue;
         if (!E.rlyShown(R)) { ++S.rlyNoHbo; continue; }   // (1.21.0) not inside an hourly breakout bar of its direction (or its hour has not closed yet)
         if (E.hideRly.count(std::make_pair(R.te, R.dir))) { ++S.rlyHidden; continue; }   // (1.11.1) a drawn Cob on this extreme: no Rly letter
