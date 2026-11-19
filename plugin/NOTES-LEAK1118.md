@@ -65,3 +65,18 @@ Source: `Perf\permem-*-20261118.csv`, 13:19-15:10 (IRT restarted about 14:00).
 - Read tomorrow: own_live_mb rising with private bytes = that plugin keeps the memory (fix it in the plugin). own_live_mb flat while its draws add private bytes = IRT keeps it while drawing for that plugin (then: draw less per pass, e.g. cache the drawn picture or cut primitives).
 - Tests: test_permem 7/7 (own heap columns), PerfGuard suite 58/0, macro simulation, e2e writer, real-SDK syntax; MinGW syntax of DeltaProfile, BookFlow, ZzoCombo, SDMO, RevRead with 1.2.0: 0 errors; the operator block links (MinGW) and counts / releases correctly (Linux run).
 - SDMO.cpp: the unused sdmLetters function removed (MSVC C5051 warning); SDMO host tests 14/14.
+
+## 2026-11-19 10:00 CT - PerfGuard 1.2.0 own-heap counter: the growth is DeltaProfile's OWN heap
+Source: `Perf\permem2-*-20261118.csv` (19:37-22:41) and `-20261119.csv` (07:24-09:53); own_live_mb = bytes the DLL holds through its own
+operator new (all its charts), priv_mb = IRT's private memory.
+- **DeltaProfile: own_live tracks IRT's private memory almost 1:1** (priv - own_live stays about 0.85-1.8 GB):
+  - 11-18 evening: 5 MB (19:37) -> 4,124 MB (20:57), dropped at the 21:5x restart, then 30 MB -> 2,958 MB by 22:41 (priv 4.2 GB).
+  - 11-19: 5 MB (07:24) -> 641 MB (08:27) -> 2,252 MB (08:54) -> 3,526 MB (09:30, priv 5.3 GB). About 65 MB a minute in RTH.
+    After the 09:38 restart: 3 MB -> 170 MB by 09:53.
+  - Rows at 09:12 / 09:21 show draw_n 0 (IRT not drawing) with priv at 4.6 GB; the 09:41 restart hang came after priv reached 5.3 GB.
+    Memory pressure from this leak is a likely contributor to the hang (not proven).
+- **Not their own heap** (own_live flat, so the process growth logged against their draws is IRT's, or another DLL's growth
+  landing during their draw): DealerProfile / LimitProfile own_live 16-27 MB (process draw net 729-1,388 MB); ZzoCombo 9-23 MB
+  (736-1,008 MB); BookFlow 7-39 MB; Breakout1 9-23 MB.
+- Next: find what DeltaProfile keeps allocating in draw (own_draw adds 30-140 MB per 9-minute slice and is never freed) - a
+  per-draw cache / vector that is appended to but never cleared. Fix needs a DeltaProfile build (his yes; trading hours rule).
