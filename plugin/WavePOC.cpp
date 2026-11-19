@@ -109,6 +109,8 @@
 #endif
 #include "WavePOCLogic.h"
 #include "CobSignalLogic.h"  // (1.9.2) cobs::Engine = lsCobSignal's CoB rule natively (CoB waves; no RTL read any more)
+#include "WyMarks.h"         // (1.17.0) lsRevRead's letters file: the Bk marks (the waves that get a profile now)
+#include "MarketKey.h"
 #include "BreakoutLogic.h"   // (1.9.0) bko::Engine = lsBreakout's BO / BD decision on the same bars (the HVN break level), natively
 #include "WavePOCSettings.h"
 #include "SettingsHost.h"
@@ -131,6 +133,7 @@
 #include <string>
 #include <vector>
 #include <sys/stat.h>
+#include <iterator>
 #if !defined(_WIN32)
 #include <sys/types.h>
 #endif
@@ -142,7 +145,8 @@
 #endif
 
 static const bool WP_LIQ = false;   // (1.16.1) the liquidity nodes (WavePOCLiq.h) are removed: the MBO feed is never opened, nothing sampled
-static const char* WP_VERSION = "1.16.1";   // (1.16.1, Rassul 2026-11-17 20:30 CT "remove the liquidity nodes") no order-by-order feed, no liquidity nodes   // was "1.16.0";   // (1.16.0) the spike rule for H   // was "1.15.2"   // (1.15.2) lighter profile rows   // was "1.15.1"   // (1.15.1) CoB legs: the CoB mark after the end pivot is found   // was "1.15.0"   // (1.15.0, Rassul 2026-11-16 21:32 CT) spine + volume profile + POC + 2 HVNs back   // was "1.14.0";   // (1.14.0, Rassul 2026-11-11 19:09 CT) no spine; POC / HVN dashes on their candles; lots at the end of the POC dash
+static const char* WP_VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-19 16:06 CT "i'll go with your recommendation", price-pane cleanup "ok"): the breakout waves that get a profile are the Bk waves of lsRevRead (the Bk candles of RevRead\wy-<MKT>-<secs>.txt, its direction, decided at its close) instead of lsBreakout's BO / BD; Rly waves no longer get one (the Rly is gone from the chart); CoB waves as before; the logic (WavePOCLogic 1.16.1) is unchanged
+// was "1.16.1";   // (1.16.1, Rassul 2026-11-17 20:30 CT "remove the liquidity nodes") no order-by-order feed, no liquidity nodes   // was "1.16.0";   // (1.16.0) the spike rule for H   // was "1.15.2"   // (1.15.2) lighter profile rows   // was "1.15.1"   // (1.15.1) CoB legs: the CoB mark after the end pivot is found   // was "1.15.0"   // (1.15.0, Rassul 2026-11-16 21:32 CT) spine + volume profile + POC + 2 HVNs back   // was "1.14.0";   // (1.14.0, Rassul 2026-11-11 19:09 CT) no spine; POC / HVN dashes on their candles; lots at the end of the POC dash
 // was "1.13.0";   // (1.13.0) POC + 1 HVN (break level = the pivot the BO broke), no PB profile
 // was "1.12.0";   // (1.12.0, 2026-11-10) the wave POC row only (no HVN / grey rows)
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") PB POC row width = the wave POC row width   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") the wave PB POC = its POC row only (white + lots), shown only when the POC is at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4, 2026-11-09) rebuild only: BreakoutLogic.h 1.14.0 compiled in - nothing changes here (no drawing change)   // was "1.10.3":   // (1.10.3, 2026-11-09) rebuild only: BreakoutLogic.h 1.13.0 (lsBreakout's Pdoc) compiled in - nothing changes here   // was "1.10.2":   // (1.10.2, 2026-11-09) rebuild only: BreakoutLogic.h 1.12.0 (lsBreakout's Pboc) is compiled in for its BO / Rly / Rev decisions - unchanged here (no VAP handed to it, no Pboc)
@@ -492,15 +496,20 @@ void WavePOC::feedBreakouts(WState& S, long n, RTARRAYI& times) {
     S.BK.update(B, n, B[0].t, S.tick, S.spb, om, cm); ++S.bkRuns;
     S.E.bos.clear();
     std::map<long long, size_t> at; for (size_t j = 0; j < B.size(); ++j) at[B[j].t] = j;
-    for (const auto& kv : S.BK.bo) {
-        const bba::BoDec& m = kv.second; if (!m.fired) continue;
-        const auto it = at.find(m.t0); if (it == at.end()) continue;
-        wpc::BoCand c; c.t0 = m.t0; c.dir = m.dir; c.tf = m.t;   // (1.9.2) + the fire bar
-        if (!wpc::toTicks(B[it->second].h, S.tick, c.hi) || !wpc::toTicks(B[it->second].l, S.tick, c.lo)) continue;
-        S.E.bos.push_back(c);
-    }
-    S.E.rlys.clear();   // (1.9.2) the fired Rly waves (Rly waves get a profile)
-    for (const auto& kv : S.BK.rly) { if (!kv.second.fired) continue; wpc::RlyCand r; r.te = kv.second.te; r.dir = kv.second.dir;
+    // (1.17.0) the Bk candles of lsRevRead's letters file (bounded 1 MB read; gone / torn = no breakout waves this pass): each Bk = a break
+    // candidate decided at its own close (tf = its candle), with its candle's high / low for the HVN break level
+    {   const std::string f = wpFlex(), mk = mkey::norm(S.mkt);
+        const std::string path = f.empty() || mk.empty() || S.spb <= 0 ? std::string() : f + WP_SEP "RevRead" WP_SEP "wy-" + mk + "-" + std::to_string((long long)S.spb) + ".txt";
+        struct stat st; std::map<long long, std::vector<wyi::M> > all;
+        if (!path.empty() && stat(path.c_str(), &st) == 0 && (size_t)st.st_size <= wyi::MAX_BYTES) { std::ifstream in(path.c_str(), std::ios::binary);
+            if (in) { const std::string txt((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()); if (wyi::parseAll(txt, all) < 0) all.clear(); } }
+        for (const auto& kv : all) for (const wyi::M& m : kv.second) { if (m.code != 'B') continue;
+            const long long t = localSec((RTDATE)kv.first); const auto it = at.find(t); if (it == at.end()) continue;
+            wpc::BoCand c; c.t0 = t; c.dir = m.dir; c.tf = t;
+            if (!wpc::toTicks(B[it->second].h, S.tick, c.hi) || !wpc::toTicks(B[it->second].l, S.tick, c.lo)) continue;
+            S.E.bos.push_back(c); } }
+    S.E.rlys.clear();   // (1.17.0) Rly waves get no profile any more (the Rly is gone from the chart)
+    if (false) for (const auto& kv : S.BK.rly) { if (!kv.second.fired) continue; wpc::RlyCand r; r.te = kv.second.te; r.dir = kv.second.dir;
         {   const auto L = S.BK.rlyL.find(kv.first);   // (1.10.0) the fire (confirmation) bar = field 4 of lsBreakout's RLY| record line "RLY|t_e|t_p|t_conf|..."
             if (L != S.BK.rlyL.end()) { const std::string& ln = L->second.line; size_t a = 0; for (int f = 0; f < 3 && a != std::string::npos; ++f) { a = ln.find('|', a); if (a != std::string::npos) ++a; }
                 if (a != std::string::npos) r.tfire = std::atoll(ln.c_str() + a); } }
@@ -750,6 +759,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.10.4 - (1.10.1) lots labelled on the wave POC and pullback POC rows. (1.10.0) after a BO / Rly wave, the PULLBACK profile once it has retraced 38.2% (POC white, 2 HVNs orange, ends at a Rev / a new BO or Rly / a trade beyond the extreme / 16:00; dimmed on a close beyond the origin). each CoB, Rly or BO / BD wave's VOLUME profile (lsCobSignal / lsBreakout rules, computed natively; the live wave once its BO / CoB fired) right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
-    p->setVersion("1.16.1");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.17.0");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

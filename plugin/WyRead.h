@@ -28,7 +28,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-19 10:37 CT "yes, put level under I too", 10:40 "go"): the level each I reclaimed is kept in Out.ilv (candle stamp -> level) so the candle tag can name it (I / PHL); hour levels carry how many hours back they are (Lvl.hb) and their side (Lvl.high). No rule change
+static const char* const VERSION = "1.7.1";   // (1.7.1, Rassul 2026-11-19 16:58 CT "ok" to the read wording: the I is set aside (lsRevRead 0.19.5), so the E / A reads say "Watch: ... (Sw / Tst)" instead of "(I)"; no rule change)
+// was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-19 10:37 CT "yes, put level under I too", 10:40 "go"): the level each I reclaimed is kept in Out.ilv (candle stamp -> level) so the candle tag can name it (I / PHL); hour levels carry how many hours back they are (Lvl.hb) and their side (Lvl.high). No rule change
 // was VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-19 09:19-09:22 CT "there needs to be a break that tries to trade above a high or below a low that fails, just like the concept of a spring or upthrust ... all of these are springs and upthrusts because they attempt to break a level and are met by a reversal instead", "yes"): Sp / Ut use the SAME levels and rules as the I - a prior hour high / low or a key / volume level, broken 1+ tick by the leg into the pivot (the leg started on the other side), its first break, closed back within 3 candles, no follow-through, order flow confirms; the old 15-candle local floor / ceiling is gone. The rejection I closes back through that same level
 // was VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-19 09:14 CT "it needs to be the first break, otherwise the level was already traded before right"): the pivot's leg must be the FIRST break of the level - since the level formed (the end of its hour; the session start for key / volume levels) no candle before that leg traded through it
 // was VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-19 09:09 CT with a sketch "it should be coming from the pivot break high or low ... the break and reclaim from the pivot low that broke"): the level must be broken BY THE LEG INTO THE PIVOT - at the leg's start (the pivot high before a bullish I's low) price closed above the level and no candle closed below it until the pivot candle; then the first close back above it = the I. A level price was already living under before that leg no longer counts. Same for the rejection I (the leg into the spring) and mirrored for highs
@@ -134,7 +135,7 @@ inline void pushes(const Ctx& X, const std::vector<Leg>& L, Out& o) {
             if (fade || sot) { eDone = true; Read r; r.dir = -d; r.head = std::string(d > 0 ? "Buyers" : "Sellers") + " running out";
                 if (fade) r.lines.push_back("Delta momentum " + num(pk) + " -> " + num(mom) + " (last 3 candles).");
                 if (sot) { std::string s = "Pushes getting shorter: "; const size_t a0 = ground.size() > 4 ? ground.size() - 4 : 0; for (size_t q = a0; q < ground.size(); ++q) s += (q > a0 ? " -> " : "") + num(ground[q]); r.lines.push_back(s + " ticks."); }
-                r.lines.push_back("Watch: A or the turn bar (I).");
+                r.lines.push_back("Watch: A, a sweep (Sw) or a test of a break (Tst).");   // (1.7.1, Rassul 16:58 CT "ok" - the I is set aside: the read points at the Sw / Tst)
                 add(o, i, B, 'E', -d, r); } }
         // A: effort without result
         const long long eff = d > 0 ? b.buy : b.sell; const double lpt = (double)eff / (double)nw;
@@ -145,7 +146,7 @@ inline void pushes(const Ctx& X, const std::vector<Leg>& L, Out& o) {
         if (run >= 2 && i - lastA >= 3) { lastA = i; Read r; r.dir = -d; r.head = std::string(d > 0 ? "Buyers" : "Sellers") + " being absorbed";
             r.lines.push_back(std::string(d > 0 ? "Buyers" : "Sellers") + " still hitting, price stuck:");
             r.lines.push_back(fx(xs[xs.size() - 2]) + ", " + fx(x) + " the lots per tick of the first push.");
-            r.lines.push_back(std::string("Watch: ") + (d > 0 ? "sellers" : "buyers") + " taking over (I).");
+            r.lines.push_back(std::string("Watch: ") + (d > 0 ? "sellers" : "buyers") + " taking over (Sw / Tst).");   // (1.7.1) was "(I)"
             add(o, i, B, 'A', -d, r); run = 0; }
     }
 }

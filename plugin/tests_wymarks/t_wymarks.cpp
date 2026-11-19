@@ -1,4 +1,4 @@
-// t_wymarks.cpp -- WyMarks.h 1.0.0 / 2.0.0 / 2.2.0. Build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. t_wymarks.cpp -o t && ./t
+// t_wymarks.cpp -- WyMarks.h 1.0.0 / 2.0.0 / 2.2.0 / 2.3.0. Build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. t_wymarks.cpp -o t && ./t
 #include "../WyMarks.h"
 #include <fstream>
 #include <iostream>
@@ -72,5 +72,15 @@ int main(int argc, char** argv) {
         CHECK(m[400].size() == 1 && m[400][0].st.empty() && m[400][0].lv == "Op", "5 fields still read");
         CHECK(m[500].size() == 1, "3 fields still read");
         CHECK(m.count(600) == 0, "an oversized strength is rejected"); }
+    // (2.3.0) FT / Tst / Rev lines and their side
+    {   std::map<long long, std::vector<wyi::M> > a;
+        CHECK(wyi::parseAll("WY|1|ES|180|0.20.0\n100|Bk|-1|PDL|29221|V99+\n103|FT|-1\n200|Tst|-1|PDL|0|62%\n203|Rev|-1||0|V35\n204|Rev|1||0|\n", a) == 5, "FT / Tst / Rev read");
+        CHECK(a[103][0].code == 'F' && a[200][0].code == 'T' && a[200][0].lv == "PDL" && a[200][0].st == "62%" && a[203][0].code == 'R' && a[203][0].st == "V35", "fields");
+        CHECK(wyi::sideOf(a[103][0]) == -1 && wyi::sideOf(a[200][0]) == 1 && wyi::sideOf(a[203][0]) == -1 && wyi::sideOf(a[204][0]) == 1 && wyi::sideOf(a[100][0]) == 0, "sides: FT / Rev with the break, Tst on its pivot");
+        CHECK(wyi::plainOf(a[103][0]) && !wyi::plainOf(a[200][0]) && !wyi::plainOf(a[203][0]), "FT plain, Tst / Rev badges");
+        std::vector<wyi::Candle> C(1); C[0].x = 100; C[0].yHigh = 200; C[0].yLow = 260; C[0].green = true;
+        std::vector<wyi::Want> W(1); W[0].candle = 0; W[0].w = 20; W[0].h = 24; W[0].side = -1;
+        const auto P = wyi::layout(C, W, 0, 600, 1000); CHECK(P[0].ok && P[0].t > 260, "side -1 on a green candle: under it");
+        W[0].side = 0; const auto Q = wyi::layout(C, W, 0, 600, 1000); CHECK(Q[0].ok && Q[0].b < 200, "side 0 on a green candle: over it"); }
     std::cout << (fail ? "FAILED " : "ALL PASS ") << pass << " pass, " << fail << " fail\n"; return fail ? 1 : 0;
 }

@@ -450,6 +450,7 @@ void ZzoCombo::mouseLeft(ZState& S) {
 
 static short zdC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
 
+static const bool ZC_SR_CB = false;   // (3.0.5, Rassul 2026-11-19 16:04 CT "i'll take your recommendation": SR dropped - the Sw marks that candle with its level and strength; CB dropped - folded into the Cob badge's strength line, lsCobSignal 1.10.0)
 int ZzoCombo::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     ZState* S = slot_.get(this, false);
     if (!S || S->E.B.empty()) return RTX_OK;   // draw never reads bars / VAP
@@ -461,7 +462,7 @@ int ZzoCombo::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
             RCT pane; pane.getPaneRect(false);
             int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
             std::map<long long, int> sr; std::map<long long, std::pair<int, int>> cb;
-            for (const cck::Item& t : S->items) { if (t.srT) sr[t.srT] = t.side; if (t.cbT) cb[t.cbT] = std::make_pair(t.side, t.cbRank); }   // (3.0.0) the 3-hour-sweep CoBs, read from the pane's status (was: the 2.9.5 finder's tags)
+            if (ZC_SR_CB) for (const cck::Item& t : S->items) { if (t.srT) sr[t.srT] = t.side; if (t.cbT) cb[t.cbT] = std::make_pair(t.side, t.cbRank); }   // (3.0.5) off: nothing drawn, an empty board posted   // (3.0.0) the 3-hour-sweep CoBs, read from the pane's status (was: the 2.9.5 finder's tags)
             if (sr.empty() && cb.empty()) { const char* sy0 = getSymbol(); const char* chl0 = getChartLabel(); sb::publish('Z', sy0 ? sy0 : "", getSecondsPerBar(), chl0 ? chl0 : "", zdMs(), std::vector<sb::Ev>()); return RTX_OK; }   // (3.0.4) nothing drawn: an empty board
             FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD; setFont(fb); const zzd::Colours C; const int TH = 12;
             const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom; int drawn = 0;

@@ -26,7 +26,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 11:22-11:30 CT "sweeps of key levels on big volume or range are very meaningfull", "maybe consider sw and a second line like v50 or r50, same with breaks", "use the max numbers that we have ... biggest in green bars, red bars, consecutive", "ok.. good build it"): Bk / Sw carry a STRENGTH = his BVMax / BRMax (the Volume / Range panes' Max number) - "V<N>" / "R<N>" from 20 up, "99+" from 99; a Sw takes the max over its attempt's candles
+static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
+// was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 11:22-11:30 CT "sweeps of key levels on big volume or range are very meaningfull", "maybe consider sw and a second line like v50 or r50, same with breaks", "use the max numbers that we have ... biggest in green bars, red bars, consecutive", "ok.. good build it"): Bk / Sw carry a STRENGTH = his BVMax / BRMax (the Volume / Range panes' Max number) - "V<N>" / "R<N>" from 20 up, "99+" from 99; a Sw takes the max over its attempt's candles
 // was VERSION = "1.1.0";   // (1.1.0, Rassul 10:50 CT "ok build": the BO indicator's Rly gets its level too - levelNear(); same priority / short names)
 
 struct Mark { char code = 0; int dir = 0; long long px = 0; std::string lv; long long t0 = 0; std::string st; };   // (1.2.0) t0 = the first candle the strength looks at (a Sw: its attempt's first candle; else the mark's own); st = "V45" / "R99+" / ""   // code 'B' Bk / 'S' Sw / 'C' Cx; lv = the short level name ("" = none)
@@ -35,10 +36,10 @@ inline const char* codeText(char c) { return c == 'B' ? "Bk" : c == 'S' ? "Sw" :
 // the priority of a level name (lower = shown first); -1 = this name never labels a mark (MenthorQ, gamma, VWAP ...)
 inline int pri(const std::string& n, int hb) {
     if (hb > 0) return hb == 1 ? 50 : 60;
-    static const char* const S0[] = { "ONL", "ONH", "ONH/LonHI", "ONL/LonLO", "LonLO", "LonHI", "AsiaLO", "AsiaHI", "Open" };
+    static const char* const S0[] = { "ONL", "ONH", "ONH/LonHI", "ONL/LonLO", "LonLO", "LonHI", "AsiaLO", "AsiaHI" };   // (1.3.0, 16:34 "just remove it") no Open
     static const char* const S1[] = { "PDH", "PDL", "PFL/PDL", "PFH/PDH" };
     static const char* const S2[] = { "PFH", "PFL" };
-    static const char* const S3[] = { "VAH", "VAL", "DPoc", "WPoc" };
+    static const char* const S3[] = { "VAH", "VAL" };   // (1.3.0, 16:30 "remove poc") no DPoc / WPoc
     static const char* const S4[] = { "PWH", "PWL", "CWH", "CWL" };
     static const char* const S5[] = { "PHL", "PHH" };
     for (const char* x : S0) if (n == x) return 0;
@@ -110,6 +111,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             if (newExt) continue;
             double am = 0; for (int k : att) am = std::max(am, v[(size_t)k]);
             if (am < maxV(f - 5, f)) continue;
+            if (sup ? !(B[(size_t)dpt].c > B[(size_t)dpt].o) : !(B[(size_t)dpt].c < B[(size_t)dpt].o)) continue;   // (1.3.0, 16:42 "a bullish sweep should be green and vice versa")
             Cand c; c.px = z.px; c.name = z.name; c.hb = z.hb; c.high = z.high;
             auto it = raw.find(dpt);
             if (it != raw.end()) { if (it->second.first == 'S') { it->second.second.push_back(c); rawA[dpt] = std::min(rawA[dpt], att[0]); } continue; }
@@ -118,6 +120,8 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     // Bk: closes through a level
     for (int i = 5; i < n; ++i) {
         const bool big = v[(size_t)i] >= maxV(i - 5, i);
+        { const long long r0 = B[(size_t)i].h - B[(size_t)i].l, r1 = B[(size_t)i - 1].h - B[(size_t)i - 1].l;   // (1.3.0, 16:32 "implement the range rule for breaks also and the either rule") the BO candle rule
+          if (!(r0 >= r1 && (r0 > r1 || v[(size_t)i] > v[(size_t)i - 1]))) continue; }
         std::vector<std::pair<long long, Cand> > crossed;   // distance from the close before -> level
         for (const Lv& z : levelsAt(B, i, key)) {
             const long long pc = B[(size_t)i - 1].c, c = B[(size_t)i].c;
@@ -159,6 +163,81 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
         }
         const auto ra = rawA.find(i); m.t0 = B[(size_t)(ra != rawA.end() ? ra->second : i)].t;   // (1.2.0)
         out[B[(size_t)i].t] = m;
+    }
+    return out;
+}
+
+
+// ---- (1.3.0) the Bk sequence: Bk -> FT -> Tst -> Rev (Rassul 2026-11-19 15:35-16:58 CT "just keep BK because it focuses on levels", "Bk and its
+// Tst, which is currently the pb but for BO", "just keep it like the Pb because it works .. also have FT bar just like how we have it for BO",
+// "the second tst for a bearish must be higher than the first", "the tst shouldnt take out the bearish breakout bar high", "no, it must overlap",
+// "update the Tst so it also mentions the lvl"; mockup price-pane-cleanup-mockup.html). Bullish shown, bearish = mirror:
+//   FT   within the 3 candles after the Bk, a GREEN candle closing above the Bk candle's high (or at it with a higher high).
+//   Tst  a pivot LOW on the 3-bar High / Low ZigZag on the pullback after the Bk move topped (the first pivot high at / after the Bk); only after a
+//        Bk that had its FT; the pivot candle OVERLAPS the Bk candle; it retraced 38.2% - 100% of the move (move = the last pivot low at / before
+//        the Bk -> the top); it never takes out the Bk candle's LOW (if it does, that Bk gets no more Tsts); at most 2 per move and the 2nd reaches
+//        further back (a lower low) than the 1st; none after a close below the move's origin or a Bk the other way; one Tst per pivot - the
+//        earliest Bk of the move (the furthest-back break) keeps it and names its level. Shown "Tst / level / 62%".
+//   Rev  from the Tst pivot candle on (12 candles at most), the first GREEN candle whose low is below the pivot candle's high, with range > 0.8 x
+//        ATR(13) of the candle before and a close above the prior candle's high, or range >= 1.2 x ATR; when the prior candle has the same colour
+//        its range must be bigger (rule 7) - the PB Rev candle rules.
+// Pure function of the closed candles and the Bk marks: no repaint.
+struct SMark { char code = 0; int dir = 0; std::string lv; long long px = 0; int pct = 0; long long bkT = 0; std::string st; };   // st = the Rev's strength line (filled by the host, as fillStrength)   // 'F' FT / 'T' Tst / 'R' Rev
+inline const char* seqText(char c) { return c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : ""; }
+inline std::map<long long, std::vector<SMark> > seq(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks) {
+    std::map<long long, std::vector<SMark> > out; const int n = (int)B.size(); if (n < 6) return out;
+    std::map<long long, int> at; for (int i = 0; i < n; ++i) at[B[(size_t)i].t] = i;
+    const std::vector<double> atr = wyr::atr13(B);
+    std::vector<std::pair<int, int> > piv;   // pivot candle, side (+1 low / -1 high), in order of confirmation
+    { const std::vector<wyr::Leg> LG = wyr::legs(B); int prevA = -1;
+      for (int i = 0; i < n; ++i) { const int a = LG[(size_t)i].a; if (a != prevA && i > 0) { bool seen = false; for (const auto& p : piv) if (p.first == a) seen = true; if (!seen) piv.push_back(std::make_pair(a, LG[(size_t)i].dir == 1 ? 1 : -1)); } prevA = a; } }
+    std::vector<std::pair<int, const Mark*> > bks; for (const auto& kv : marks) if (kv.second.code == 'B') { const auto it = at.find(kv.first); if (it != at.end()) bks.push_back(std::make_pair(it->second, &kv.second)); }
+    std::set<int> tstAt; std::set<std::pair<int, char> > put;
+    auto add = [&](int i, char code, int dir, const std::string& lv, long long px, int pct, long long bkT) {
+        if (put.count(std::make_pair(i, code))) return;
+        put.insert(std::make_pair(i, code));
+        SMark m; m.code = code; m.dir = dir; m.lv = lv; m.px = px; m.pct = pct; m.bkT = bkT; out[B[(size_t)i].t].push_back(m); };
+    for (const auto& bk : bks) {
+        const int k = bk.first, dr = bk.second->dir;
+        bool ft = false;
+        for (int j = k + 1; j < std::min(n, k + 4); ++j) { const wyr::Bar& b = B[(size_t)j];
+            if (dr > 0 && b.c > b.o && (b.c > B[(size_t)k].h || (b.c == B[(size_t)k].h && b.h > B[(size_t)k].h))) { add(j, 'F', 1, "", 0, 0, B[(size_t)k].t); ft = true; break; }
+            if (dr < 0 && b.c < b.o && (b.c < B[(size_t)k].l || (b.c == B[(size_t)k].l && b.l < B[(size_t)k].l))) { add(j, 'F', -1, "", 0, 0, B[(size_t)k].t); ft = true; break; } }
+        if (!ft) continue;
+        int oi = -1; for (const auto& p : piv) if (p.first <= k && p.second == dr) oi = p.first;
+        if (oi < 0) continue;
+        const long long origin = dr > 0 ? B[(size_t)oi].l : B[(size_t)oi].h;
+        int ti = -1; for (const auto& p : piv) if (p.first >= k && p.second == -dr) { ti = p.first; break; }
+        if (ti < 0) continue;
+        const long long top = dr > 0 ? B[(size_t)ti].h : B[(size_t)ti].l;
+        int nt = 0; long long firstExt = 0;
+        for (const auto& p : piv) {
+            if (p.first <= ti || p.second != dr) continue;
+            if (nt >= 2) break;
+            const int pi = p.first;
+            bool stop = false; for (int j = k; j <= pi; ++j) if (dr > 0 ? B[(size_t)j].c < origin : B[(size_t)j].c > origin) { stop = true; break; }
+            if (stop) break;
+            for (const auto& o : bks) if (o.second->dir == -dr && o.first > k && o.first <= pi) { stop = true; break; }
+            if (stop) break;
+            const bool overl = B[(size_t)pi].l <= B[(size_t)k].h && B[(size_t)pi].h >= B[(size_t)k].l;
+            const long long ext = dr > 0 ? B[(size_t)pi].l : B[(size_t)pi].h;
+            const double ret = top != origin ? (double)(top - ext) / (double)(top - origin) : 0.0;
+            if (!overl || ret < 0.382 || ret > 1.0) continue;
+            if (dr < 0 ? B[(size_t)pi].h > B[(size_t)k].h : B[(size_t)pi].l < B[(size_t)k].l) break;   // took out the Bk candle's extreme: the break failed
+            if (nt == 1 && !(dr < 0 ? ext > firstExt : ext < firstExt)) continue;                      // the 2nd reaches further back
+            if (nt == 0) firstExt = ext;
+            ++nt;
+            if (tstAt.count(pi)) continue;                                                             // the earliest Bk of the move keeps it (still counted here)
+            tstAt.insert(pi);
+            add(pi, 'T', dr, bk.second->lv, bk.second->px, (int)std::lround(ret * 100.0), B[(size_t)k].t);
+            for (int j = pi; j < std::min(n, pi + 12); ++j) { if (j < 1) continue; const wyr::Bar& b = B[(size_t)j]; const wyr::Bar& q = B[(size_t)j - 1];
+                if (!(dr > 0 ? b.c > b.o : b.c < b.o)) continue;
+                const bool back = dr > 0 ? b.l < B[(size_t)pi].h : b.h > B[(size_t)pi].l;
+                const double rng = (double)(b.h - b.l), a = atr[(size_t)j - 1];
+                const bool beyond = dr > 0 ? b.c > q.h : b.c < q.l;
+                const bool same = (q.c > q.o) == (b.c > b.o); const bool r7 = !same || rng > (double)(q.h - q.l);
+                if (back && r7 && ((rng > 0.8 * a && beyond) || rng >= 1.2 * a)) { add(j, 'R', dr, "", 0, 0, B[(size_t)k].t); break; } }
+        }
     }
     return out;
 }

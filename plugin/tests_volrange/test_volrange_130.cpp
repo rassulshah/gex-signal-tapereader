@@ -23,11 +23,24 @@ int main(int argc, char** argv) {
         CHECK(vrr::sessionDay(D0 + 9 * 3600) == 20000 && vrr::sessionDay(D0 - 7 * 3600 + 180) == 20000 && vrr::sessionDay(D0 - 7 * 3600) == 19999 && vrr::sessionDay(D0 + 17 * 3600) == 20000 && vrr::sessionDay(D0 + 17 * 3600 + 180) == 20001, "session day: 17:00 CT ends a session, the 17:03 bar starts the next");
         CHECK(vrr::lvNameOk("ONH") && !vrr::lvNameOk("PHH/PHL") && !vrr::lvNameOk("VWAP") && vrr::lvNameOk("PHH/PDH"), "level names");
     }
+    {   // (1.7.0) the price chart's rules: a green bar can't be a bearish Sw; a Bk bar smaller than the bar before is no Bk; POC / Open are not levels
+        vrr::Engine E = eng(); E.lvDay[20000] = { 105.0 };
+        long long t = D0 + 9 * 3600; double v = 100;
+        for (int i = 0; i < 8; ++i) { E.addBar(bar(t, 100, 101, 99, 100, v), t); t += 180; v -= 1; }
+        E.addBar(bar(t, 100, 106, 100, 104, 500), t); t += 180;                // 8: sweeps 105 and closes back under, but GREEN
+        E.markLevels(); CHECK(E.markOf(8).code != vrr::MK_SW, "(1.7.0) a green bar is not a bearish Sw");
+        vrr::Engine F = eng(); F.lvDay[20000] = { 105.0 }; t = D0 + 9 * 3600; v = 100;
+        for (int i = 0; i < 7; ++i) { F.addBar(bar(t, 100, 101, 99, 100, v), t); t += 180; v -= 1; }
+        F.addBar(bar(t, 100, 104.9, 95, 104, 90), t); t += 180;                // 7: a wide bar under the level
+        F.addBar(bar(t, 104, 106, 103, 105.5, 500), t); t += 180;              // 8: closes over 105 but its range (3) < the bar before (9.9)
+        F.markLevels(); CHECK(F.markOf(8).code != vrr::MK_BK, "(1.7.0) the BO candle rule: a Bk bar's range >= the bar before");
+        CHECK(!vrr::lvNameOk("DPoc") && !vrr::lvNameOk("WPoc") && !vrr::lvNameOk("Open") && vrr::lvNameOk("VAL"), "(1.7.0) no POC / Open levels");
+    }
     {   // Bk / Sw at a level: gate 5, direction, cooldown, Bk wins
         vrr::Engine E = eng(); E.lvDay[20000] = { 105.0 };
         long long t = D0 + 9 * 3600; double v = 100;
         for (int i = 0; i < 8; ++i) { E.addBar(bar(t, 100, 101, 99, 100, v), t); t += 180; v -= 1; }                 // quiet, falling volume
-        E.addBar(bar(t, 100, 106, 100, 104, 500), t); t += 180;              // 8: through 105, closes back under = Sw, bearish
+        E.addBar(bar(t, 105.5, 106, 100, 104, 500), t); t += 180;            // 8: through 105, closes back under = Sw, bearish (1.7.0: a red bar)
         E.addBar(bar(t, 104, 104.5, 103, 104, 90), t); t += 180;             // 9
         E.addBar(bar(t, 104, 107, 104, 106, 600), t); t += 180;              // 10: closes over 105 within the cooldown = no mark
         E.markLevels();

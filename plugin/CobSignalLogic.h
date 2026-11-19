@@ -50,7 +50,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.9.0";   // (1.9.0, 2026-11-16 Rassul 19:06-19:07 CT "i had replaced cob key levels with 3 hr levels, i am reconsidering so that we can use both", "eigher": the sweep = a 3-hour S1 / S2 / R1 / R2 OR a named key level (ONL, PDL, PFL, LonLO, PWL, AsiaLO, PHL and the highs; RTH only, as 1.6.x); the record names both)   // was "1.8.3";   // (1.8.3, 2026-11-16: host only - the accumulation boxes of lsRevRead 0.9.0 are drawn; no rule change)   // was "1.8.2";   // (1.8.2, 2026-11-16: the 3-hour R1 / R2 / S1 / S2 are drawn as ONE line each across the chart at where they stand now - no past steps)   // was "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
+static const char* const VERSION = "1.10.0";   // (1.10.0, Rassul 2026-11-19 15:56-16:58 CT, price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Cob, Lvp and Rev drawn as BADGES (green / red fill, black text) at the same places; the Cob badge carries its ZZO count and, from 20 up, the Cob candle's strength (his BVMax / BRMax, V / R); the Rev badge its strength; only the 38.2% entry line is drawn (Stop / BE / 1.272 / 1.618 / 2.0 gone - "only keep the 38.2"); a Rev label is posted to SignalBoard K with flag 7 so lsRevReadMarks does not draw a 2nd Rev on that candle. The Cob Rev rule is unchanged (the 16:21 test: current rule 89% reached the Cob high / +0.03R on 103 Revs vs the PB Rev candle rule 87% / +0.00R)
+// was VERSION = "1.9.0";   // (1.9.0, 2026-11-16 Rassul 19:06-19:07 CT "i had replaced cob key levels with 3 hr levels, i am reconsidering so that we can use both", "eigher": the sweep = a 3-hour S1 / S2 / R1 / R2 OR a named key level (ONL, PDL, PFL, LonLO, PWL, AsiaLO, PHL and the highs; RTH only, as 1.6.x); the record names both)   // was "1.8.3";   // (1.8.3, 2026-11-16: host only - the accumulation boxes of lsRevRead 0.9.0 are drawn; no rule change)   // was "1.8.2";   // (1.8.2, 2026-11-16: the 3-hour R1 / R2 / S1 / S2 are drawn as ONE line each across the chart at where they stand now - no past steps)   // was "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
@@ -554,11 +555,29 @@ struct Engine {
 
 // ---- the drawing (SDK-free): the label under a bull CoB bar's low / over a bear's high, bull green / bear red, never over another label
 struct View { int l = 0, t = 0, r = 800, b = 600, first = 0, last = 0; std::function<double(int)> X; std::function<double(double)> Y; std::function<int(const std::string&)> textW; };
-struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool line = false; bool tiny = false; };   // (1.5.0) line = a horizontal line x0..x1 at y0; tiny = the Fib labels' smaller font
+struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool line = false; bool tiny = false; bool badge = false; std::string text2; int flag = 0; };   // (1.10.0) badge = a filled tag (black text), text2 = its 2nd line (small), flag 7 = a Rev (SignalBoard K)   // (1.5.0) line = a horizontal line x0..x1 at y0; tiny = the Fib labels' smaller font
 static const unsigned C_BULL = 0x0022C55E, C_BEAR = 0x00EF4444;   // 0x00RRGGBB
 static const int GAP = 18;
 static const int COB_OFF = 3 + 16;                           // (1.6.3) row 1 past the pivot: just beyond the wave-time label ("39m")                                     // px from the bar's extreme (clear of Candle Absorb's codes on pivot bars)
 static const int LVP_OFF = 3 + 1 * 16;   // (1.6.3) row 1 = right past the wave-time label; was 3 + 3 * 16                         // (1.3.0) = 51 px: row 3 out (wave-time label row 0, Candle Absorb A row 1, lsBreakout Pb row 2; 16 px rows)
+// (1.10.0) the strength line of one candle = his BVMax / BRMax (as LevelMarks.h lvm::strength / the Volume and Range panes count it): the larger
+// of "biggest in N candles in a row" and "biggest in N candles of its own colour", for volume (V) and range (R); "" under 20, "99+" from 99
+inline int stN(const std::vector<Bar>& B, int i, bool vol) {
+    if (i < 0 || i >= (int)B.size()) return 0;
+    auto val = [&](int k) { const Bar& b = B[(size_t)k]; const double x = vol ? b.v : b.h - b.l; return std::isfinite(x) ? x : 0.0; };
+    const double x = val(i);
+    if (!(x > 0)) return 0;
+    const bool g = B[(size_t)i].c >= B[(size_t)i].o; int all = 0, same = 0; bool da = false, ds = false;
+    for (int j = i - 1; j >= std::max(0, i - 1500) && !(da && ds); --j) { const bool big = val(j) >= x - 1e-9 * std::fabs(x);
+        if (!da) { if (big || all >= 99) da = true; else ++all; }
+        if (!ds && (B[(size_t)j].c >= B[(size_t)j].o) == g) { if (big || same >= 99) ds = true; else ++same; } }
+    return std::max(all, same);
+}
+inline std::string strengthOf(const std::vector<Bar>& B, int i) {
+    const int nv = stN(B, i, true), nr = stN(B, i, false), n = std::max(nv, nr); if (n < 20) return std::string();
+    return std::string(nv >= nr ? "V" : "R") + (n >= 99 ? std::string("99+") : std::to_string(n));
+}
+static const int BADGE_H1 = 13, BADGE_H2 = 11;
 inline std::vector<Prim> layout(const Engine& E, const View& v)
 {
     std::vector<Prim> P; std::vector<std::pair<int, int>> used;   // label boxes (x0, y0) taken
@@ -569,7 +588,8 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
         const int at = (m.legEnd >= 0 && m.legEnd < (int)E.B.size()) ? m.legEnd : m.idx;
         if (!m.show || !m.zOk || at < v.first || at > v.last || m.idx >= (int)E.B.size()) continue;   // (1.1.0) LOG CoBs are not drawn; (1.4.0) nor a CoB whose ZZO wave count is under 10
         const Bar& b = E.B[(size_t)at];
-        const std::string s = m.label(); const int w = v.textW ? v.textW(s) : (int)s.size() * 7, h = 14;
+        const std::string s = m.label(); const std::string s2 = (m.zCnt >= 0 ? std::to_string(m.zCnt) : std::string()) + [&]() { const std::string st = strengthOf(E.B, at); return st.empty() ? std::string() : (m.zCnt >= 0 ? " / " : "") + st; }();   // (1.10.0) badge line 2: the ZZO count / strength
+        const int w = std::max(v.textW ? v.textW(s) : (int)s.size() * 7, (int)s2.size() * 6) + 6, h = BADGE_H1 + (s2.empty() ? 0 : BADGE_H2);
         const double x = v.X(at);
         int y = m.side > 0 ? (int)std::lround(v.Y(b.h)) - COB_OFF - h : (int)std::lround(v.Y(b.l)) + COB_OFF;
         for (int k = 0; k < 4; ++k) {                              // step away from another label at the same spot
@@ -578,7 +598,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
             y += m.side > 0 ? -h : h;
         }
         if (y < v.t || y + h > v.b) continue;
-        Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = m.side > 0 ? C_BULL : C_BEAR; p.text = s;
+        Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = m.side > 0 ? C_BULL : C_BEAR; p.text = s; p.text2 = s2; p.badge = true;
         P.push_back(p); used.push_back(std::make_pair((int)x, y));
     }
     // (1.3.0) LVP: bear CoB -> red "LVP" above the pullback's pivot high, bull CoB -> green "LVP" below its pivot low, row 3 out from the
@@ -591,7 +611,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
             if (!cobDrawn) continue;
         }
         const Bar& b = E.B[(size_t)m.idx];
-        const std::string s = "Lvp"; const int w = v.textW ? v.textW(s) : 21, h = 14;
+        const std::string s = "Lvp"; const int w = (v.textW ? v.textW(s) : 21) + 6, h = BADGE_H1;   // (1.10.0) a badge
         const double x = v.X(m.idx); const bool below = m.side > 0;
         int y = below ? (int)std::lround(v.Y(b.l)) + LVP_OFF : (int)std::lround(v.Y(b.h)) - LVP_OFF - h;
         for (int k = 0; k < 3; ++k) {
@@ -600,7 +620,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
             y += below ? 16 : -16;
         }
         if (y < v.t || y + h > v.b) continue;
-        Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = below ? C_BULL : C_BEAR; p.text = s;
+        Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = below ? C_BULL : C_BEAR; p.text = s; p.badge = true;
         P.push_back(p); used.push_back(std::make_pair((int)x, y));
     }
     // (1.8.0) the CoB pullback Rev: green "Rev" on top of the bar for a bull CoB, red under it for a bear CoB (as the PB Rev), never on another label
@@ -608,11 +628,11 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
     for (const RevMark& m : E.revs) {
         if (m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;
         { const long long key = (long long)m.idx * 2 + (m.side > 0 ? 1 : 0); bool dup = false; for (long long q : revAt) if (q == key) { dup = true; break; } if (dup) continue; revAt.push_back(key); }
-        const Bar& b = E.B[(size_t)m.idx]; const std::string s = "Rev"; const int w = v.textW ? v.textW(s) : 21, h = 14; const double x = v.X(m.idx); const bool above = m.side > 0;
+        const Bar& b = E.B[(size_t)m.idx]; const std::string s = "Rev", s2 = strengthOf(E.B, m.idx); const int w = std::max(v.textW ? v.textW(s) : 21, (int)s2.size() * 6) + 6, h = BADGE_H1 + (s2.empty() ? 0 : BADGE_H2); const double x = v.X(m.idx); const bool above = m.side > 0;   // (1.10.0) a badge + its strength
         int y = above ? (int)std::lround(v.Y(b.h)) - COB_OFF - h : (int)std::lround(v.Y(b.l)) + COB_OFF;
         for (int k = 0; k < 3; ++k) { bool clash = false; for (auto& u : used) if (std::abs(u.first - (int)x) < w && std::abs(u.second - y) < h) clash = true; if (!clash) break; y += above ? -16 : 16; }
         if (y < v.t || y + h > v.b) continue;
-        Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = above ? C_BULL : C_BEAR; p.text = s;
+        Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = above ? C_BULL : C_BEAR; p.text = s; p.text2 = s2; p.badge = true; p.flag = 7;
         P.push_back(p); used.push_back(std::make_pair((int)x, y));
     }
     return P;
@@ -682,6 +702,7 @@ inline std::vector<Prim> fibLayout(const Engine& E, const View& v)
         if (!fibDrawn(m)) continue;
         const FibSet F = fibLines(E, m); if (F.seg.empty()) continue;
         for (const FibSeg& g : F.seg) {
+            if (g.kind != F_ENTRY) continue;   // (1.10.0, Rassul 16:10 CT "only keep the 38.2") the entry line only
             const int e = g.open ? g.i1 + 1 : g.i1;
             if (e < v.first || g.i0 > v.last + 1) continue;
             const int x0 = (int)std::lround(v.X(g.i0)), x1 = (int)std::lround(v.X(e)), y = (int)std::lround(v.Y(g.px));

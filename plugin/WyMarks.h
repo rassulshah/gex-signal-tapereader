@@ -14,15 +14,20 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.2.0";   // (2.2.0, Rassul 11:30-11:35 CT: the strength line) mark lines may carry a 6th field = the strength ("V45" / "R99+" / ""); 3 / 5 / 6 fields read
+static const char* const VERSION = "2.3.0";   // (2.3.0, Rassul 2026-11-19 15:35-16:58 CT, price-pane-cleanup-mockup.html, "ok"): + FT / Tst / Rev after a Bk (LevelMarks 1.3.0 seq): "FT" (a plain letter), "Tst" (level + %), "Rev" (+ strength); a tag can ask for its side (FT / Rev with the break, Tst on the pivot side)
+// was VERSION = "2.2.0";   // (2.2.0, Rassul 11:30-11:35 CT: the strength line) mark lines may carry a 6th field = the strength ("V45" / "R99+" / ""); 3 / 5 / 6 fields read
 // was VERSION = "2.1.0";   // (2.1.0, Rassul 10:50-10:51 CT "ok build", "remember placement of other signals like cmx so you have to coordinate everything"): the key levels published in the file (L|px|name lines, read by the BO indicator for its Rly level); the layout also keeps clear of boxes other indicators occupy (the BO indicator's letters from SignalBoard 'L')
 static const int TAG_H = 13, PAD_X = 3, GAP = 3, CX_STEP = 16;
 static const int LINE1_H = 13, LINE2_H = 11;   // (2.0.0) a two-line tag: 13 px for the code, 11 px for the level name
 static const size_t MAX_BYTES = 1024 * 1024;
 
 struct M { char code = 0; int dir = 0; std::string lv; long long px = 0; std::string st; };   // (2.2.0) st = the strength line ("" = none)   // code 'I' / 'B' (Bk) / 'S' (Sw) / 'C' (Cx)
-inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : 0; }
-inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : ""; }
+inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : s == "FT" ? 'F' : s == "Tst" ? 'T' : s == "Rev" ? 'R' : 0; }
+inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : ""; }
+// (2.3.0) where a tag wants to sit: 0 = by the candle (over green, under red); +1 over / -1 under. FT and Rev go with the break (over for a
+// bullish one), a Tst on its pivot's side (under a bullish Tst's pivot low, over a bearish one's high) - as the BO indicator's FT / Pb / Rev
+inline int sideOf(const M& m) { return m.code == 'F' || m.code == 'R' ? m.dir : m.code == 'T' ? -m.dir : 0; }
+inline bool plainOf(const M& m) { return m.code == 'F'; }   // (2.3.0) FT stays a plain coloured letter; every other mark is a badge
 
 // every candle mark of the file: candle stamp -> its marks (the I first). -1 = not a letters file (torn / foreign: keep the last good set).
 inline int parseAll(const std::string& txt, std::map<long long, std::vector<M> >& out) {
@@ -88,7 +93,7 @@ inline Tag place(int x, int yHigh, int yLow, bool greenCandle, int textW, bool c
 
 // (2.0.0) the layout of every tag in view, so none overlaps a candle or another tag
 struct Candle { int x = 0, yHigh = 0, yLow = 0, halfW = 2; bool green = true; };
-struct Want { int candle = 0; int w = 0, h = TAG_H; };            // one tag of a candle (the I first, then the level mark), its size in px
+struct Want { int candle = 0; int w = 0, h = TAG_H; int side = 0; };   // (2.3.0) side: 0 = by the candle colour, +1 over, -1 under            // one tag of a candle (the I first, then the level mark), its size in px
 struct Box { int l = 0, t = 0, r = 0, b = 0; bool ok = false; };
 inline bool hit(const Box& a, const Box& b) { return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b); }
 inline std::vector<Box> layout(const std::vector<Candle>& C, const std::vector<Want>& W, int paneTop, int paneBottom, int xRight, const std::vector<Box>& taken = std::vector<Box>()) {
@@ -99,7 +104,7 @@ inline std::vector<Box> layout(const std::vector<Candle>& C, const std::vector<W
         const Want& w = W[k]; if (w.candle < 0 || w.candle >= (int)C.size()) continue; const Candle& c = C[(size_t)w.candle];
         Box got; bool found = false;
         for (int sidePass = 0; sidePass < 2 && !found; ++sidePass) {
-            const bool over = sidePass == 0 ? c.green : !c.green;
+            const bool pref = w.side == 0 ? c.green : w.side > 0; const bool over = sidePass == 0 ? pref : !pref;
             for (int r = 0; r < 14 && !found; ++r) {
                 const int t = over ? std::min(c.yHigh, c.yLow) - GAP - w.h - r * (w.h + 3) : std::max(c.yHigh, c.yLow) + GAP + r * (w.h + 3);
                 if (t < paneTop + 1 || t + w.h > paneBottom - 1) continue;

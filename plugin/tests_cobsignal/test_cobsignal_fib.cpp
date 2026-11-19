@@ -141,13 +141,13 @@ int main(int argc, char** argv) {
             else { ++labels; if (!p.tiny) posOk = false;
                 const unsigned want = p.text == "Stop" ? cobs::C_BEAR : p.text == "38.2%" ? cobs::C_ENTRY : cobs::C_BULL; if (p.col != want) colOk = false; }
         }
-        CHECK(lines == 6 && labels == 6 && colOk && posOk, "6 lines from the origin bar + 6 names: stop red, 38.2% blue, BE + targets green (" << lines << "/" << labels << ")");
+        CHECK(lines == 1 && labels == 1 && colOk && posOk, "(1.10.0 \"only keep the 38.2\") 1 line from the origin bar + its name: the 38.2% entry, blue (" << lines << "/" << labels << ")");
         bool t1x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12195 + 1.272 * 0.00215)) && p.x1 == (int)v.X(at(B, "09:30"))) t1x = true;
-        CHECK(t1x, "T1's line ends at its hit bar");
+        CHECK(!t1x, "(1.10.0) no T1 line");
         bool t3x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12625)) && p.x1 == (int)v.X(last + 1)) t3x = true;
-        CHECK(t3x, "T3's open line runs to the forming bar");
+        CHECK(!t3x, "(1.10.0) no T3 line");
         v.first = at(B, "12:15"); const std::vector<cobs::Prim> Q = cobs::fibLayout(E, v); int ql = 0; for (const cobs::Prim& p : Q) if (p.line) ++ql;
-        CHECK(ql == 1, "scrolled past 12:15: only the open line (T3) is drawn (" << ql << ")");
+        CHECK(ql == 0, "(1.10.0) scrolled past 12:15: the entry line ended earlier - nothing drawn (" << ql << ")");
         std::vector<cobs::Prim> both = cobs::fibLayout(E, v); const std::vector<cobs::Prim> lab = cobs::layout(E, v); both.insert(both.end(), lab.begin(), lab.end());
         CHECK(both.size() >= Q.size(), "fib + CoB label layout combine");
     }
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     {   cobs::Engine E = eng(B, B.size()); E.marks.push_back(cob(B, i0, i1, ic, 1));
         const std::string s = cobs::fibStatus(E);
         CHECK(s.find("FIB_RULES,1.6.5") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,38.2% ended,BE hit,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
-        CHECK(std::string(cobs::VERSION) == "1.6.5" && cobs::FIB_ENTRY_K == 0.618, "version 1.6.5, entry at 0.618 from the origin");
+        CHECK(cobs::FIB_ENTRY_K == 0.618, "entry at 0.618 from the origin (the 38.2% retracement)");
     }
     // [10] not drawn = no lines
     {   cobs::Engine E = eng(B, B.size()); cobs::Mark m = cob(B, i0, i1, ic, 1); m.show = false; E.marks.push_back(m); m.show = true; m.zOk = false; E.marks.push_back(m);
