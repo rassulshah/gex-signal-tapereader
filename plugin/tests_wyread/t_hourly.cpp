@@ -25,6 +25,18 @@ int main() {
     { auto B = down(97, 102, 400); for (auto& b : B) { long long o = b.o, h = b.h, l = b.l, c = b.c; b.o = 300 - o; b.h = 300 - l; b.l = 300 - h; b.c = 300 - c; std::swap(b.buy, b.sell); }
       auto o = wyr::run(B, 0.25, 2); C(hasI(o, B[22].t, -1), "mirror: swept the 2 AM hour high, closed back under = bearish I");
       C(line1(o, B[22].t).find("the 2 AM hour high") != std::string::npos, "the read names the 2 AM hour high"); }
+    { std::vector<wyr::Lvl> v; auto B = down(97, 102, 400); // T0 = 2 AM: drift 2:00-3:00 (1 AM 4h block), sweep 3:00+ (same block) -> no 4h level; hour level present
+      wyr::blockLevels(B, 21, 1, 14400, 3600, 2, v); C(v.empty(), "same 4h candle: no completed 4h level before the pivot"); }
+    { auto B = down(97, 102, 400, 3600 * 2); // drift 4:00-5:00 AM (1 AM 4h block, partly covered), sweep 5:00+ (5 AM block)
+      std::vector<wyr::Lvl> v; wyr::blockLevels(B, 21, 1, 14400, 3600, 2, v); C(v.empty(), "a 4h candle the data only partly covers is skipped"); }
+    { // full 4h candle: 80 bars 1:00-5:00 AM drifting down to 100 at the last one, then the sweep and the I in the 5 AM candle
+      std::vector<wyr::Bar> B; int k = 0; const long long base = 3600LL * 25;   // 1 AM
+      for (; k < 80; ++k) { long long hi = 260 - 2 * (k / 2) * 1 - k % 2, lo = hi - 3; if (k == 79) lo = 100; if (lo < 100) lo = 100; wyr::Bar b; b.t = base + (k + 1) * 180; b.o = hi; b.h = hi; b.l = lo; b.c = lo + 1; b.buy = 40; b.sell = 60; b.when = std::to_string(k); B.push_back(b); }
+      auto mk = [&](long long o, long long h, long long l, long long c, long long by, long long sl) { wyr::Bar b; b.t = base + (k + 1) * 180; b.o = o; b.h = h; b.l = l; b.c = c; b.buy = by; b.sell = sl; b.when = std::to_string(k); B.push_back(b); ++k; };
+      mk(101, 102, 100, 101, 40, 60); mk(101, 101, 97, 98, 30, 70); mk(98, 103, 98, 102, 400, 20); for (int j = 0; j < 3; ++j) mk(102, 104, 101, 103, 50, 50);
+      std::vector<wyr::Lvl> v; wyr::blockLevels(B, 81, 1, 14400, 3600, 2, v); C(v.size() == 1 && v[0].px == 100 && v[0].name == "the 1 AM 4h low", "the 1 AM 4h low = 100");
+      auto o = wyr::run(B, 0.25, 2); C(hasI(o, B[82].t, 1), "swept the 1 AM 4h low, closed back above = I");
+      C(line1(o, B[82].t).find("the 1 AM 4h low") != std::string::npos, "the read names the 4h low (tie with the 4 AM hour low)"); }
     C(wyr::hourName(26) == "2 AM" && wyr::hourName(24) == "12 AM" && wyr::hourName(36) == "12 PM" && wyr::hourName(15) == "3 PM", "hour names");
     C(wyr::hourOf(3600 * 3) == 2 && wyr::hourOf(3600 * 3 + 180) == 3, "the 3:00 candle END belongs to the 2 AM hour");
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;

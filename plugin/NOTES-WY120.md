@@ -19,3 +19,11 @@ Measured (in-sample, 3-min, Aug 25 - Nov 19, 41-62 sessions per market, stop 1 t
 - Still negative as a stand-alone trade with this stop / target.
 
 Not verified: needs his IRT restart (File -> Exit, wait for "installed", reopen).
+
+## 1.2.1 (08:59 CT "the 4 hour high and low is also a key level")
+- The high / low of the 2 completed 4-hour candles before the pivot's 4-hour candle, anchored on the 5 PM CT session open
+  (5 PM, 9 PM, 1 AM, 5 AM, 9 AM, 1 PM), are levels the I can reclaim ("the 1 AM 4h low"). On a tie with an hour level the 4h name wins.
+- Tests: t_hourly 13/13; other WyRead suites unchanged and passing; MinGW OK. Ships inside lsRevRead 0.18.5 (not yet installed).
+- Measured (same data / trade as above), by the furthest level reclaimed:
+  4h 148, 34%, -0.28R (halves -0.33 / -0.23) | hour 435, 41%, -0.11R (-0.11 / -0.10) | local pivot only 672, 35%, -0.28R.
+  The 4h group is no better than local pivots in this sample; the hourly group stays the best.

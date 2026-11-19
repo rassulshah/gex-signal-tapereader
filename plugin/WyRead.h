@@ -27,7 +27,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 08:41-08:42 CT on the ES 3:36 AM I "lets include this. so there is always some reclaim after a sweep of some htf level, in this case it was an hourly level. build", "the key is that there is a htf breakout failure as indicated by the reclaim of a level"): the high / low of each of the 3 completed clock hours before the pivot's hour is a level the I can reclaim ("the 2 AM hour low"), computed from the candles themselves (every session, not only the current one)
+static const char* const VERSION = "1.2.1";   // (1.2.1, Rassul 2026-11-19 08:59 CT "the 4 hour high and low is also a key level": the high / low of the 2 completed 4-hour candles before the pivot's (anchored on the 5 PM CT session open: 5 PM, 9 PM, 1 AM, 5 AM, 9 AM, 1 PM) are levels the I can reclaim too ("the 9 PM 4h low"); on a tie with an hour level the 4h name is used)
+// was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 08:41-08:42 CT on the ES 3:36 AM I "lets include this. so there is always some reclaim after a sweep of some htf level, in this case it was an hourly level. build", "the key is that there is a htf breakout failure as indicated by the reclaim of a level"): the high / low of each of the 3 completed clock hours before the pivot's hour is a level the I can reclaim ("the 2 AM hour low"), computed from the candles themselves (every session, not only the current one)
 // was VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-18 22:33-22:37 CT "modify the I so it is a reclaim of a key level, volume level or a local level", "it needs to close above it", "yes its a sweep", "it can happen anytime as long as it reclaims", "go" on i-reclaim-mockup.html): a bullish I = the pivot low SWEPT a level (1+ tick below it) and the I candle is the FIRST close back above it; the level = a prior pivot low (1, 2 or 3 pivots back - a further one only when it is lower than the nearer ones), a key level or a volume level (the host's level files); plus the delta / close-through / 1-ATR rules; any time after the pivot (no 3-candle window, no pivot-candle-high rule). Bearish mirror.
 // was VERSION = "1.0.2";   // (1.0.2, Rassul 2026-11-18 20:17 CT "the low of the green I candle should not be greater than 1 atr from the pivot low and vice versa": a bullish I candle's low is within 1 ATR(13) of the pivot low, a bearish I candle's high within 1 ATR(13) of the pivot high (ATR = Wilder 13 as of the candle before), both I paths
 // was VERSION = "1.0.1";   // (1.0.1, 09:21 CT) a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
@@ -235,18 +236,27 @@ inline long long hourOf(long long t) { return (t - 1) >= 0 ? (t - 1) / 3600 : -(
 inline std::string hourName(long long h) { int hh = (int)(((h % 24) + 24) % 24); char b[16]; std::snprintf(b, sizeof b, "%d %s", hh % 12 == 0 ? 12 : hh % 12, hh < 12 ? "AM" : "PM"); return b; }
 // the high (side -1) / low (side +1) of the 3 completed clock hours before the pivot candle's hour, newest first; an hour the candles only
 // partly cover (the first one, when the candles start mid-hour) is left out
-inline void hourLevels(const std::vector<Bar>& B, int ex, int side, std::vector<Lvl>& out) {
+// (1.2.1) a candle's block of `per` seconds, anchored `off` seconds after midnight (4h: per 14400, off 3600 = 5 PM / 9 PM / 1 AM ... CT)
+inline long long blockOf(long long t, long long per, long long off) { const long long x = t - 1 - off; return x >= 0 ? x / per : -((-x + per - 1) / per); }
+// the high (side -1) / low (side +1) of the `nWant` completed blocks before the pivot candle's block, newest first; a block the candles
+// only partly cover (the first one, when the candles start mid-block) is left out. per 3600 = clock hours (1.2.0), 14400 = 4-hour candles (1.2.1)
+inline void blockLevels(const std::vector<Bar>& B, int ex, int side, long long per, long long off, int nWant, std::vector<Lvl>& out) {
     if (ex < 1) return;
-    const long long hp = hourOf(B[(size_t)ex].t); const bool lo = side > 0;
+    const long long hp = blockOf(B[(size_t)ex].t, per, off); const bool lo = side > 0;
     long long spb = B.size() > 1 ? B[1].t - B[0].t : 0; if (spb <= 0) spb = 60;
-    const long long h0 = hourOf(B[0].t), firstFull = (B[0].t - spb) % 3600 == 0 ? h0 : h0 + 1;   // B[0] starts on the hour = its hour is whole
+    const long long h0 = blockOf(B[0].t, per, off); long long st = (B[0].t - spb - off) % per; if (st < 0) st += per;
+    const long long firstFull = st == 0 ? h0 : h0 + 1;   // B[0] starts on the block boundary = its block is whole
     int got = 0; long long h = hp - 1; int k = ex - 1;
-    while (got < 3 && h >= firstFull && k >= 0) {
+    while (got < nWant && h >= firstFull && k >= 0) {
         long long v = 0; bool any = false;
-        while (k >= 0 && hourOf(B[(size_t)k].t) > h) --k;
-        while (k >= 0 && hourOf(B[(size_t)k].t) == h) { const long long x = lo ? B[(size_t)k].l : B[(size_t)k].h; if (!any || (lo ? x < v : x > v)) v = x; any = true; --k; }
-        if (any) { Lvl z; z.px = v; z.name = "the " + hourName(h) + " hour " + (lo ? "low" : "high"); out.push_back(z); ++got; }
+        while (k >= 0 && blockOf(B[(size_t)k].t, per, off) > h) --k;
+        while (k >= 0 && blockOf(B[(size_t)k].t, per, off) == h) { const long long x = lo ? B[(size_t)k].l : B[(size_t)k].h; if (!any || (lo ? x < v : x > v)) v = x; any = true; --k; }
+        if (any) { Lvl z; z.px = v; z.name = "the " + hourName((h * per + off) / 3600) + (per == 3600 ? " hour " : " 4h ") + (lo ? "low" : "high"); out.push_back(z); ++got; }
         --h; }
+}
+inline void hourLevels(const std::vector<Bar>& B, int ex, int side, std::vector<Lvl>& out) {
+    blockLevels(B, ex, side, 14400, 3600, 2, out);   // (1.2.1) 4-hour candles first: on a tie the 4h name wins
+    blockLevels(B, ex, side, 3600, 0, 3, out);
 }
 inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const std::vector<int>& rejI) {
     const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; int last[2] = { -10, -10 }; const std::vector<double> A = atr13(B);
