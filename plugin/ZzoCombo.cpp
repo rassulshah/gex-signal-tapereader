@@ -91,6 +91,7 @@
 #include "ZzoComboView.h"
 #include "CobCheck.h"        // (3.0.0) the 3-hour-sweep CoBs (lsCobSignal's engine) + the checklist
 #include "HostSlot.h"
+#include "SignalBoard.h"      // (lsZzoComboMarks 3.0.4) sb::publish('Z', ...) - the SR / CB badges as drawn (lsRevReadMarks keeps clear of them)
 #ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
 #if defined(ZC_MARKS)
   #define LSPERF_PLUGIN "ZzoComboMarks"
@@ -461,22 +462,27 @@ int ZzoCombo::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
             int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
             std::map<long long, int> sr; std::map<long long, std::pair<int, int>> cb;
             for (const cck::Item& t : S->items) { if (t.srT) sr[t.srT] = t.side; if (t.cbT) cb[t.cbT] = std::make_pair(t.side, t.cbRank); }   // (3.0.0) the 3-hour-sweep CoBs, read from the pane's status (was: the 2.9.5 finder's tags)
-            if (sr.empty() && cb.empty()) return RTX_OK;
+            if (sr.empty() && cb.empty()) { const char* sy0 = getSymbol(); const char* chl0 = getChartLabel(); sb::publish('Z', sy0 ? sy0 : "", getSecondsPerBar(), chl0 ? chl0 : "", zdMs(), std::vector<sb::Ev>()); return RTX_OK; }   // (3.0.4) nothing drawn: an empty board
             FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD; setFont(fb); const zzd::Colours C; const int TH = 12;
             const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom; int drawn = 0;
+            std::vector<sb::Ev> board; long long curT = 0; int curYh = 0, curYl = 0;   // (3.0.4) SignalBoard 'Z': each badge as drawn
             auto badge = [&](const std::string& txt, int xc, int yEdge, bool below, unsigned long col) {
                 const int tw = (int)getTextWidth(txt.c_str(), -1) + 4; const int x0 = xc - tw / 2, y0 = below ? yEdge + 4 : yEdge - 4 - TH, y1 = y0 + TH;
                 if (x0 < L || x0 + tw > R || y0 < T || y1 > Bt) return;
                 RCT r; r.set(zdC(x0), zdC(y0), zdC(x0 + tw + 1), zdC(y1 + 1)); r.draw(0, (COLOR)col, (COLOR)col, DRAW_OPAQUE, PAT_SOLID);
-                setTextColor((COLOR)0xFFFFFF); RCT q; q.set(zdC(x0 + 2), zdC(y0), zdC(x0 + tw), zdC(y1)); q.drawText(txt.c_str(), false, false); ++drawn; };
+                setTextColor((COLOR)0xFFFFFF); RCT q; q.set(zdC(x0 + 2), zdC(y0), zdC(x0 + tw), zdC(y1)); q.drawText(txt.c_str(), false, false); ++drawn;
+                sb::Ev e; if (board.size() < sb::CAP && sb::tagEv(curT, curYh, curYl, x0, y0, x0 + tw + 1, y1 + 1, e)) board.push_back(e); };
             for (int i = std::max(vs, S->off); i <= ve; ++i) {
                 const int j = i - S->off; if (j < 0 || j >= (int)S->F.F.size()) continue;
                 const zcf::FBar& b = S->F.F[(size_t)j]; const auto a = sr.find(b.t); const auto c = cb.find(b.t); if (a == sr.end() && c == cb.end()) continue;
                 PNT p; p.set(i, 0.0f, kBarCenter); const int yh = (int)getVerticalDrawPosition((float)((double)b.h * S->tick)), yl = (int)getVerticalDrawPosition((float)((double)b.l * S->tick));
+                curT = b.t; curYh = yh; curYl = yl;   // (3.0.4) the candle the badges below belong to
                 if (a != sr.end()) { if (a->second > 0) badge("SR", (int)p.h, yl, true, C.up); else badge("SR", (int)p.h, yh - (c != cb.end() ? TH + 2 : 0), false, C.down); }   // (2.9.2, Rassul 18:12 "the bearish SR tab should be on top of the candle") a bullish Cob's stop run under its candle (2.7.1), a bearish one over it - above the CB when both sit on one candle
                 if (c != cb.end()) { const int d = c->second.first, rk = c->second.second; badge(rk >= 99 ? "CB99" : "CB40",   /* (2.9.5) a Cob bar always beats 40+ same-colour bars */ (int)p.h, yh, false, d > 0 ? C.up : C.down); }   // (2.7.1) always over the candle
             }
             S->last = zzd::ComboScene(); S->last.sr = (int)sr.size(); S->last.cb = (int)cb.size(); S->last.cols = drawn;
+            {   const char* sy = getSymbol(); const char* chl = getChartLabel();   // (3.0.4) posted every draw (fresh 60 s)
+                sb::publish('Z', sy ? sy : "", getSecondsPerBar(), chl ? chl : "", zdMs(), board); }
             return RTX_OK;
         }
 #endif

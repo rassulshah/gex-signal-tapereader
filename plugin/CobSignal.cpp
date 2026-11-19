@@ -30,6 +30,7 @@
 #include "CobSignalLogic.h"
 #include "AccumLogic.h"            // (1.8.3) lsRevRead's accumulation / distribution zones: the boxes on the price chart
 #include "HostSlot.h"
+#include "SignalBoard.h"           // (1.9.2) sb::publish('K', ...) - the candle labels as drawn (lsRevReadMarks keeps clear of them)
 #ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
   #define LSPERF_PLUGIN "CobSignal"
 #endif
@@ -53,7 +54,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.9.1";   // (1.9.1, Rassul 2026-11-18 19:54 CT "get rid of the accumulation and distribution boxes": the boxes are no longer read or drawn - CS_ACCUM_BOXES false; lsRevRead still keeps the zones in the background)   // was "1.9.0";   // (1.9.0) the CoB sweep = a 3-hour level OR a named key level   // was "1.8.3";   // (1.8.3, 2026-11-16 Rassul 10:54 CT) draws lsRevRead 0.9.0's accumulation / distribution boxes on the price chart (outline + the absorbed price)   // was "1.8.2";   // (1.8.2) the 3-hour S / R lines: one line each across the chart, no past steps   // was "1.8.1";   // (1.8.1) review fixes: the status text is built at most once a second; a REV line is keyed by its bar AND its CoB   // was "1.8.0";   // (1.8.0) + the CoB pullback Rev ("Rev" on the bar, REV record lines)   // was "1.7.1":   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
+static const char* CS_VERSION = "1.9.2";   // (1.9.2, Rassul 2026-11-19 11:13 CT "ok" - coordinate the candle tags: the Cob / Lvp / Rev labels as drawn are posted to SignalBoard kind K so lsRevReadMarks keeps its tags off them; nothing drawn changes)   // was "1.9.1";   // (1.9.1, Rassul 2026-11-18 19:54 CT "get rid of the accumulation and distribution boxes": the boxes are no longer read or drawn - CS_ACCUM_BOXES false; lsRevRead still keeps the zones in the background)   // was "1.9.0";   // (1.9.0) the CoB sweep = a 3-hour level OR a named key level   // was "1.8.3";   // (1.8.3, 2026-11-16 Rassul 10:54 CT) draws lsRevRead 0.9.0's accumulation / distribution boxes on the price chart (outline + the absorbed price)   // was "1.8.2";   // (1.8.2) the 3-hour S / R lines: one line each across the chart, no past steps   // was "1.8.1";   // (1.8.1) review fixes: the status text is built at most once a second; a REV line is keyed by its bar AND its CoB   // was "1.8.0";   // (1.8.0) + the CoB pullback Rev ("Rev" on the bar, REV record lines)   // was "1.7.1":   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
 // was "1.5.1";   // (1.5.1) CQG roots mapped (cobs::mktKey) - it never ran on his CQG charts before   // (1.5.0) + the CoB Fib lines (targets 1.272 / 1.618 / 2.0, entry 50%, stop 0)   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -252,8 +253,10 @@ int CobSignal::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         }
         std::vector<cobs::Prim> P = cobs::htfLayout(S->E, v);           // (1.7.0) the 3-hour R1 / R2 / S1 / S2 lines first
         { const std::vector<cobs::Prim> Q = cobs::fibLayout(S->E, v); P.insert(P.end(), Q.begin(), Q.end()); }   // (1.5.0) the Fib lines (under the labels)
+        const size_t labFrom = P.size();                                  // (1.9.2) the candle labels (Cob..., Lvp, Rev) start here
         { const std::vector<cobs::Prim> Q = cobs::layout(S->E, v); P.insert(P.end(), Q.begin(), Q.end()); }
         S->drawn = (int)P.size();
+        std::vector<sb::Ev> board;                                        // (1.9.2) SignalBoard 'K': each candle label as drawn
         FONT fs; fs.id = HELVETICA; fs.size = 8; fs.style = PLAIN;
         for (const cobs::Prim& p : P) {
             if (p.line) {                                                  // (1.5.0) 1 px solid, clipped to the pane
@@ -266,7 +269,16 @@ int CobSignal::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
             if (p.y0 < pane.top || p.y1 > pane.bottom || p.x0 < pane.left || p.x1 > pane.right) continue;
             setFont(p.tiny ? fs : fb); setTextColor((COLOR)p.col);
             RCT r; r.set(csC(p.x0), csC(p.y0), csC(p.x1 + 2), csC(p.y1)); r.drawText(p.text.c_str(), false, false);
+            if ((size_t)(&p - &P[0]) >= labFrom && !p.tiny && board.size() < sb::CAP) {   // (1.9.2) its candle: the one centred under it
+                const int xc = (p.x0 + p.x1) / 2, j0 = std::max(0, v.first), j1 = std::min(v.last, (int)S->E.B.size() - 1); int bj = -1; double bd = 1e9;
+                for (int j = j0; j <= j1; ++j) { const double d = std::fabs(v.X(j) - xc); if (d < bd) { bd = d; bj = j; } }
+                if (bj >= 0 && bd <= 3) { const cobs::Bar& cb = S->E.B[(size_t)bj]; sb::Ev e;
+                    if (sb::tagEv(cb.t, (int)std::lround(v.Y(cb.h)), (int)std::lround(v.Y(cb.l)), p.x0, p.y0, p.x1, p.y1, e)) board.push_back(e); }
+            }
         }
+        {   const char* sy = getSymbol(); const char* chl = getChartLabel();   // (1.9.2) posted every draw (fresh 60 s); none drawn = an empty list
+            const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            sb::publish('K', sy ? sy : "", getSecondsPerBar(), chl ? chl : "", ms, board); }
     } catch (...) {}
     return RTX_OK;
 }
@@ -275,7 +287,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.9.1 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a named key level (in RTH) or a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Rev = the CoB pullback Rev: the first bar that closes above the prior bar's high (below its low for a bear CoB) while the pullback has carried 0.5x of the CoB wave's volume or less; up to 3 Revs on 3 separate pullbacks, until a bar closes through the CoB origin. Decided at the bar close, never repainted.");
-    p->setVersion("1.9.1");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.9.2 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a named key level (in RTH) or a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Rev = the CoB pullback Rev: the first bar that closes above the prior bar's high (below its low for a bear CoB) while the pullback has carried 0.5x of the CoB wave's volume or less; up to 3 Revs on 3 separate pullbacks, until a bar closes through the CoB origin. Decided at the bar close, never repainted.");
+    p->setVersion("1.9.2");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

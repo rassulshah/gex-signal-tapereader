@@ -1,6 +1,10 @@
 #ifndef LS_SIGNALBOARD_H
 #define LS_SIGNALBOARD_H
-// SignalBoard.h 1.5.0 (1.5.0, 2026-10-28 overnight: the NODE LADDER channel LRA_SLD_ - lsBookFlow posts the per-price added / pulled / filled
+// SignalBoard.h 1.6.0 (1.6.0, 2026-11-19 Rassul 10:51 CT "remember placement of other signals like cmx so you have to coordinate everything",
+// 11:13 CT "ok"): kinds 'Z' = lsZzoComboMarks badges (SR / CB35 / CB99) and 'K' = lsCobSignal candle labels (Cob..., Lvp, Rev) AS DRAWN, the
+// same form as 'L': bar, side +1 above / -1 below the candle, val = pixels from the candle's extreme to the label's OUTER edge, px = the
+// label's width in pixels (0 = unknown). lsRevReadMarks keeps its tags off all three. tagEv / tagBox = the SDK-free conversion both ways.
+// was SignalBoard.h 1.5.0 (1.5.0, 2026-10-28 overnight: the NODE LADDER channel LRA_SLD_ - lsBookFlow posts the per-price added / pulled / filled
 // lots of its last closed candles (NodeLadder.h); lsDeltaProfile sums its node zone; fact kind 'Y' = the node defender read lsDeltaProfile
 // decides from it, read for display by lsBookFlow's "At node" row)
 // SignalBoard.h 1.4.0 (1.4.0, 2026-10-28: the STANDARD FACT form - sb::Fact {bar, lo, hi, side, val, kind, state, proven} - posted by every
@@ -35,10 +39,28 @@
 #include <cmath>
 #include "BannerBoard.h"
 namespace sb {
-static const char* const VERSION = "1.5.0";
+static const char* const VERSION = "1.6.0";
 static const long long FRESH_MS = 60000; static const size_t CAP = 40;
 struct Ev { long long bar = 0; double px = 0; int side = 0; double val = 0; int flag = 0; };
-inline const char* prefix(char k) { return k == 'A' ? "LRA_SGA_" : k == 'B' ? "LRA_SGB_" : k == 'O' ? "LRA_SGO_" : k == 'L' ? "LRA_SGL_" : "LRA_SGF_"; }
+inline const char* prefix(char k) { return k == 'A' ? "LRA_SGA_" : k == 'B' ? "LRA_SGB_" : k == 'O' ? "LRA_SGO_" : k == 'L' ? "LRA_SGL_" : k == 'Z' ? "LRA_SGZ_" : k == 'K' ? "LRA_SGK_" : "LRA_SGF_"; }   // (1.6.0) + Z / K
+// (1.6.0) a label drawn at pixel box (x0, y0)-(x1, y1) by candle bar (Central wall seconds) whose high / low sit at pixel yHigh / yLow ->
+// the board event (side, val = extreme to outer edge, px = width). false = a degenerate box.
+inline bool tagEv(long long bar, int yHigh, int yLow, int x0, int y0, int x1, int y1, Ev& e) {
+    if (bar <= 0 || x1 <= x0 || y1 <= y0) return false;
+    const int top = yHigh < yLow ? yHigh : yLow, bot = yHigh < yLow ? yLow : yHigh;
+    e = Ev(); e.bar = bar; e.px = (double)(x1 - x0);
+    if ((y0 + y1) / 2 <= (top + bot) / 2) { e.side = 1; e.val = (double)(top - y0); } else { e.side = -1; e.val = (double)(y1 - bot); }
+    if (e.val < 1) e.val = 1;
+    return true;
+}
+// (1.6.0) the reverse: the pixel box an event covers at a candle drawn at x with high / low at yHigh / yLow (from the extreme to the outer
+// edge; half the width each side, at least 14 px when the width is unknown). l / t / r / b out.
+inline void tagBox(const Ev& e, int x, int yHigh, int yLow, int& l, int& t, int& r, int& b) {
+    const int top = yHigh < yLow ? yHigh : yLow, bot = yHigh < yLow ? yLow : yHigh;
+    const int half = e.px > 0 && e.px < 400 ? (int)(e.px / 2) + 1 : 14;
+    l = x - half; r = x + half;
+    if (e.side > 0) { b = top; t = top - (int)e.val; } else { t = bot; b = bot + (int)e.val; }
+}
 static const size_t CAP_O = 160;   // (1.2.0) kind 'O' carries several prices per candle
 inline size_t capOf(char k) { return k == 'O' ? CAP_O : CAP; }
 inline int obFlag(long long shown, int refills) { if (shown < 0) shown = 0; if (shown > 20000000) shown = 20000000; return (int)(shown * 100 + (refills > 99 ? 99 : refills < 0 ? 0 : refills)); }
