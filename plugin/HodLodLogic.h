@@ -41,6 +41,7 @@
 #include "HodLodExpected.h"
 #include "HodLodExpectedV2.h"
 #include "HodLodEvents.h"         // (HL101) the economic calendar (CPI / NFP / FOMC / ISM, EIA for CL / NG), generated nightly
+#include "HodLodTop.h"           // (2.37.0) the box top: the signal line (Cob | Sw | BkTst) and the Now row's gamma pill + 0DTE expiry (SDK-free)
 #include "HodLodMedians.h"        // the typical (median) first-extreme timing per market (v12 E row)     // hle 2.0.0: the studies agent's conditional expected model (range, close, times, gap fill)
 
 #if defined(__has_include) && !defined(HL_FORCE_NO_READ)
@@ -56,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.36.0";   // (2.36.0, Rassul 2026-11-19 18:35-18:48 CT, mockup now-box-levels-mockup.html: the Now box comes back as ONE line of named levels at its old spot above the table - "TESTING: <level> · BkTst Rev <arrow>" or "WATCH: Bk / Sw at <level> · <level>" | Next <arrow> <level> · <arrow> <level> | Last Bk <arrow> <level> (NowLevels.h); no numbers)   // was "2.35.0";   // (2.35.0, Rassul 2026-11-19 17:27-18:10 CT "lets include sweeps too", "build": the right end of the top line = each market's latest Cob (Rev), Sw and BkTst as green / red badges with black text, newest first (TopSignals.h); no plain Bk)   // was "2.34.0";   // (2.34.0, Rassul 2026-11-19 16:18 CT "i'll go with your recommendation" - price-pane cleanup: the "Now" read box (Now / Level / Flow lines) is no longer drawn; it is still built and logged in the status file; nothing else changes)
+static const char* const HL_VERSION = "2.37.0";   // (2.37.0, Rassul 2026-11-19 19:29 CT "ok.. do it", mockup hodlod-new-box-mockup.html; 19:33 "switch positions of sweeps and Cobs"): the box top = line 1 the SIGNAL line (Cob left | Sw centre | BkTst right, 11 -> 10 pt -> tight -> oldest drop; HodLodTop.h) + line 2 "ES  Close | LTD | market moves ... Norm?  v2.37.0" (Hrly / 3m / Day removed); the gamma pill and "0DTE Exp 3:00 PM" moved to the left of the Now row (host); spoken sweep alerts (SweepVoice.h, host)
+// was HL_VERSION = "2.36.0";   // (2.36.0, Rassul 2026-11-19 18:35-18:48 CT, mockup now-box-levels-mockup.html: the Now box comes back as ONE line of named levels at its old spot above the table - "TESTING: <level> · BkTst Rev <arrow>" or "WATCH: Bk / Sw at <level> · <level>" | Next <arrow> <level> · <arrow> <level> | Last Bk <arrow> <level> (NowLevels.h); no numbers)   // was "2.35.0";   // (2.35.0, Rassul 2026-11-19 17:27-18:10 CT "lets include sweeps too", "build": the right end of the top line = each market's latest Cob (Rev), Sw and BkTst as green / red badges with black text, newest first (TopSignals.h); no plain Bk)   // was "2.34.0";   // (2.34.0, Rassul 2026-11-19 16:18 CT "i'll go with your recommendation" - price-pane cleanup: the "Now" read box (Now / Level / Flow lines) is no longer drawn; it is still built and logged in the status file; nothing else changes)
 // was HL_VERSION = "2.33.0";   // (2.33.0, Rassul 2026-11-18 09:30 CT "lets put the session in the middle with lod to the left and hod to the right": LOD SWEEPS | SESSION | HOD SWEEPS)   // was "2.32.0";   // (2.32.0, Rassul 2026-11-17 12:12 CT "build": the Flow read in two lines - Now (the forming candle's market orders, fact M from lsRevRead) + Above / Below (the decided level still in play, its time and distance))   // was "2.31.0";   // (2.31.0, Rassul 2026-11-17 07:03-07:18 CT: host - the Flow read sits bottom centre above the box and follows the live price and new events every second)   // was "2.30.0";   // (2.30.0, Rassul 2026-11-17 05:55-05:58 CT) the Cob section at the right end of the top line: every market with a live Cob   // was "2.29.2";   // (2.29.2, Rassul 2026-11-17 05:31 CT "lets use percentages like 20%") the market strength line reads "CL +20%"   // was "2.29.1";   // (2.29.1) the session close + last trading day always shown, on the top line (a full header band used to drop them)   // was "2.29.0";   // (2.29.0, 2026-11-16 Rassul 21:45-21:52 CT: the market strength line on top of the box - each traded market's session move over its average session range, MktMove.h)   // was "2.28.0";   // (2.28.0, 2026-11-16 Rassul 13:06 CT: the session close and the contract's last trading day right after the market in the header band - host only, the hdrLeft segments)   // was "2.27.0";   // (2.27.0, 2026-11-16 Rassul 09:58 CT "i dont need this line": the call line under the header band - 1st extreme / 2nd / Lvl - is gone; the tables are unchanged)   // was "2.26.0";   // (2.26.0, 2026-11-11 Rassul "Ok build"): the read box gets the Book line (ReadBox 1.4.0, lsBookFlow fact F)   // was "2.25.0";   // (2.25.0, 2026-11-11 Rassul 11:57 "show mockup", 12:01 "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:02 "will the hod lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build") the read box = the Flow line only; this box: a CALL LINE under the header (1st / 2nd extreme: actual, else expected; FLIPPED hh:mm; the Lvl read), "Hrly: Up, above 7607" and "Day: ..." in the header row, the sweep tables' UPCOMING level bright ("next" / "testing") and the rest dim, the 1st-extreme time table only until the first extreme is in
 // was "2.24.0":   // (2.24.0, Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") the read box = ReadBox 1.2.0: Hrly Trend + the hourly breakout level / Day / Lvl nearest above and below / one Flow line from events still in play
 // was "2.23.1":   // (2.23.1, Rassul 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA") the read box's first line is "Hrly Trend: Up / Down / NA" (ReadBox 1.1.0)
@@ -1475,6 +1477,7 @@ struct Layout {
     int swTier = -1;                                            // (2.17.9) the sweep sections' form: 0 full, 1 no caption, 2 half bars, 3 no bars (-1 = no sections)
     int sessR = 0;                                              // (2.17.7) the SESSION section's right edge (= the HOD section's left)
     bool stretched = false; int stretchFrom = 0;                // (2.17.7) the table was widened to the price axis (from this width)
+    int sigFs = 0, sigShown = 0, sigDropped = 0; bool sigTight = false; Box sigRow = { 0, 0, 0, 0 };   // (2.37.0) the signal line: its font, tags shown / dropped, tight spacing, its row
 };
 
 inline int lineH(int fs) { return (int)(fs * 1.7f + 0.5f); }   // as SessionInfo (a 9 pt font is 12 px at 96 dpi)
@@ -1928,7 +1931,9 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         int htfW = 0; for (size_t q = 0; q < v.htf.size(); q++) { const bool lab = v.htf[q].col == C_GREY; htfW += M(v.htf[q].s, fs, !lab) + (lab ? (q == 0 ? 10 : 22) : 5); }
         exW += exL;   // (2.14.0) "| Day ...", "| RTH 83% done", "| Bar 2:13 left"
         int expW = 0; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Expiry") == 0) expW = M(hlShortExpiry(v.sessSegs[q].s), fs, false) + 24;   // (2.17.5)
-        const int headW = 10 + segsW(head, true) + 24 + (htfW > 0 ? htfW + 40 : 0) + pillW + rpG + (trendTxt.empty() || htfW > 0 ? 0 : 10 + M(trendTxt, fs, true)) + 10 + (htfW > 0 ? exL + expW : exW) + verW + 10;   // (2.17.5) with the HTF groups: no Day extra, the expiry instead   // (2.17.4) no separate trend text with the HTF groups   // (2.12.0) + the small version at the right
+        (void)htfW; (void)expW; (void)pillW; htfW = 0; exW = 0; exL = 0;   // (2.37.0) line 2 has no HTF groups (Hrly / 3m / Day), no Day extras, no gamma pill / expiry (they moved to the Now row)
+        int hl2W = 10 + segsW(head, true) + 12 + rpG + verW + 10; for (size_t q = 0; q < v.hdrLeft.size(); q++) hl2W += M(v.hdrLeft[q].s, fs, false) + 18;
+        const int headW = hl2W;   // (2.37.0) the market, Close / LTD, the Range Day pill and the version; the market moves fill what is left
         const int sW = lad.ok ? geo.W : 0;
         int W = 8 + lw + sumC;                                                            // (2.14.1) the session content only (header / strip below)
         if (v.preOn) W = (std::max)(W, 8 + lw + M(v.preText, fs, false) + 10);            // (2.6.0) the Pre row never wraps either
@@ -1978,7 +1983,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int hdrH = rowH + 4;                         // (2.5.0) the header band, a little taller
         const int htfH = 0;   // (2.17.2, Rassul 14:41 CT) the HTF trend / RS values moved INTO the header (no own row)
         const int callH = CALL_ROW ? rowH + 3 : 0;   // (2.25.0) the call line
-        const int mktH = (v.mkts.empty() && v.cobs.empty() && !(HDR_LEFT_TOP && !v.hdrLeft.empty())) ? 0 : rowH + 3;   // (2.29.0) the market strength line above the header band
+        const int mktH = rowH + 3;   // (2.37.0) the signal line, always there (the box keeps one height) - was (2.29.0) the market strength line, only when it had something   // (2.29.0) the market strength line above the header band
         const int H0 = mktH + callH + htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
         const int sessRows = 1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size() + (v.tmOk ? 3 : 0);   // (2.14.2) + 1 spacer row above the time table   // (2.14.0) strip + Exp / Act (+ Pre / notes) + the time table
         const int H = useSw ? mktH + callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
@@ -2001,119 +2006,42 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         }
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
         int y = T.t + 1;
-        if (mktH > 0) {   // (2.29.0, Rassul 2026-11-16 21:45-21:52 CT "a line on top of the hod lod box , which indicates how much each market is up or down for the
-            // session ... strong trending moving markets"; mockup claude.ai/artifact/TmYk67SB3emJaALWR4PbpJ) THE MARKET STRENGTH LINE: "ES -0.8x" per market,
-            // biggest move first; bold + arrow = strong and still at the session's extreme. Markets that do not fit are left out (the weakest ones).
-            // (2.30.0, Rassul 2026-11-17 05:55-05:58 CT "on the right show which markets have a cob", "build"; mockup claude.ai/artifact/F2X8n9DNVXPFFh9ZZbUfUN)
-            // THE COB SECTION, right-aligned: "Cob  NQ ^ 10:06  GC v 9:45" - each market's live Cob, newest first; it keeps its room, the market
-            // moves on the left fill what is left (the weakest drop off)
-            int xLim = T.r - 8;
-            if (!v.cobs.empty() && !v.cobs[0].text.empty()) {   // (2.35.0) the signal badges: green / red fill, black text, newest first; the oldest drop when there is no room
-                const int padX = 4, gap = 6; int tot = 0; size_t nShow = 0;
-                for (size_t q = 0; q < v.cobs.size(); q++) { const int w = M(v.cobs[q].text, fs, true) + 2 * padX + (q ? gap : 0); if (tot + w > (T.r - T.l) / 2) break; tot += w; nShow = q + 1; }
-                if (nShow > 0) {
-                    int xc = T.r - 10 - tot; xLim = xc - 20;
-                    addLine(L, xc - 10, y + 4, xc - 10, y + mktH - 5, C_BORDER, 1, R_TABLE);
-                    for (size_t q = 0; q < nShow; q++) { const View::CobSeg& g = v.cobs[q]; const unsigned col = g.dir > 0 ? C_GREEN : C_RED; if (q) xc += gap;
-                        const int tw = M(g.text, fs, true); addFill(L, xc, y + 2, xc + tw + 2 * padX, y + mktH - 2, col, R_TABLE);
-                        addText(L, xc + padX, y + 1, y + mktH - 2, g.text, 0x00000000u, fs, true, tw, R_TABLE, -1); xc += tw + 2 * padX; }
-                }
-            } else if (!v.cobs.empty()) {
-                const int labW = M("Cob", fs, true); int tot = labW + 12; size_t nShow = 0;
-                for (size_t q = 0; q < v.cobs.size(); q++) { const int w = M(v.cobs[q].mkt, fs, true) + 14 + M(v.cobs[q].when, fs, false) + (q ? 14 : 0); if (tot + w > (T.r - T.l) / 2) break; tot += w; nShow = q + 1; }
-                if (nShow > 0) {
-                    int xc = T.r - 10 - tot; xLim = xc - 20;
-                    addLine(L, xc - 10, y + 4, xc - 10, y + mktH - 5, C_BORDER, 1, R_TABLE);
-                    addText(L, xc, y + 1, y + mktH - 2, "Cob", C_SLATE, fs, true, labW, R_TABLE, -1); xc += labW + 12;
-                    for (size_t q = 0; q < nShow; q++) { const View::CobSeg& g = v.cobs[q]; const unsigned col = g.dir > 0 ? C_GREEN : C_RED; if (q) xc += 14;
-                        const int w = M(g.mkt, fs, true); addText(L, xc, y + 1, y + mktH - 2, g.mkt, col, fs, true, w, R_TABLE, -1); xc += w;
-                        const int ax = xc + 6, ym = y + mktH / 2, d = g.dir > 0 ? -1 : 1;
-                        addLine(L, ax, ym - 4 * d, ax, ym + 4 * d, col, 2, R_TABLE); addLine(L, ax - 3, ym + d, ax, ym + 4 * d, col, 2, R_TABLE); addLine(L, ax + 3, ym + d, ax, ym + 4 * d, col, 2, R_TABLE); xc += 14;
-                        const int tw = M(g.when, fs, false); addText(L, xc, y + 1, y + mktH - 2, g.when, C_GREY, fs, false, tw, R_TABLE, -1); xc += tw; }
-                }
-            }
-            int xm = T.l + 10;
-            if (HDR_LEFT_TOP) for (size_t q = 0; q < v.hdrLeft.size(); q++) { const int w = M(v.hdrLeft[q].s, fs, false); if (xm + w > xLim) break;   // (2.29.1) the session close and the last trading day: always here
-                addText(L, xm, y + 1, y + mktH - 2, v.hdrLeft[q].s, v.hdrLeft[q].col, fs, false, w, R_TABLE, -1); xm += w + 9;
-                addLine(L, xm, y + 4, xm, y + mktH - 5, C_BORDER, 1, R_TABLE); xm += 9; }
-            for (size_t q = 0; q < v.mkts.size(); q++) { const View::MkSeg& g = v.mkts[q]; const int w = M(g.s, fs, g.bold), aw = g.arrow ? 14 : 0; if (xm + w + aw > xLim) break;
-                addText(L, xm, y + 1, y + mktH - 2, g.s, g.col, fs, g.bold, w, R_TABLE, -1); xm += w;
-                if (g.arrow) { const int ax = xm + 8, ym = y + mktH / 2, d = g.arrow > 0 ? -1 : 1;
-                    addLine(L, ax, ym - 4 * d, ax, ym + 4 * d, g.col, 2, R_TABLE); addLine(L, ax - 3, ym + d, ax, ym + 4 * d, g.col, 2, R_TABLE); addLine(L, ax + 3, ym + d, ax, ym + 4 * d, g.col, 2, R_TABLE); xm += aw; }
-                xm += 18; }
+        {   // (2.37.0, Rassul 2026-11-19 19:29 CT "ok.. do it", mockup hodlod-new-box-mockup.html; 19:33 "switch positions of sweeps and Cobs") LINE 1 =
+            // THE SIGNAL LINE: the 2.35.0 tags in three groups - Cob left (left-aligned), Sw centre, BkTst right (right-aligned), newest first in
+            // each; (19:28 "if there are too many signals you will have to adjust font size") 11 pt -> 10 pt (his floor) -> tighter spacing ->
+            // only then the oldest tag of the most crowded group drops (HodLodTop.h). Replaces the 2.29.0 market strength line's top spot.
+            std::vector<htop::Tag> tags;
+            for (const View::CobSeg& g : v.cobs) { if (g.text.empty()) continue; htop::Tag t; t.text = g.text; t.dir = g.dir; t.group = htop::groupOf(htop::typeOf(g.text)); if (t.group >= 0) tags.push_back(t); }
+            auto mf = [&](const std::string& s2, int f, bool b2) { return M(s2, f, b2); };
+            const htop::Sig sg = htop::sigLayout(tags, mf, T.l + 8, T.r - 8, y, y + mktH);
+            L.sigFs = sg.fs; L.sigTight = sg.tight; L.sigDropped = sg.dropped; L.sigShown = sg.shown[0] + sg.shown[1] + sg.shown[2]; L.sigRow = Box{ T.l, y, T.r, y + mktH };
+            for (const htop::It& it : sg.items) { if (it.k == 0) addFill(L, it.l, it.t, it.r, it.b, it.col, R_TABLE); else if (it.k == 1) addText(L, it.l, it.t, it.b, it.s, it.col, it.fs, it.bold, it.r - it.l, R_TABLE, -1); }
             y += mktH; addLine(L, T.l, y - 1, T.r, y - 1, C_BORDER, 1, R_TABLE);
         }
-        {   // (2.5.0) the header band: "ES  M4 O0 V2" left; the gamma pill and the trend in full right ("+GAMMA  Strong Uptrend")
+        {   // (2.37.0) LINE 2 = the old two header lines in one, without Hrly / 3m / Day: "ES  Close 4:00 PM | LTD Dec 18 (29d) | NQ -9%  ES -3%" left,
+            // the Range Day pill ("Norm?" / "Big" / "Small") and the version right. The gamma pill and the expiry moved to the Now row (host).
             addFill(L, T.l + 1, y, T.r - 1, y + hdrH, C_HEAD, R_TABLE);
-            const bool showEx = (T.r - T.l) >= headW;   // (2.14.1) the extras only when they fit
-            int x = T.l + 10; for (size_t q = 0; q < head.size(); q++) { const int w = M(head[q].s, fs, true); addText(L, x, y + 2, y + hdrH - 2, head[q].s, head[q].col, fs, true, w, R_TABLE, -1); x += w; }
-            if (showEx && !HDR_LEFT_TOP) for (size_t q = 0; q < v.hdrLeft.size(); q++) { const int w = M(v.hdrLeft[q].s, fs, false);   // (2.14.3) RTH % / bar time right after the market
-                addLine(L, x + 10, y + 5, x + 10, y + hdrH - 5, C_BORDER, 1, R_TABLE); addText(L, x + 18, y + 2, y + hdrH - 2, v.hdrLeft[q].s, v.hdrLeft[q].col, fs, false, w, R_TABLE, -1); x += w + 18; }
-            addText(L, T.r - 10 - verW, y + 2, y + hdrH - 2, verTxt, C_GREY, vfs, false, verW, R_TABLE, -1);   // (2.12.0) the version, small, right end of the top line
-            const int exR = exW - exL; (void)exR;
-            if (htfW > 0) {   // (2.17.4, Rassul 14:55 CT "move -Gamma to be right justified and the trend shouldn't be displayed twice ... make everything
-                // look nice"): left = market / RTH / bar; CENTRE = | Dly | Hrly | 3m | (the 3m trend = his VWAP trend, the day type after it);
-                // RIGHT = | Day ... | then the gamma pill, then the version
-                const bool pillMid = HDR_PILL_MID && !pill.s.empty();   // (2.23.0) the gamma pill leads the centre group (where "Dly:" was)
-                const int xp = T.r - 10 - verW - 12 - (pillMid ? -12 : pillW);
-                // (2.17.5, Rassul 15:14 CT "remove what i crossed out and place the option Expiry time there instead before the regime"):
-                // no "Day ..." extra and no day type here; "| Exp 3:00 PM" (amber in its last hour, "done" after) right before the gamma pill
-                std::string ex; unsigned exC = C_GREY;
-                for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Expiry") == 0) { ex = hlShortExpiry(v.sessSegs[q].s); exC = v.sessSegs[q].col == C_AMBER ? C_AMBER : C_SLATE; }
-                const int xq = xp - rpG;   // (2.19.0) the Range Day pill right before the gamma pill; the expiry before both
-                if (rpW > 0) { const unsigned fill = rp.col == C_GREEN ? C_PILL_G : (rp.col == C_RED ? C_PILL_R : C_PILL_N);
-                    addRect(L, xq, y + 3, xq + rpW, y + hdrH - 3, rp.col, fill, 1, R_TABLE);
-                    addText(L, xq + 6, y + 3, y + hdrH - 3, rp.s, rp.col, fs, true, rpW - 12, R_TABLE, -1); }
-                int xe = xq - 12;
-                if (!ex.empty()) { const int w = M(ex, fs, false); xe = xq - 12 - w - 12;
-                    addLine(L, xe + 4, y + 5, xe + 4, y + hdrH - 5, C_BORDER, 1, R_TABLE);
-                    addText(L, xe + 12, y + 2, y + hdrH - 2, ex, exC, fs, false, w, R_TABLE, -1); }
-                const int cw = htfW + (pillMid ? pillW + 12 : 0);
-                const int lo = x + 24, hi = xe - 16 - cw; int xh = (T.l + T.r) / 2 - cw / 2; if (hi >= lo) xh = (std::min)((std::max)(xh, lo), hi); else xh = lo;
-                if (!pill.s.empty()) { const int px0 = pillMid ? xh : xp;
-                    const unsigned fill = pill.col == C_GREEN ? C_PILL_G : (pill.col == C_RED ? C_PILL_R : C_PILL_N);
-                    addRect(L, px0, y + 3, px0 + pillW, y + hdrH - 3, pill.col, fill, 1, R_TABLE);
-                    addText(L, px0 + 6, y + 3, y + hdrH - 3, pill.s, pill.col, fs, true, pillW - 12, R_TABLE, -1);
-                    if (pillMid) xh += pillW + 12; }
-                for (size_t q = 0; q < v.htf.size(); q++) { const bool lab = v.htf[q].col == C_GREY; const int w = M(v.htf[q].s, fs, !lab);
-                    if (lab) { addLine(L, xh, y + 5, xh, y + hdrH - 5, C_BORDER, 1, R_TABLE); xh += 8; }
-                    addText(L, xh, y + 2, y + hdrH - 2, v.htf[q].s, v.htf[q].col, fs, !lab, w, R_TABLE, -1); xh += w + 5;
-                    if (q + 1 < v.htf.size() && v.htf[q + 1].col == C_GREY) xh += 9; }
-                // (2.17.4) no closing divider: the "| Day ..." extra brings its own
-            } else {
-            const int exR = exW - exL;
-                int xr = T.r - 10 - verW - 10 - (showEx ? exR : 0) - (trendTxt.empty() ? 0 : M(trendTxt, fs, true) + 10) - pillW - rpG;
-                {   // (2.14.4, Rassul 21:00 CT) the gamma pill and the trend sit in the MIDDLE of the header, kept clear of both sides
-                    const int hw = htfW > 0 ? htfW + 14 : 0;   // (2.17.3) the HTF groups lead the centred block
-                    const int cw = hw + rpG + pillW + (pill.s.empty() || trendTxt.empty() ? 0 : 10) + (trendTxt.empty() ? 0 : M(trendTxt, fs, true));
-                    const int lo = x + 20, hi = xr - hw;   // after the left items; never past where the right-aligned spot was
-                    const int mid = (T.l + T.r) / 2 - cw / 2;
-                    if (cw > 0 && hi >= lo) xr = (std::min)((std::max)(mid, lo), hi);
-                }
-                if (showEx) {   int xe = T.r - 10 - verW - 10 - exR;   // (2.14.0) the extras, each after a thin divider
-                    for (size_t q = 0; q < v.hdrExtra.size(); q++) { const int w = M(v.hdrExtra[q].s, fs, false);
-                        addLine(L, xe + 4, y + 5, xe + 4, y + hdrH - 5, C_BORDER, 1, R_TABLE);
-                        addText(L, xe + 12, y + 2, y + hdrH - 2, v.hdrExtra[q].s, v.hdrExtra[q].col, fs, false, w, R_TABLE, -1); xe += w + 18; } }
-                if (htfW > 0) {   // (2.17.3) "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk": a thin divider before each timeframe
-                    int xh = xr;
-                    for (size_t q = 0; q < v.htf.size(); q++) { const bool lab = v.htf[q].col == C_GREY; const int w = M(v.htf[q].s, fs, !lab);
-                        if (lab) { addLine(L, xh, y + 5, xh, y + hdrH - 5, C_BORDER, 1, R_TABLE); xh += 8; }
-                        addText(L, xh, y + 2, y + hdrH - 2, v.htf[q].s, v.htf[q].col, fs, !lab, w, R_TABLE, -1); xh += w + 5;
-                        if (q + 1 < v.htf.size() && v.htf[q + 1].col == C_GREY) xh += 9; }
-                    addLine(L, xh + 2, y + 5, xh + 2, y + hdrH - 5, C_BORDER, 1, R_TABLE);
-                    xr += htfW + 14; }
-                if (rpW > 0) {   // (2.19.0) the Range Day pill, then the gamma pill
-                    const unsigned fill = rp.col == C_GREEN ? C_PILL_G : (rp.col == C_RED ? C_PILL_R : C_PILL_N);
-                    addRect(L, xr, y + 3, xr + rpW, y + hdrH - 3, rp.col, fill, 1, R_TABLE);
-                    addText(L, xr + 6, y + 3, y + hdrH - 3, rp.s, rp.col, fs, true, rpW - 12, R_TABLE, -1); xr += rpG; }
-                if (!pill.s.empty()) {
-                    const unsigned fill = pill.col == C_GREEN ? C_PILL_G : (pill.col == C_RED ? C_PILL_R : C_PILL_N);
-                    addRect(L, xr, y + 3, xr + pillW, y + hdrH - 3, pill.col, fill, 1, R_TABLE);
-                    addText(L, xr + 6, y + 3, y + hdrH - 3, pill.s, pill.col, fs, true, pillW - 12, R_TABLE, -1); xr += pillW + 10;
-                }
-                if (!trendTxt.empty()) addText(L, xr, y + 2, y + hdrH - 2, trendTxt, trendC, fs, true, M(trendTxt, fs, true), R_TABLE, -1);
-                    if (!v.dayText.empty() && !v.dayHover.empty()) { L.dayBox = Box{ xr - 2, y, xr + M(trendTxt, fs, true) + 2, y + hdrH }; L.dayOk = true; }   // (2.7.0)
-            }
+            const int xv = T.r - 10 - verW;
+            addText(L, xv, y + 2, y + hdrH - 2, verTxt, C_GREY, vfs, false, verW, R_TABLE, -1);   // the version, small, right end
+            int xLim = xv - 12;
+            if (rpW > 0) { const int xq = xLim - rpW; const unsigned fill = rp.col == C_GREEN ? C_PILL_G : (rp.col == C_RED ? C_PILL_R : C_PILL_N);
+                addRect(L, xq, y + 3, xq + rpW, y + hdrH - 3, rp.col, fill, 1, R_TABLE);
+                addText(L, xq + 6, y + 3, y + hdrH - 3, rp.s, rp.col, fs, true, rpW - 12, R_TABLE, -1); xLim = xq - 12; }
+            int x = T.l + 10;
+            for (size_t q = 0; q < head.size(); q++) { const int w = M(head[q].s, fs, true); addText(L, x, y + 2, y + hdrH - 2, head[q].s, head[q].col, fs, true, w, R_TABLE, -1); x += w + 12; }
+            bool sep = false;   // a thin divider between the parts after the market
+            for (size_t q = 0; q < v.hdrLeft.size(); q++) { const int w = M(v.hdrLeft[q].s, fs, false), dx2 = sep ? 18 : 0; if (x + dx2 + w > xLim) break;   // (2.29.1) the session close and the last trading day
+                if (sep) { addLine(L, x + 9, y + 5, x + 9, y + hdrH - 5, C_BORDER, 1, R_TABLE); x += 18; }
+                addText(L, x, y + 2, y + hdrH - 2, v.hdrLeft[q].s, v.hdrLeft[q].col, fs, false, w, R_TABLE, -1); x += w; sep = true; }
+            bool first = true;
+            for (size_t q = 0; q < v.mkts.size(); q++) { const View::MkSeg& g = v.mkts[q]; const int w = M(g.s, fs, g.bold), aw = g.arrow ? 14 : 0, lead = first ? (sep ? 18 : 0) : 12;
+                if (x + lead + w + aw > xLim) break;   // (2.29.0) the market moves: the weakest drop off
+                if (first && sep) addLine(L, x + 9, y + 5, x + 9, y + hdrH - 5, C_BORDER, 1, R_TABLE);
+                x += lead; first = false;
+                addText(L, x, y + 2, y + hdrH - 2, g.s, g.col, fs, g.bold, w, R_TABLE, -1); x += w;
+                if (g.arrow) { const int ax = x + 8, ym = y + hdrH / 2, d = g.arrow > 0 ? -1 : 1;
+                    addLine(L, ax, ym - 4 * d, ax, ym + 4 * d, g.col, 2, R_TABLE); addLine(L, ax - 3, ym + d, ax, ym + 4 * d, g.col, 2, R_TABLE); addLine(L, ax + 3, ym + d, ax, ym + 4 * d, g.col, 2, R_TABLE); x += aw; } }
+            (void)trendTxt; (void)trendC; (void)pill; (void)exW; (void)exL;
             L.qBox = Box{ T.l, T.t, T.r, y + hdrH }; L.qOk = true;
         }
         y += hdrH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;

@@ -1,5 +1,14 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.37.0 (2026-11-19 19:29 CT, Rassul "ok.. do it" on mockup hodlod-new-box-mockup.html; 19:33 "switch positions of sweeps and Cobs"):
+ *         THE BOX TOP: line 1 = the SIGNAL line (Cob left | Sw centre | BkTst right, newest first; 11 pt -> 10 pt -> tighter spacing ->
+ *         the oldest of the most crowded group drops; HodLodTop.h 1.0.0), line 2 = "ES  Close 4:00 PM | LTD ... | NQ -9%  ES -3% ... Norm?
+ *         v2.37.0" (Hrly / 3m / Day removed). The gamma pill and "0DTE Exp 3:00 PM" sit at the far left of the Now row (the Now line stays
+ *         centred and is never covered: the expiry goes first, then the pill). SPOKEN SWEEP ALERTS (SweepVoice.h 1.0.0): when a drawn Sw
+ *         mark (named key level, strength >= 10, Sw colour) is confirmed at its candle close in RTH, its clip plays once per market + level +
+ *         side per session ("NQ, sweep, PDL, up"; lsFlexLevels\Voice\sw-<MKT>-<LV>-<up|down>.wav, PlaySound async, a queue, ONE hub per
+ *         DLL so several charts of a market speak once; never for marks already there when the chart started; a missing clip = a short
+ *         system sound). Status lines SIGNAL_LINE / NOW_ROW / SWEEP_VOICE.
  *  2.36.0 (2026-11-19 18:35-18:48 CT, Rassul "i want to update the now to be more focused on levels indicating the last level broken,
  *         then next level and if it is looking to tst any level that it already broke", "I dont have that much vertical space, use
  *         horizonal", "empasize watch", "remove now", "get rid of the values, just keep the named levels", "Watch becomes testing when
@@ -134,6 +143,7 @@
 #endif
 #if defined(_WIN32)
 #include <windows.h>                 // (2.4.0) BEFORE irtsdk.h (MSVC C2371 RTBOOL clash otherwise): MarketState.h -> BannerBoard.h needs it
+#include <mmsystem.h>                // (2.37.0) PlaySound: the spoken sweep alerts (winmm - pragma below)
 #endif
 #include "irtsdk.h"
 #include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
@@ -167,6 +177,8 @@ static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not dra
 #else
 #define HL_SEP "/"
 #endif
+#include "SweepVoice.h"              // (2.37.0) the spoken sweep alerts: parse / rules / queue (SDK-free, tests_hodlod/t_hl2370)
+#include <mutex>
 #include "NowLevels.h"               // (2.36.0) the Now levels line: TESTING / WATCH badge, Next, Last Bk (SDK-free, tests_hodlod/t_hl2360)
 #include "TopSignals.h"             // (2.35.0) the top line signal badges: latest Cob / Sw / BkTst per market (SDK-free, tests_hodlod/t_hl2350)
 #include "MktMove.h"               // (2.29.0) the market strength line (SDK-free)
@@ -307,6 +319,8 @@ struct HLState {
     // (2.36.0) the Now levels line: this session's closed bars + the forming one (its high / low widened by the live price once a second),
     // the wy marks text (re-read at most every 3 s, by stamp), the finished line and its box
     std::vector<nowl::Bar> nlBars; double nlFh = NAN, nlFl = NAN; long long nlMs = -1, nlWyStamp = -2; time_t nlWyChecked = 0; std::string nlWy, nlWhy = "not run yet";
+    long long svStart = 0; int svOffered = 0; std::string svWhy = "not run yet";   // (2.37.0) the spoken sweep alerts: when this chart started (CT wall s; marks up to then are never spoken), clips this chart queued
+    int nrKeep = -1;   // (2.37.0) the Now row's left part: 2 gamma pill + expiry, 1 pill, 0 none (it would touch the Now line), -1 not drawn
     nowl::Out nlOut; std::vector<nowl::Seg> nlSegs; int nlRuns = 0, nlMarks = 0; bool nlDrawn = false; hl::Box nlBox = { 0, 0, 0, 0 }; int nlLevel = 0, nlShown = 0;
     mkm::Cob mkCob; int mkCobN = 0;   // (2.30.0) this market's live Cob (lsCobSignal's live file) / Cobs read
     mkm::Stat mk; time_t mkChecked = 0, mkWritten = 0; std::string mkBody; std::vector<mkm::Item> mkItems; int mkWrites = 0, mkRead = 0;   // (2.29.0) the market strength line
@@ -756,6 +770,20 @@ void HodLod::loadHvl(HLState& S)
     if (!B.ok && S.hvl.ok && B.why != "no HVL0 strike in the book" && B.why != "book is for another market") { S.hvlWhy = "garbled (" + B.why + "): kept the last good book"; S.hvlStamp = -2; return; }
     S.hvl = B; S.hvlWhy = B.ok ? std::string() : B.why;
 }
+// (2.37.0) THE SPOKEN SWEEP ALERTS: ONE hub per DLL - every chart of every market shares it, so several charts / timeframes of a market speak
+// a sweep once and two clips never talk over each other. This is deliberate cross-chart state (the per-chart rule does not apply), guarded.
+static std::mutex g_svMu; static svx::Hub g_sv;
+#if defined(_WIN32) && !defined(HL_TEST_SOUND)
+#if defined(_MSC_VER)
+#pragma comment(lib, "winmm.lib")
+#endif
+static bool hlPlayFile(const std::string& path) { return PlaySoundA(path.c_str(), NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT) != FALSE; }
+static bool hlPlayFallback() { return PlaySoundA("SystemAsterisk", NULL, SND_ALIAS | SND_ASYNC | SND_NODEFAULT) != FALSE; }   // a short system sound when a clip is missing
+#else
+static int hl_test_played = 0, hl_test_fallbacks = 0;
+static bool hlPlayFile(const std::string&) { ++hl_test_played; return true; }
+static bool hlPlayFallback() { ++hl_test_fallbacks; return true; }
+#endif
 // the CT wall clock now (this PC's local time = Central, as everywhere in this plugin), as CT wall-clock seconds
 static long long hlNowCt()
 {
@@ -1314,6 +1342,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
     else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\nLEFT_KEEP," + std::to_string(S.leftKeepX) + " (ColumnBoard " + cb::VERSION + ")\nCANDLE_KEEPOUT," + std::to_string(S.candleAvoid) + " boxes (the table + strip never cover candles when a clear spot exists)\n";
     text += std::string("AWARENESS,") + awh::VERSION + " AWHODLOD decided " + std::to_string(S.aw.writes) + " records\nPERF," + lsperf::statusOf(this) + "\n";   // (2.8.0)
     {   char b[320]; std::snprintf(b, sizeof b, "MKT_LINE,%s,own %s move %.2f pos %.2f adr sessions %d,others read %d,shown %d,writes %d,own cob %d at %lld (of %d read),cob markets %d\n", mkm::VERSION, S.mk.ok ? "ok" : "not ready", S.mk.ratio, S.mk.pos, S.mk.sessions, S.mkRead, (int)S.view.mkts.size(), S.mkWrites, S.mkCob.dir, S.mkCob.t, S.mkCobN, (int)S.view.cobs.size()); text += b; }   // (2.29.0)
+    {   std::lock_guard<std::mutex> lk(g_svMu); char b[400]; std::snprintf(b, sizeof b, "SWEEP_VOICE,%s,%d,%s,queued here %d,fallbacks %d,last missing %s,skipped rth %d / old %d / colour %d,%s\n", svx::VERSION, g_sv.spoken, g_sv.last.empty() ? "-" : g_sv.last.c_str(), S.svOffered, g_sv.fallbacks, g_sv.lastMissing.empty() ? "-" : g_sv.lastMissing.c_str(), g_sv.skippedRth, g_sv.skippedOld, g_sv.skippedColour, S.svWhy.c_str()); text += b; }   // (2.37.0)
     {   char b[200]; std::snprintf(b, sizeof b, "TOP_SIGNALS,%s,files %d,signals this session %d,badges %d (latest Cob / Sw / BkTst per market, newest first; the line shows what fits)\n", tsig::VERSION, S.tsFiles, S.tsSigs, S.tsShown); text += b; }   // (2.35.0)
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
@@ -2071,27 +2100,71 @@ int HodLod::draw(void)
                          : std::string(S->nlOut.bs.state == 1 ? "live break " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "live sweep " + S->nlOut.bs.name + "; " : "")
                            + (S->nlOut.tst.ok ? std::string(S->nlOut.tst.state == 2 ? "testing " : "test coming ") + S->nlOut.tst.lv + " " + std::to_string(S->nlOut.tst.pct) + "% back" : "no test: " + S->nlOut.tst.why);
             } catch (...) { S->nlSegs.clear(); S->nlWhy = "fault (kept off)"; }
+            try {   // (2.37.0) THE SPOKEN SWEEP ALERTS (SweepVoice.h): this chart's drawn Sw marks newer than its start, once per market + level + side
+                const long long nowL = hlNowCt(); if (S->svStart == 0) S->svStart = nowL;
+                if (S->mi < 0) S->svWhy = "market not known";
+                else {
+                    const std::vector<svx::Sw> sws = svx::parseSw(S->nlWy, S->svStart, nowL + 60);
+                    auto colour = [&](long long t, int dir) -> int { for (size_t q = 0; q + 1 < S->nlBars.size(); q++) if (S->nlBars[q].t == t) { const nowl::Bar& b = S->nlBars[q]; return dir > 0 ? (b.c > b.o ? 1 : 0) : (b.c < b.o ? 1 : 0); } return -1; };
+                    std::lock_guard<std::mutex> lk(g_svMu);
+                    S->svOffered += g_sv.offer(S->mkt, S->svStart, nowL, sws, hl::MKTS[S->mi].open, hl::MKTS[S->mi].close, colour);
+                    bool miss = false; std::string usedPath;
+                    const bool played = g_sv.pump(hlNowMs(), [&](const std::string& f) -> long long {
+                            usedPath = flexPath(std::string("Voice") + HL_SEP + f); if (usedPath.empty()) return -1;
+                            std::ifstream in(usedPath.c_str(), std::ios::binary); if (!in) return -1;
+                            char hb[256]; in.read(hb, sizeof hb); const std::string head(hb, (size_t)in.gcount()); in.clear(); in.seekg(0, std::ios::end); const long long sz = (long long)in.tellg();
+                            const long long ms = svx::wavMs(head, sz); if (ms <= 0 || ms > 15000) return -1;
+                            return hlPlayFile(usedPath) ? ms : -1; },
+                        [&]() -> long long { miss = true; hlPlayFallback(); return svx::FALLBACK_MS; });
+                    if (played) { const std::string lp = flexPath(std::string("HodLod") + HL_SEP + "SweepVoice.log");
+                        char tb[32]; { const long long n2 = nowL; std::snprintf(tb, sizeof tb, "%s", nowl::clock12(n2).c_str()); }
+                        if (!lp.empty()) hlAppend(lp, "# lsHodLod spoken sweep alerts: <CT clock>,<market>,<text>,<clip>,<played|MISSING - system sound>,<version>", std::string(tb) + "," + S->mkt + "," + g_sv.last + "," + usedPath + "," + (miss ? "MISSING - system sound" : "played") + "," + hl::HL_VERSION); }
+                    S->svWhy = "start " + nowl::clock12(S->svStart) + ",sw marks after start " + std::to_string((int)sws.size()) + ",queue " + std::to_string((int)g_sv.q.size());
+                }
+            } catch (...) { S->svWhy = "fault (kept quiet)"; }
         }
-        if (!S->nlSegs.empty()) {   // at the old Now box spot: centred on the table, just above it (and its Gex strip); no table = the pane's bottom centre
-            int l = pb.l + HL_RB_LEFT, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
-            const int anchorT = L.tableOk ? (L.gexOk ? (std::min)(L.table.t, L.gexRow.t) : L.table.t) : (int)pane.bottom - 22;
-            const int cx = L.tableOk ? (L.table.l + L.table.r) / 2 : (l + r) / 2;
-            auto meas = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
-            const nowl::Draw D = nowl::layout(S->nlSegs, meas, cx, anchorT - 4, l, r, 10);
-            if (D.ok && D.t > (int)pane.top + 24) {
+    }
+    S->nrKeep = -1;
+    {   // (2.36.0) at the old Now box spot: centred on the table, just above it (and its Gex strip); no table = the pane's bottom centre
+        // (2.37.0, mockup hodlod-new-box-mockup.html) + at the far left of the same row (the box's left edge): the gamma pill and "0DTE Exp 3:00 PM"
+        // (moved out of the box header); the Now line stays centred and is never covered - the expiry goes first, then the pill (HodLodTop.h nowLeft)
+        int l = pb.l + HL_RB_LEFT, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
+        const int anchorT = L.tableOk ? (L.gexOk ? (std::min)(L.table.t, L.gexRow.t) : L.table.t) : (int)pane.bottom - 22;
+        const int cx = L.tableOk ? (L.table.l + L.table.r) / 2 : (l + r) / 2;
+        auto meas = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
+        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, cx, anchorT - 4, l, r, 10);
+        const int yB = anchorT - 4, yT = D.ok ? D.t : yB - 18;
+        if (yT > (int)pane.top + 24) {
+            if (D.ok) {
                 for (const nowl::Item& it : D.items) {
                     if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
                     else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
                     else line(it.l, it.t, it.r, it.b, (COLOR)it.col, it.col == nowl::C_SEP ? 1 : 2);
                 }
                 S->nlDrawn = true; S->nlBox = hl::Box{ D.l, D.t, D.r, D.b }; S->nlLevel = D.level; S->nlShown = D.shown;
-                if (!stripOk) { stripBox = S->nlBox; stripOk = true; }   // the confirm badges keep off it, as they did off the read box
             }
+            const hl::Seg pill = hl::gammaPill(S->view); std::string ex; unsigned exC = hl::C_SLATE;
+            for (size_t q = 0; q < S->view.sessSegs.size(); q++) if (S->view.sessSegs[q].s.compare(0, 6, "Expiry") == 0) { ex = hl::hlShortExpiry(S->view.sessSegs[q].s); exC = S->view.sessSegs[q].col == hl::C_AMBER ? hl::C_AMBER : hl::C_SLATE; }
+            const unsigned pf = pill.col == hl::C_GREEN ? hl::C_PILL_G : (pill.col == hl::C_RED ? hl::C_PILL_R : hl::C_PILL_N);
+            auto meas3 = [&](const std::string& s2, int f, bool bold) { return textW(s2, f, bold); };
+            const int xL = L.tableOk ? L.table.l : l;
+            const htop::Left Lf = htop::nowLeft(pill.s, pill.col, pf, htop::zeroDte(ex), exC, meas3, xL, yT, yB, D.ok ? D.l : 1000000, r, 10);
+            for (const htop::It& it : Lf.items) {
+                if (it.k == 3) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
+                else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, it.fs, it.bold);
+            }
+            S->nrKeep = Lf.keep;
+            if (!stripOk && (D.ok || Lf.keep > 0)) {   // the confirm badges keep off the row, as they did off the read box
+                stripBox = D.ok ? S->nlBox : hl::Box{ xL, yT, Lf.r, yB };
+                if (D.ok && Lf.keep > 0) stripBox.l = (std::min)(stripBox.l, xL);
+                stripOk = true; }
         }
     }
     S->placeLine += "NOW_LEVELS," + std::string(nowl::VERSION) + "," + (S->nlDrawn ? "box " + std::to_string(S->nlBox.l) + "," + std::to_string(S->nlBox.t) + "," + std::to_string(S->nlBox.r) + "," + std::to_string(S->nlBox.b)
                     + (S->nlLevel ? ",Last Bk dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
                   + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
+    S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->nrKeep == 2 ? "gamma pill + 0DTE expiry" : S->nrKeep == 1 ? "gamma pill (expiry dropped: no room)" : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn") + "\n";
+    S->placeLine += "SIGNAL_LINE," + std::string(htop::VERSION) + "," + (L.tableOk ? "font " + std::to_string(L.sigFs) + " pt" + (L.sigTight ? " tight" : "") + ",shown " + std::to_string(L.sigShown) + ",dropped " + std::to_string(L.sigDropped) : std::string("no table")) + " (Cob left | Sw centre | BkTst right)\n";
     if (S->rbox.ok && !HL_READBOX_DRAW) S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not drawn (2.34.0: removed from the price pane; still built)," + S->rbWhy + "\n";
     else if (S->rbox.ok) {   // (2.22.0) the READ BOX left column; (2.22.1) at the pane top, as wide as its text, clear of the left-edge labels
         const int fs = 10;
@@ -2261,6 +2334,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.36.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.37.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
