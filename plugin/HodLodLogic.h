@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.41.1";   // (2.41.1, Rassul 11:58 CT) the box ends at the last candle (host axisR = priceEdge), not the price axis
+static const char* const HL_VERSION = "2.41.2";   // (2.41.2, Rassul 2026-11-20 12:04 CT "lets only keep cob and sweeps because of the limited room") the signal line shows Cob (left) and Sw (centre) only - no BkTst
+// was HL_VERSION = "2.41.1";   // (2.41.1, Rassul 11:58 CT) the box ends at the last candle (host axisR = priceEdge), not the price axis
 // was HL_VERSION = "2.41.0";   // (2.41.0, Rassul 2026-11-20 10:47 CT "get rid of the left and right buy and sell sections and use the horizontal space for hod values", 10:53 "lets go with A", mockup hodlod-box-wide-mockup.html A; 10:32 "it should be aligned to the left") the BUY AT / SELL AT sections are gone (the Today Plan stays in the MQ Reader): ONE SESSION section across the whole box - Exp / Act with the 1st and 2nd extreme as before, the "1st extreme by / % of days" table moved to the RIGHT of those two rows (the box is 2 rows shorter); the box starts at the pane's left edge (no left keep-out, host)
 static const bool HL_WIDE_SESSION = true;   // (2.41.0) false = the 2.40.0 three-section box
 // was HL_VERSION = "2.40.0";   // (2.40.0, Rassul 2026-11-20 09:43 CT "this looks good. build", mockup hodlod-box-plan-mockup.html) the LOD / HOD SWEEPS sections replaced by BUY AT · 3-HOUR SUPPORT (left) / SELL AT · 3-HOUR RESISTANCE (right) = the MQ Reader TODAY PLAN for this market (TodayPlan.h 1.0.0: CobSignal HTFNOW + the Reader state.json, the Reader's own rules); the sweep rows are still built and written to the status file (SWROW) for the bridge, not drawn
@@ -2057,7 +2058,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             // each; (19:28 "if there are too many signals you will have to adjust font size") 11 pt -> 10 pt (his floor) -> tighter spacing ->
             // only then the oldest tag of the most crowded group drops (HodLodTop.h). Replaces the 2.29.0 market strength line's top spot.
             std::vector<htop::Tag> tags;
-            for (const View::CobSeg& g : v.cobs) { if (g.text.empty()) continue; htop::Tag t; t.text = g.text; t.dir = g.dir; t.group = htop::groupOf(htop::typeOf(g.text)); if (t.group >= 0) tags.push_back(t); }
+            for (const View::CobSeg& g : v.cobs) { if (g.text.empty()) continue; htop::Tag t; t.text = g.text; t.dir = g.dir; t.group = htop::groupOf(htop::typeOf(g.text)); if (t.group == 2) continue;   /* (2.41.2, Rassul 12:04 CT "lets only keep cob and sweeps because of the limited room") no BkTst tags */ if (t.group >= 0) tags.push_back(t); }
             auto mf = [&](const std::string& s2, int f, bool b2) { return M(s2, f, b2); };
             const htop::Sig sg = htop::sigLayout(tags, mf, T.l + 8, T.r - 8, y, y + mktH);
             L.sigFs = sg.fs; L.sigTight = sg.tight; L.sigDropped = sg.dropped; L.sigShown = sg.shown[0] + sg.shown[1] + sg.shown[2]; L.sigRow = Box{ T.l, y, T.r, y + mktH };
