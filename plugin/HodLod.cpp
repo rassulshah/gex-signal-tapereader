@@ -1,5 +1,6 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.42.3 (2026-11-20 17:10 CT): the SW / COB rows show the session of the chart's last candle (after the close and over the weekend: the last session), not the PC clock's
  *  2.42.2 (2026-11-20 16:51 CT, Rassul "get rid of that rule. keep all sweeps of the session"): the SW / COB rows show every sweep / Cob of the session, newest left (no 60-min expiry)
  *  2.42.1 (2026-11-20 14:30 CT): SweepVoice 1.1.2 - speaks the renamed sweep levels 1hH / 1hL / PhrH / PhrL (lsRevRead 0.21.6)
  *  2.42.0 (2026-11-20 14:13 CT, Rassul 13:22 "two signal rows ... sweep row should have strength like 99", 13:36 "perfect"): the signal line becomes TWO rows - SW (top) and
@@ -2002,7 +2003,7 @@ int HodLod::draw(void)
         try {
             if (S->tsChecked == 0 || nowE - S->tsChecked >= 5 || nowE < S->tsChecked) {
                 S->tsChecked = nowE; S->tsFiles = 0;
-                const long long nowL = hlNowCt(), from = tsig::sessionStart(nowL);
+                const long long nowL = hlNowCt(), from = tsig::sessionStart(S->lastClosedAbs > 0 ? S->lastClosedAbs - 1 : nowL);   // (2.42.3) the session of the chart's last candle, not the PC clock: after the close / over the weekend the rows keep the last session (Rassul 17:05 CT "when i restart will they be in the signal line")
                 std::vector<tsig::Sig> all;
                 for (int k = 0; k < 7; k++) { const std::string m = hl::MKTS[k].code;
                     const std::string ps[2] = { flexPath(std::string("RevRead") + HL_SEP + "wy-" + m + "-180.txt"), flexPath(std::string("CobSignal") + HL_SEP + m + "-180.csv") };
@@ -2599,6 +2600,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.42.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.42.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
