@@ -1,4 +1,4 @@
-// HodLodTop.h -- lsHodLod 2.37.0 box top: the SIGNAL line (line 1 inside the box) and the left of the Now row (gamma pill + 0DTE expiry), SDK-free
+// HodLodTop.h -- lsHodLod 2.37.1 (HodLodTop 1.1.0) box top: the SIGNAL line (line 1 inside the box) and the left of the Now row (gamma pill + 0DTE expiry), SDK-free
 //
 // (2.37.0, Rassul 2026-11-19 19:2x CT, approved mockup hodlod-new-box-mockup.html, "ok.. do it"; 19:33 "switch positions of sweeps and Cobs")
 //   SIGNAL LINE: the 2.35.0 tags (latest Cob / Sw / BkTst per market) in three groups - Cob LEFT (left-aligned), Sw CENTRE, BkTst RIGHT
@@ -8,6 +8,11 @@
 //   -> only then the OLDEST tag of the most crowded group drops (repeated). Never overlapping, never past the line's ends.
 //   NOW ROW LEFT: the gamma pill (+GAMMA / -GAMMA) at the box's left edge, then "0DTE Exp 3:00 PM"; the Now line stays centred and is never
 //   covered: when they would touch it, the expiry text goes first, then the pill.
+// (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:35 CT, his wording, mockup gamma-tag-mockup.html rows "YOUR IDEA, once the forward test
+//   proves it", shown WITHOUT "?"): the gamma pill carries a label inside it - "-GAMMA \xB7 Trending \xB7 Bk / BkTst" (red) and
+//   "+GAMMA \xB7 Range \xB7 Sw / Cob" (green); "0DTE Exp 3:00 PM" follows as before. Narrow pane (nowLeftTag): the expiry drops first, then
+//   " \xB7 Bk / BkTst" / " \xB7 Sw / Cob", then " \xB7 Trending" / " \xB7 Range"; the +/-GAMMA word always stays (unless even it would touch the
+//   Now line, as in 1.0.0); the centred Now line is never covered.
 #pragma once
 #include <string>
 #include <vector>
@@ -15,7 +20,7 @@
 
 namespace htop {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // was "1.0.0" (lsHodLod 2.37.0)
 static const int FS_NORMAL = 11, FS_MIN = 10;
 
 struct Tag { std::string text; int dir = 0; int group = 0; };   // in newest-first order
@@ -78,7 +83,7 @@ inline std::string zeroDte(const std::string& ex) { return ex.empty() ? ex : "0D
 
 // the Now row's left part. xL = the box's left edge; nowL = the Now line's left edge (a large value when there is no Now line); keep: 2 pill +
 // expiry, 1 pill only, 0 nothing (it would touch the Now line). pillCol = border / text colour, pillFill = its fill.
-struct Left { int keep = 0; int r = 0; std::vector<It> items; };
+struct Left { int keep = 0; int r = 0; std::vector<It> items; int lvl = -1; std::string tag; };   // (1.1.0) lvl = which gammaTag form was drawn (0 full .. 2 word only), -1 none; tag = its text
 template <class M> inline Left nowLeft(const std::string& pill, unsigned pillCol, unsigned pillFill, const std::string& exp, unsigned expCol, M meas, int xL, int top, int bot, int nowL, int xMax, int fs = 10) {
     Left o; const int gap = 10;
     const int pillW = pill.empty() ? 0 : meas(pill, fs, true) + 12, expW = exp.empty() ? 0 : meas(exp, fs, false);
@@ -91,6 +96,26 @@ template <class M> inline Left nowLeft(const std::string& pill, unsigned pillCol
     if (o.keep == 2 && expW) { It T; T.k = 1; T.l = x; T.t = top + 1; T.r = x + expW; T.b = bot - 1; T.col = expCol; T.s = exp; T.fs = fs; T.bold = false; o.items.push_back(T); x += expW; }
     else if (pillW) x -= 8;
     o.r = x; return o;
+}
+
+// (1.1.0) the gamma pill's label forms, longest first: full, without the setups, the word only. Any other pill ("GAMMA STALE", "") as is.
+inline std::vector<std::string> gammaTag(const std::string& pill) {
+    if (pill == "-GAMMA") return { "-GAMMA \xB7 Trending \xB7 Bk / BkTst", "-GAMMA \xB7 Trending", "-GAMMA" };
+    if (pill == "+GAMMA") return { "+GAMMA \xB7 Range \xB7 Sw / Cob", "+GAMMA \xB7 Range", "+GAMMA" };
+    if (pill.empty()) return {};
+    return { pill };
+}
+
+// (1.1.0) the Now row's left part with the labelled pill. Drop order when room runs out: the expiry, then the setups part, then the
+// regime word part; the +/-GAMMA word stays (it goes only when even it would touch the Now line). forms = gammaTag(pill).
+template <class M> inline Left nowLeftTag(const std::vector<std::string>& forms, unsigned pillCol, unsigned pillFill, const std::string& exp, unsigned expCol, M meas, int xL, int top, int bot, int nowL, int xMax, int fs = 10) {
+    if (forms.empty()) { Left o = nowLeft(std::string(), pillCol, pillFill, exp, expCol, meas, xL, top, bot, nowL, xMax, fs); return o; }
+    if (!exp.empty()) { Left o = nowLeft(forms[0], pillCol, pillFill, exp, expCol, meas, xL, top, bot, nowL, xMax, fs); if (o.keep == 2) { o.lvl = 0; o.tag = forms[0]; return o; } }
+    for (size_t i = 0; i < forms.size(); i++) {
+        Left o = nowLeft(forms[i], pillCol, pillFill, std::string(), expCol, meas, xL, top, bot, nowL, xMax, fs);
+        if (o.keep == 1) { o.lvl = (int)i; o.tag = forms[i]; return o; }
+    }
+    return Left();
 }
 
 } // namespace htop

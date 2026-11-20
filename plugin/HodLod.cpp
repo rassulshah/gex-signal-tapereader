@@ -1,5 +1,10 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.37.1 (2026-11-19 22:35 CT, Rassul approved, his wording, mockup gamma-tag-mockup.html rows "YOUR IDEA, once the forward test
+ *         proves it", shown WITHOUT "?"): the gamma pill at the far left of the Now row carries a label inside it - "-GAMMA \xB7 Trending \xB7
+ *         Bk / BkTst" (red) / "+GAMMA \xB7 Range \xB7 Sw / Cob" (green); "0DTE Exp 3:00 PM" follows as before. Narrow pane: the expiry drops
+ *         first, then the setups part, then " \xB7 Trending" / " \xB7 Range"; the +/-GAMMA word stays; the Now line is never covered
+ *         (HodLodTop.h 1.1.0 gammaTag / nowLeftTag). NOW_ROW status line names the form drawn. No other change.
  *  2.37.0 (2026-11-19 19:29 CT, Rassul "ok.. do it" on mockup hodlod-new-box-mockup.html; 19:33 "switch positions of sweeps and Cobs"):
  *         THE BOX TOP: line 1 = the SIGNAL line (Cob left | Sw centre | BkTst right, newest first; 11 pt -> 10 pt -> tighter spacing ->
  *         the oldest of the most crowded group drops; HodLodTop.h 1.0.0), line 2 = "ES  Close 4:00 PM | LTD ... | NQ -9%  ES -3% ... Norm?
@@ -321,6 +326,7 @@ struct HLState {
     std::vector<nowl::Bar> nlBars; double nlFh = NAN, nlFl = NAN; long long nlMs = -1, nlWyStamp = -2; time_t nlWyChecked = 0; std::string nlWy, nlWhy = "not run yet";
     long long svStart = 0; int svOffered = 0; std::string svWhy = "not run yet";   // (2.37.0) the spoken sweep alerts: when this chart started (CT wall s; marks up to then are never spoken), clips this chart queued
     int nrKeep = -1;   // (2.37.0) the Now row's left part: 2 gamma pill + expiry, 1 pill, 0 none (it would touch the Now line), -1 not drawn
+    int nrLvl = -1; std::string nrTag;   // (2.37.1) which gamma label form was drawn (0 full, 1 no setups, 2 the word only), its text
     nowl::Out nlOut; std::vector<nowl::Seg> nlSegs; int nlRuns = 0, nlMarks = 0; bool nlDrawn = false; hl::Box nlBox = { 0, 0, 0, 0 }; int nlLevel = 0, nlShown = 0;
     mkm::Cob mkCob; int mkCobN = 0;   // (2.30.0) this market's live Cob (lsCobSignal's live file) / Cobs read
     mkm::Stat mk; time_t mkChecked = 0, mkWritten = 0; std::string mkBody; std::vector<mkm::Item> mkItems; int mkWrites = 0, mkRead = 0;   // (2.29.0) the market strength line
@@ -2124,7 +2130,7 @@ int HodLod::draw(void)
             } catch (...) { S->svWhy = "fault (kept quiet)"; }
         }
     }
-    S->nrKeep = -1;
+    S->nrKeep = -1; S->nrLvl = -1; S->nrTag.clear();
     {   // (2.36.0) at the old Now box spot: centred on the table, just above it (and its Gex strip); no table = the pane's bottom centre
         // (2.37.0, mockup hodlod-new-box-mockup.html) + at the far left of the same row (the box's left edge): the gamma pill and "0DTE Exp 3:00 PM"
         // (moved out of the box header); the Now line stays centred and is never covered - the expiry goes first, then the pill (HodLodTop.h nowLeft)
@@ -2148,12 +2154,12 @@ int HodLod::draw(void)
             const unsigned pf = pill.col == hl::C_GREEN ? hl::C_PILL_G : (pill.col == hl::C_RED ? hl::C_PILL_R : hl::C_PILL_N);
             auto meas3 = [&](const std::string& s2, int f, bool bold) { return textW(s2, f, bold); };
             const int xL = L.tableOk ? L.table.l : l;
-            const htop::Left Lf = htop::nowLeft(pill.s, pill.col, pf, htop::zeroDte(ex), exC, meas3, xL, yT, yB, D.ok ? D.l : 1000000, r, 10);
+            const htop::Left Lf = htop::nowLeftTag(htop::gammaTag(pill.s), pill.col, pf, htop::zeroDte(ex), exC, meas3, xL, yT, yB, D.ok ? D.l : 1000000, r, 10);   // (2.37.1) the labelled pill
             for (const htop::It& it : Lf.items) {
                 if (it.k == 3) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
                 else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, it.fs, it.bold);
             }
-            S->nrKeep = Lf.keep;
+            S->nrKeep = Lf.keep; S->nrLvl = Lf.lvl; S->nrTag = Lf.tag;
             if (!stripOk && (D.ok || Lf.keep > 0)) {   // the confirm badges keep off the row, as they did off the read box
                 stripBox = D.ok ? S->nlBox : hl::Box{ xL, yT, Lf.r, yB };
                 if (D.ok && Lf.keep > 0) stripBox.l = (std::min)(stripBox.l, xL);
@@ -2163,7 +2169,8 @@ int HodLod::draw(void)
     S->placeLine += "NOW_LEVELS," + std::string(nowl::VERSION) + "," + (S->nlDrawn ? "box " + std::to_string(S->nlBox.l) + "," + std::to_string(S->nlBox.t) + "," + std::to_string(S->nlBox.r) + "," + std::to_string(S->nlBox.b)
                     + (S->nlLevel ? ",Last Bk dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
                   + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
-    S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->nrKeep == 2 ? "gamma pill + 0DTE expiry" : S->nrKeep == 1 ? "gamma pill (expiry dropped: no room)" : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn") + "\n";
+    S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
+                  + ",tag " + (S->nrTag.empty() ? std::string("-") : S->nrTag) + "\n";   // (2.37.1)
     S->placeLine += "SIGNAL_LINE," + std::string(htop::VERSION) + "," + (L.tableOk ? "font " + std::to_string(L.sigFs) + " pt" + (L.sigTight ? " tight" : "") + ",shown " + std::to_string(L.sigShown) + ",dropped " + std::to_string(L.sigDropped) : std::string("no table")) + " (Cob left | Sw centre | BkTst right)\n";
     if (S->rbox.ok && !HL_READBOX_DRAW) S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not drawn (2.34.0: removed from the price pane; still built)," + S->rbWhy + "\n";
     else if (S->rbox.ok) {   // (2.22.0) the READ BOX left column; (2.22.1) at the pane top, as wide as its text, clear of the left-edge labels
@@ -2334,6 +2341,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.37.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.37.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
