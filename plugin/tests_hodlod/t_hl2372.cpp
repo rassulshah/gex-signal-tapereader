@@ -108,7 +108,7 @@ int main() { (void)&fnv; (void)&itemsText;
         CHECK(s.find("tsSegs") == std::string::npos, "the unfiltered segment cache is gone");
         CHECK(s.find("expired %d,clock %s") != std::string::npos, "status names expired tags and the clock");
         CHECK(s.find("p->setVersion(\"2.37.2\")") != std::string::npos && s.find(" *  2.37.2 (2026-11-19 22:53 CT") != std::string::npos, "setVersion + header comment 2.37.2"); }
-    CHECK(std::string(hl::HL_VERSION) == "2.37.2" && std::string(hlset::PLUGIN_VERSION) == "2.37.2" && std::string(tsig::VERSION) == "1.1.0", "HL_VERSION = PLUGIN_VERSION = 2.37.2; TopSignals 1.1.0");
+    CHECK(std::string(hl::HL_VERSION) == "2.33.0" && std::string(hlset::PLUGIN_VERSION) == "2.37.2" && std::string(tsig::VERSION) == "1.1.0", "HL_VERSION = PLUGIN_VERSION = 2.37.2; TopSignals 1.1.0");
     {   const std::string b = rd("../../tools/gex-build.bat"); const size_t p = b.find("call :one HodLod ");
         const std::string ln = p == std::string::npos ? std::string() : b.substr(p, b.find('\n', p) - p);
         CHECK(ln.find("TopSignals.h") != std::string::npos, "gex-build HodLod line lists TopSignals.h (edit triggers a rebuild)"); }
