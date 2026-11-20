@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.68.0";   // (2.68.0) level-line liquidity states (LevelLiq.h) - no settings change; was "2.67.0";   // (2.67.0) one king + L / P marks - no settings change; was "2.66.2";   // (2.66.2) no settings change; was "2.66.1";   // (2.66.1) S / R lines across the chart - no settings change; was "2.66.0";   // (2.66.0) the standing 3-hour R1 / R2 / S1 / S2 in the level list - no settings change; was "2.65.2";   // (2.65.0) level liquidity rows, dark lot text - no settings change; was "2.64.0";   // (2.64.0) performance fix (status files) - no settings change; (2.63.0) the own order feed - no settings change
+static const char* const PLUGIN_VERSION = "2.69.0";   // (2.69.0) brighter 2 px key level lines - no settings change; was "2.68.0"   // (2.68.0) level-line liquidity states (LevelLiq.h) - no settings change; was "2.67.0";   // (2.67.0) one king + L / P marks - no settings change; was "2.66.2";   // (2.66.2) no settings change; was "2.66.1";   // (2.66.1) S / R lines across the chart - no settings change; was "2.66.0";   // (2.66.0) the standing 3-hour R1 / R2 / S1 / S2 in the level list - no settings change; was "2.65.2";   // (2.65.0) level liquidity rows, dark lot text - no settings change; was "2.64.0";   // (2.64.0) performance fix (status files) - no settings change; (2.63.0) the own order feed - no settings change
 // was PLUGIN_VERSION "2.62.0";   // (2.62.0) Limit Profile only (header tag LP) - no settings change
 // was PLUGIN_VERSION "2.61.0";   // (2.61.0) the level-line stretches recorded - no settings change
 // was PLUGIN_VERSION "2.60.0";   // (2.60.0) liquidity on the level lines - no settings change
