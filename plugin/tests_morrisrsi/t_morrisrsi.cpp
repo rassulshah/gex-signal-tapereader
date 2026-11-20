@@ -1,4 +1,4 @@
-// t_morrisrsi.cpp -- MorrisRsiLogic.h 0.1.2 tests (0.1.2: undercut-swing divergences, ES 11-19/20 fixture, mirror, 60-candle limit, restart replay)
+// t_morrisrsi.cpp -- MorrisRsiLogic.h 0.1.3 tests (0.1.3: 1-bar pivots, ES 11-20 08:36 -> 09:00) / 0.1.2 tests (0.1.2: undercut-swing divergences, ES 11-19/20 fixture, mirror, 60-candle limit, restart replay)
 #include "../MorrisRsiLogic.h"
 #include <cstdio>
 #include <fstream>
@@ -129,5 +129,12 @@ int main(int argc, char** argv) {
     if (argc > 2) { std::ifstream f(argv[1]); Engine E; long long t; double c, h, l; while (f >> t >> c >> h >> l) { mrsi::Bar b; b.t = t; b.c = c; b.h = h; b.l = l; E.add(b); }
       std::ifstream r(argv[2]); int i; double x; int cmp = 0, diff = 0; double mx = 0; while (r >> i >> x) { ++cmp; const double d = std::fabs(E.val[(size_t)i] - x); mx = std::max(mx, d); if (d > 1e-6) ++diff; }
       std::printf("PARITY: %d values compared, %d differ, max |diff| %.2e; divergences %zu\n", cmp, diff, mx, E.dv.size()); C(cmp > 100 && diff == 0, "parity with the Python reference"); }
+    { // 0.1.3 his ES 11-20 (10:58 CT "same issue"): high 7,174.50 at 08:36 (RSI 78.3), higher high 7,216.75 at 09:00 (RSI 69.7) -> bearish Dv
+      // research 3-min bars (labels = bar START); the 3-bar walk had no pivot at 08:27 / 08:36 (no low under the previous 3 lows)
+      std::ifstream f("tests_morrisrsi/mrsi_es1120_am.txt"); Engine E; long long t; double h, l, c; std::string d, tm; std::map<long long, std::string> T; long long i = 0;
+      while (f >> t >> h >> l >> c >> d >> tm) { Bar b; b.t = i; b.h = h; b.l = l; b.c = c; E.add(b); T[i++] = tm; }
+      bool hit = false; for (const Dv& x : E.dv) if (T[x.t2] == "09:00:00" && T[x.t1] == "08:36:00" && x.dir == -1) hit = true;
+      { const std::string m = "0.1.3: ES 11-20 08:36 -> 09:00 bearish Dv marked (" + std::to_string(i) + " candles)"; C(i > 300 && hit, m.c_str()); }
+      C(ZZ_REV == 1 && std::string(VERSION) == "0.1.3", "0.1.3: 1-bar walk, version"); }
     std::printf("%s %d pass, %d fail\n", bad ? "FAILED" : "ALL PASS", ok, bad); return bad;
 }

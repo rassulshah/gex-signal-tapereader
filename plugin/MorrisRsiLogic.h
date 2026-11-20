@@ -1,4 +1,9 @@
-// MorrisRsiLogic.h 0.1.2 (2026-11-20) -- lsMorrisRSI: the Morris modified RSI in its own pane, with regular divergences.
+// MorrisRsiLogic.h 0.1.3 (2026-11-20)
+// 0.1.3 Rassul 2026-11-20 10:58 CT ("why are you not showing divergences" / "same issue", ES 08:36 high RSI 78 -> 09:00 higher high RSI 70 not marked):
+//       the Dv pivots come from the 1-bar High / Low walk (a lower low than the previous candle turns an up leg; the swings his chart's
+//       ZigZag line shows) - was the 3-bar walk, which skipped the 08:27 / 08:36 swings (no low under the previous 3 lows). Same RSI
+//       tests, same 60-candle prior-swing rule, decided at the 2nd pivot, never changed. ES November: 106 -> 140 Dv (+32%).
+// was 0.1.2 (2026-11-20) -- lsMorrisRSI: the Morris modified RSI in its own pane, with regular divergences.
 // 0.1.2 Rassul 2026-11-20 (ES overnight 11-19/20: a clear bullish divergence - low ~7,148 at ~11:15 PM RSI ~20, lower low ~7,145 at ~1:18 AM
 //       RSI ~47 - was not marked because smaller ZigZag lows sat between them and they were ~40 candles apart; 08:00 CT "go"): a confirmed
 //       pivot is compared with the prior swing it UNDERCUT - the lowest confirmed pivot low (highest pivot high) within the last 60 candles,
@@ -29,7 +34,8 @@
 
 namespace mrsi {
 
-static const char* const VERSION = "0.1.2";
+static const char* const VERSION = "0.1.3";
+static const int ZZ_REV = 1;   // 0.1.3: pivots on the 1-bar High / Low walk (was 3)
 static const int N = 20, SM = 3;                      // RSI period, smoothing (simple)
 static const double OB = 70.0, OS = 30.0, MID = 50.0;
 static const int DASH_ON = 4, DASH_OFF = 4;            // 70 / 30 line dashes (px), 1 px wide
@@ -68,7 +74,7 @@ struct Engine {
         if (i == 0) return;
         if (i == 1) { zd = B[1].h >= B[0].h ? 1 : -1; zext = 0; }
         double pl = B[(size_t)i - 1].l, ph = B[(size_t)i - 1].h;
-        for (int j = std::max(0, i - 3); j < i; ++j) { pl = std::min(pl, B[(size_t)j].l); ph = std::max(ph, B[(size_t)j].h); }
+        for (int j = std::max(0, i - ZZ_REV); j < i; ++j) { pl = std::min(pl, B[(size_t)j].l); ph = std::max(ph, B[(size_t)j].h); }
         if (zd == 1) { if (B[(size_t)i].h > B[(size_t)zext].h) zext = i; else if (B[(size_t)i].l < pl && i != zext) { pivot(zext, -1); zext = i; zd = -1; } }
         else         { if (B[(size_t)i].l < B[(size_t)zext].l) zext = i; else if (B[(size_t)i].h > ph && i != zext) { pivot(zext, 1); zext = i; zd = 1; } }
     }
