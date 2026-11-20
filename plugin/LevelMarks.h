@@ -26,7 +26,7 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-19 18:29 CT "lets keep it at 10 so the BRmax or BVmax should be at least 10": a Sw needs its attempt's BVMax or BRMax >= 10 (SW_MIN), else no Sw)   // was "1.4.0"   // (1.4.0, Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20)   // was "1.3.0"   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
+static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20": a Sw needs its attempt's BVMax or BRMax >= 20 (SW_MIN), was 10; the strength line still shows from 10 up (ST_MIN unchanged))   // was "1.5.0"   // (1.5.0, Rassul 2026-11-19 18:29 CT "lets keep it at 10 so the BRmax or BVmax should be at least 10": a Sw needs its attempt's BVMax or BRMax >= 10 (SW_MIN), else no Sw)   // was "1.4.0"   // (1.4.0, Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20)   // was "1.3.0"   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
 // was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 11:22-11:30 CT "sweeps of key levels on big volume or range are very meaningfull", "maybe consider sw and a second line like v50 or r50, same with breaks", "use the max numbers that we have ... biggest in green bars, red bars, consecutive", "ok.. good build it"): Bk / Sw carry a STRENGTH = his BVMax / BRMax (the Volume / Range panes' Max number) - "V<N>" / "R<N>" from 20 up, "99+" from 99; a Sw takes the max over its attempt's candles
 // was VERSION = "1.1.0";   // (1.1.0, Rassul 10:50 CT "ok build": the BO indicator's Rly gets its level too - levelNear(); same priority / short names)
 
@@ -273,7 +273,8 @@ inline double rangeTicks(double h, double l, double tick) { const double r = h -
 // fill the strength of every Bk / Sw in M from the chart's closed candles (T = candle stamps, ascending; V volume; R range ticks; G green)
 // (1.5.0, Rassul 2026-11-19 18:29 CT "lets keep it at 10 so the BRmax or BVmax should be at least 10") a Sw only counts when its attempt's
 // BVMax or BRMax (max over the attempt candles, the strength line's measure) is at least SW_MIN; a weaker Sw is removed here
-static const int SW_MIN = 10;
+// (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20") SW_MIN 10 -> 20; ST_MIN (the strength line) stays 10
+static const int SW_MIN = 20;
 inline int strengthN(const std::vector<double>& vol, const std::vector<double>& rng, const std::vector<char>& green, int a, int b) {
     int nv = 0, nr = 0; if (a < 0) a = 0;
     for (int k = a; k <= b && k < (int)vol.size(); ++k) { nv = std::max(nv, stCount(vol, green, k)); if (k < (int)rng.size()) nr = std::max(nr, stCount(rng, green, k)); }
@@ -284,7 +285,7 @@ inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long lon
     auto at = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
     for (auto it = M.begin(); it != M.end(); ) { Mark& m = it->second; m.st.clear(); if (m.code != 'B' && m.code != 'S') { ++it; continue; }
         const int b = at(it->first); if (b < 0) { ++it; continue; } int a = m.t0 > 0 ? at(m.t0) : b; if (a < 0 || a > b) a = b;
-        if (m.code == 'S' && strengthN(V, R, G, a, b) < SW_MIN) { it = M.erase(it); continue; }   // (1.5.0) too weak for a Sw
+        if (m.code == 'S' && strengthN(V, R, G, a, b) < SW_MIN) { it = M.erase(it); continue; }   // (1.5.0; 1.6.0: 20) too weak for a Sw
         m.st = strength(V, R, G, a, b); if (!m.st.empty()) ++n; ++it; }
     return n;
 }

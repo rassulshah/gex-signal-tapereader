@@ -1,4 +1,4 @@
-// t_levelmarks.cpp -- LevelMarks 1.3.0 (lsRevRead 0.20.0: FT / Tst / Rev, Bk candle rule, Sw colour, no POC / Open) / 1.2.0 (lsRevRead 0.19.2; 1.0.0 / 0.19.0 first): Bk / Sw / Cx with one level, on ES 11-19 (mockup v8) + rule cases
+// t_levelmarks.cpp -- LevelMarks 1.6.0 (2026-11-20: Sw needs BVMax / BRMax >= 20) / 1.3.0 (lsRevRead 0.20.0: FT / Tst / Rev, Bk candle rule, Sw colour, no POC / Open) / 1.2.0 (lsRevRead 0.19.2; 1.0.0 / 0.19.0 first): Bk / Sw / Cx with one level, on ES 11-19 (mockup v8) + rule cases
 #include "../LevelMarks.h"
 #include <cstdio>
 #include <fstream>
@@ -117,6 +117,23 @@ int main(int argc, char** argv) {
         C(M.count(T[35]) && M.at(T[35]).st == "V35", "(1.5.0) Sw with BVMax 35 stays, V35");
         C(M.count(T[36]), "(1.5.0) the attempt's max counts (34..36 holds the V35 candle)");
         C(M.count(T[24]), "(1.5.0) a weak Bk is never removed by the Sw rule");
+    }
+    {   // (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20") a Sw needs BVMax or BRMax >= 20; the strength line still shows from 10
+        // one fixture per case: 60 flat candles (V 10, R 4), candle 59 = the Sw / Bk; a bigger candle k back sets its count to k - 1
+        auto one = [](char code, int volBack, int rngBack, std::string& st) {
+            std::vector<long long> T; std::vector<double> V(60, 10.0), R(60, 4.0); std::vector<char> G(60, 1); for (int i = 0; i < 60; ++i) T.push_back(9000 + i * 180);
+            V[59] = 11; V[(size_t)(59 - volBack)] = 50; if (rngBack > 0) { R[59] = 5; R[(size_t)(59 - rngBack)] = 50; }
+            std::map<long long, lvm::Mark> M; lvm::Mark m; m.code = code; m.dir = 1; M[T[59]] = m;
+            lvm::fillStrength(M, T, V, R, G); st = M.count(T[59]) ? M.at(T[59]).st : std::string("gone"); return (int)M.size(); };
+        std::string st;
+        C(lvm::SW_MIN == 20 && lvm::ST_MIN == 10, "(1.6.0) SW_MIN 20, ST_MIN still 10");
+        C(one('S', 16, 0, st) == 0, "(1.6.0) a Sw with BVMax 15 is no longer a Sw (got " + st + ")");
+        C(one('S', 20, 0, st) == 0, "(1.6.0) a Sw with BVMax 19 is no longer a Sw (got " + st + ")");
+        C(one('S', 10, 19, st) == 0, "(1.6.0) a Sw with BRMax 18 is no longer a Sw (got " + st + ")");
+        C(one('S', 21, 0, st) == 1 && st == "V20", "(1.6.0) a Sw with BVMax 20 stays, V20 (got " + st + ")");
+        C(one('S', 5, 26, st) == 1 && st == "R25", "(1.6.0) a Sw with BRMax 25 stays, R25 (got " + st + ")");
+        C(one('B', 16, 0, st) == 1 && st == "V15", "(1.6.0) a Bk with max 15 keeps its V15 line (got " + st + ")");
+        C(one('B', 3, 0, st) == 1 && st.empty(), "(1.6.0) a weak Bk is never removed");
     }
     // ---- (1.3.0) Bk -> FT -> Tst -> Rev: parity with the agreed mockup (price-pane-cleanup-mockup.html, mk10.py) on 11-19 ES / NQ 8:33 AM - 12:33 PM
     for (const char* mk : { "es", "nq" }) {
