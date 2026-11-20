@@ -14,7 +14,8 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.3.0";   // (2.3.0, Rassul 2026-11-19 15:35-16:58 CT, price-pane-cleanup-mockup.html, "ok"): + FT / Tst / Rev after a Bk (LevelMarks 1.3.0 seq): "FT" (a plain letter), "Tst" (level + %), "Rev" (+ strength); a tag can ask for its side (FT / Rev with the break, Tst on the pivot side)
+static const char* const VERSION = "2.4.0";   // (2.4.0, Rassul 2026-11-20 09:20 CT "add it ... add the badge for it also and include the level and strength line", 09:24 "build"; lsRevRead 0.21.2, mockup i-badge-mockup.html): the I badge is back - letter / level / strength like Bk / Sw; a bullish (green) I goes UNDER its candle, a bearish (red) I OVER it; iLine() writes the I line, with a 7th field "Sw" when the same candle is a Sw (recorded for the nightly, never drawn - parseAll reads 3 / 5 / 6 fields only)
+// was VERSION = "2.3.0";   // (2.3.0, Rassul 2026-11-19 15:35-16:58 CT, price-pane-cleanup-mockup.html, "ok"): + FT / Tst / Rev after a Bk (LevelMarks 1.3.0 seq): "FT" (a plain letter), "Tst" (level + %), "Rev" (+ strength); a tag can ask for its side (FT / Rev with the break, Tst on the pivot side)
 // was VERSION = "2.2.0";   // (2.2.0, Rassul 11:30-11:35 CT: the strength line) mark lines may carry a 6th field = the strength ("V45" / "R99+" / ""); 3 / 5 / 6 fields read
 // was VERSION = "2.1.0";   // (2.1.0, Rassul 10:50-10:51 CT "ok build", "remember placement of other signals like cmx so you have to coordinate everything"): the key levels published in the file (L|px|name lines, read by the BO indicator for its Rly level); the layout also keeps clear of boxes other indicators occupy (the BO indicator's letters from SignalBoard 'L')
 static const int TAG_H = 13, PAD_X = 3, GAP = 3, CX_STEP = 16;
@@ -26,7 +27,11 @@ inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? '
 inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : ""; }
 // (2.3.0) where a tag wants to sit: 0 = by the candle (over green, under red); +1 over / -1 under. FT and Rev go with the break (over for a
 // bullish one), a Tst on its pivot's side (under a bullish Tst's pivot low, over a bearish one's high) - as the BO indicator's FT / Pb / Rev
-inline int sideOf(const M& m) { return m.code == 'F' || m.code == 'R' ? m.dir : m.code == 'T' ? -m.dir : 0; }
+inline int sideOf(const M& m) { return m.code == 'F' || m.code == 'R' ? m.dir : m.code == 'T' || m.code == 'I' ? -m.dir : 0; }   // (2.4.0) I: under a bullish one, over a bearish one
+// (2.4.0) one I line of the wy file: stamp|I|dir|lv|px|st (6 fields; the level is always named since 0.19.4); underSw = the same candle is a Sw of
+// the same direction -> a 7th field "Sw": kept for the nightly score, skipped by every reader that draws (parseAll, VolRead, HodLod, TopSignals)
+inline std::string iLine(long long t, int dir, const std::string& lv, long long px, const std::string& st, bool underSw) {
+    return std::to_string(t) + "|I|" + std::to_string(dir) + "|" + lv + "|" + std::to_string(px) + "|" + st + (underSw ? "|Sw" : ""); }
 inline bool plainOf(const M& m) { return m.code == 'F'; }   // (2.3.0) FT stays a plain coloured letter; every other mark is a badge
 
 // every candle mark of the file: candle stamp -> its marks (the I first). -1 = not a letters file (torn / foreign: keep the last good set).

@@ -28,7 +28,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 05:52 CT "ok.. you decide and add it. you can also add for example b for break and c for climax etc."): + more() = T trapped / P defenders pulled while hit / X exhaustion without pulling (each candle decided at its close, measured per market before it is drawn), + Bar.pull, + the strip priority (stripPick: at most 2 letters per candle, Sp / Ut > I > T > P > A > X > E > B > C); run() is unchanged
+static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it and also add the mark to the signals line in reversal indicator ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): Out.ilvC = EVERY named level each I reclaimed (the host picks the one to show by the Bk / Sw priority, LevelMarks iPick); stripFromLines() = the strip's B / C / I from the published wy lines (an I line flagged "|Sw" - same candle as a Sw - is not drawn); no rule change
+// was VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 05:52 CT "ok.. you decide and add it. you can also add for example b for break and c for climax etc."): + more() = T trapped / P defenders pulled while hit / X exhaustion without pulling (each candle decided at its close, measured per market before it is drawn), + Bar.pull, + the strip priority (stripPick: at most 2 letters per candle, Sp / Ut > I > T > P > A > X > E > B > C); run() is unchanged
 // was VERSION = "1.7.1";   // (1.7.1, Rassul 2026-11-19 16:58 CT "ok" to the read wording: the I is set aside (lsRevRead 0.19.5), so the E / A reads say "Watch: ... (Sw / Tst)" instead of "(I)"; no rule change)
 // was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-19 10:37 CT "yes, put level under I too", 10:40 "go"): the level each I reclaimed is kept in Out.ilv (candle stamp -> level) so the candle tag can name it (I / PHL); hour levels carry how many hours back they are (Lvl.hb) and their side (Lvl.high). No rule change
 // was VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-19 09:19-09:22 CT "there needs to be a break that tries to trade above a high or below a low that fails, just like the concept of a spring or upthrust ... all of these are springs and upthrusts because they attempt to break a level and are met by a reversal instead", "yes"): Sp / Ut use the SAME levels and rules as the I - a prior hour high / low or a key / volume level, broken 1+ tick by the leg into the pivot (the leg started on the other side), its first break, closed back within 3 candles, no follow-through, order flow confirms; the old 15-candle local floor / ceiling is gone. The rejection I closes back through that same level
@@ -74,8 +75,8 @@ struct Bar {
 struct Mark { char k = 0; int dir = 0; };   // k: 'E' 'A' 'S' (Sp) 'U' (Ut) 'I'; dir: +1 green (buyers / a low), -1 red (sellers / a top)
 inline std::string label(const Mark& m) { return m.k == 'S' ? "Sp" : m.k == 'U' ? "Ut" : std::string(1, m.k); }   // (1.8.0) also T / P / X (more()) and B / C (the host, from the Bk / Cx candle marks)
 struct Read { std::string head; int dir = 0; std::vector<std::string> lines; };
-struct Lvl;
-struct Out { std::map<long long, std::vector<Mark> > marks; std::map<long long, Read> reads; std::map<long long, std::pair<long long, std::string> > ilv; std::map<long long, int> ilvHb; };   // (1.7.0) ilv: the I candle stamp -> the level it reclaimed (px in ticks, name); ilvHb: its hours back (0 = not an hour level)
+struct Lvl { long long px = 0; std::string name; int from = 0; int hb = 0; bool high = false; };   // (1.7.0) hb = hours back for an hour level (1 = the prior hour, 0 = not an hour level), high = a high   // (1.5.0) from = the first candle after the level formed (0 = the session start)   // (1.1.0) a key / volume level in ticks, with its name
+struct Out { std::map<long long, std::vector<Mark> > marks; std::map<long long, Read> reads; std::map<long long, std::pair<long long, std::string> > ilv; std::map<long long, int> ilvHb; std::map<long long, std::vector<Lvl> > ilvC; };   // (1.9.0) ilvC: every level the I candle reclaimed (the swept-and-reclaimed candidates; the host picks by priority)   // (1.7.0) ilv: the I candle stamp -> the level it reclaimed (px in ticks, name); ilvHb: its hours back (0 = not an hour level)
 
 // ---- small helpers
 inline double median(std::vector<double> v) { if (v.empty()) return 0; std::sort(v.begin(), v.end()); const size_t n = v.size(); return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2.0; }
@@ -85,7 +86,6 @@ inline std::string sgn(long long v) { return (v > 0 ? "+" : "") + std::to_string
 inline std::string px(long long ticks, double tick, int dec) { char b[32]; std::snprintf(b, sizeof b, "%.*f", dec, (double)ticks * tick); return b; }
 inline std::string pts(long long ticks, double tick, int dec) { char b[32]; std::snprintf(b, sizeof b, "%.*f", dec, (double)ticks * tick); return b; }
 
-struct Lvl { long long px = 0; std::string name; int from = 0; int hb = 0; bool high = false; };   // (1.7.0) hb = hours back for an hour level (1 = the prior hour, 0 = not an hour level), high = a high   // (1.5.0) from = the first candle after the level formed (0 = the session start)   // (1.1.0) a key / volume level in ticks, with its name
 struct Ctx {
     const std::vector<Bar>& B; const Params& P; double tick; int dec; std::vector<Lvl> lv;   // (1.1.0) lv = the key / volume levels for these candles (empty = local pivots only)
     std::vector<double> medDl, medRg, medBig[2];   // per candle: the median |delta| / range / biggest order of the 20 candles BEFORE it
@@ -278,7 +278,7 @@ inline void springs(const Ctx& X, const std::vector<Leg>& L, Out& o, std::vector
                     ri.lines.push_back("Strong rejection: " + std::string(lo ? "+" : "-") + pts(std::llabs(q.c - q.o), X.tick, X.dec) + " pts, " + fx((double)q.range() / mr) + " normal range,");
                     ri.lines.push_back("closed through the " + std::string(lo ? "spring" : "upthrust") + " candle, reclaimed " + ri_lvl + ".");
                     ri.lines.push_back("Watch: entry at a key level (Rev, PB, Cob).");
-                    add(o, k, B, 'I', side, ri); o.ilv[B[(size_t)k].t] = std::make_pair(lvz.px, lvz.name); o.ilvHb[B[(size_t)k].t] = lvz.hb; rejI.push_back(k); break; } }
+                    add(o, k, B, 'I', side, ri); o.ilv[B[(size_t)k].t] = std::make_pair(lvz.px, lvz.name); o.ilvHb[B[(size_t)k].t] = lvz.hb; o.ilvC[B[(size_t)k].t] = std::vector<Lvl>(1, lvz); rejI.push_back(k); break; } }
         }
     }
 }
@@ -308,7 +308,7 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
             // (1.3.0) higher-timeframe levels only: key / volume levels, the prior 4-hour and hour highs / lows (local pivots no longer count)
             std::vector<Lvl> cand; for (const Lvl& z : X.lv) cand.push_back(z);
             hourLevels(B, ex, side, cand);   // (1.2.0 / 1.2.1) the prior hours' and 4-hour candles' highs / lows
-            const Lvl* got = nullptr;
+            const Lvl* got = nullptr; std::vector<Lvl> all;   // (1.9.0) all = every level this candle reclaimed
             for (const Lvl& z : cand) {
                 if (lo ? !(pv < z.px) : !(pv > z.px)) continue;                 // swept: 1+ tick through it
                 if (lo ? !(b.c > z.px) : !(b.c < z.px)) continue;               // the I candle closes back through it
@@ -316,6 +316,7 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
                 if (!first) continue;                                           // the FIRST close back = the reclaim
                 if (!brokeFromPivot(B, L, ex, side, z.px)) continue;            // (1.4.0) the break came from the leg into this pivot
                 if (!firstBreak(B, L, ex, side, z)) continue;                    // (1.5.0) the first break of the level
+                all.push_back(z);
                 if (!got || (lo ? z.px > got->px : z.px < got->px)) got = &z;   // the most important = the furthest level reclaimed
             }
             if (!got) continue;
@@ -326,7 +327,7 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
             r.lines.push_back(std::string(lo ? "Buyers" : "Sellers") + " hit hard (" + fx((double)dl / md) + " normal delta),");
             r.lines.push_back("reclaimed " + got->name + " " + px(got->px, X.tick, X.dec) + " after the " + B[(size_t)ex].when + (lo ? " low swept it." : " high swept it."));
             r.lines.push_back("Watch: entry at a key level (Rev, PB, Cob).");
-            add(o, i, B, 'I', side, r); o.ilv[b.t] = std::make_pair(got->px, got->name); o.ilvHb[b.t] = got->hb;
+            add(o, i, B, 'I', side, r); o.ilv[b.t] = std::make_pair(got->px, got->name); o.ilvHb[b.t] = got->hb; o.ilvC[b.t] = all;
         }
     }
 }
@@ -433,8 +434,8 @@ inline Out more(const std::vector<Bar>& B, double tick, int dec, const MoreParam
 // 80-84%) and X held no better than any fresh extreme (14-23% vs 18-21%) -> not drawn anywhere. GC / HG / 6E / NG not measured yet -> not drawn.
 inline bool showMore(char k, const std::string& mkt) { return k == 'T' && (mkt == "ES" || mkt == "NQ" || mkt == "CL"); }
 
-// (1.8.0) the strip: at most 2 letters per candle, by priority (Rassul 2026-11-20: Sp / Ut > T > P > A > X > E > B > C; the I, hidden since
-// 0.19.5, keeps its place after Sp / Ut). Drawn top-priority first; a letter once per candle.
+// (1.8.0) the strip: at most 2 letters per candle, by priority (Rassul 2026-11-20: Sp / Ut > T > P > A > X > E > B > C; (1.9.0, 09:20 CT) the I
+// is back, right after Sp / Ut: Sp / Ut > I > T > (P) > A > X > E > B > C). Drawn top-priority first; a letter once per candle.
 struct SMk { std::string lab; int dir = 0; };
 inline int prio(const std::string& l) {
     static const char* const P[] = { "Sp", "Ut", "I", "T", "P", "A", "X", "E", "B", "C" };
@@ -446,6 +447,23 @@ inline std::vector<SMk> stripPick(const std::vector<SMk>& in, size_t cap = 2) {
     std::stable_sort(v.begin(), v.end(), [](const SMk& a, const SMk& b) { return prio(a.lab) < prio(b.lab); });
     if (v.size() > cap) v.resize(cap);
     return v;
+}
+
+// (1.9.0, lsRevRead 0.21.2) the strip's letters that come from the PUBLISHED wy lines (the frozen sessions too, so the strip and the price chart
+// always agree): Bk -> B, Cx -> C, I -> I. An I line with a 7th field (the "|Sw" flag: the same candle is a Sw of the same direction) is
+// recorded for the nightly but never drawn - the Sw shows instead. Lines: stamp|code|dir[|lv|px[|st[|flag]]].
+inline std::map<long long, std::vector<SMk> > stripFromLines(const std::vector<std::string>& lines) {
+    std::map<long long, std::vector<SMk> > out;
+    for (const std::string& ln : lines) {
+        std::vector<std::string> f; size_t p = 0; while (true) { const size_t q = ln.find('|', p); f.push_back(ln.substr(p, q == std::string::npos ? std::string::npos : q - p)); if (q == std::string::npos) break; p = q + 1; }
+        if (f.size() < 3 || f.size() > 7) continue;
+        const std::string& cd = f[1]; if (cd != "Bk" && cd != "Cx" && cd != "I") continue;
+        if (cd == "I" && f.size() == 7) continue;   // flagged: under a Sw
+        char* en = nullptr; const long long t = std::strtoll(f[0].c_str(), &en, 10); if (!en || *en != 0 || t <= 0) continue;
+        if (f[2] != "1" && f[2] != "-1") continue;
+        SMk x; x.lab = cd == "Bk" ? "B" : cd == "Cx" ? "C" : "I"; x.dir = f[2] == "1" ? 1 : -1;
+        bool dup = false; for (const SMk& y : out[t]) if (y.lab == x.lab) dup = true; if (!dup) out[t].push_back(x); }
+    return out;
 }
 
 } // namespace wyr
