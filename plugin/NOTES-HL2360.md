@@ -1,4 +1,4 @@
-# lsHodLod 2.36.0 — the Now levels line (2026-11-19, 18:35–19:04 CT)
+# lsHodLod 2.36.0 — the Now levels line (2026-11-19, 18:35–19:06 CT)
 
 Rassul asked for the Now box to be about levels: the last level broken, the next levels, and whether price is looking to test a level it already broke. That tells him where to look for a BkTst reversal, or for a break or sweep. He has little vertical space, so it is one horizontal line. The mockup is `now-box-levels-mockup.html`.
 
@@ -12,7 +12,7 @@ There is one badge at a time, first. Only signals at named levels are shown. Not
 | `TESTING: PDL · BkTst Rev ↓` | The pullback after a Bk that had its FT trades into the Bk candle's range. It is ≤ 100% back, never past the Bk candle's extreme, and has no close beyond the move origin. The furthest-back Bk it reached is named. | Red if bearish, green if bullish |
 | `BREAK: PDL ↓` / `SWEEP: PDL ↑` | The forming candle goes through a watched level (the nearest above / below the last close). BREAK: it is closing through the level in the break's colour. SWEEP: it is back in the Sw colour (a swept low is green, a swept high is red). It settles at the candle's close. | Red / green by side |
 | `WATCH: PHL BkTst Rev ↓` | The move topped (a closed candle since the extreme did not extend it), and the pullback is heading back but has not reached a Bk candle yet. The nearest Bk ahead (the latest) is named. It waits while the newest Bk's FT window (3 candles) is still open. | Gold |
-| `WATCH: VAL Bk / Sw ↓ · ONL Bk / Sw ↑` (19:03 "Watch Level Signal": each level, its signal, its side; below first) | Otherwise. It names the nearest levels below and above. | Gold |
+| `WATCH: VAL ↓ · ONL ↑ · Bk / Sw` (19:06: the level below, the level above, then the signal) | Otherwise. It names the nearest levels below and above. | Gold |
 
 After the badge, the line shows `│ Next ↓ <level> · ↑ <level>` (after BREAK / SWEEP, only the level in that direction), then `│ Last Bk ↓ <level>`. Each of these appears only when its level is not already named on the line, so no level is named twice.
 
@@ -45,7 +45,7 @@ The line has no numbers: no prices, distances, strength, % or time. When the pan
 | Time | Line |
 |---|---|
 | 11:33 AM | `TESTING: PDL · BkTst Rev ↓ │ Next ↓ 2hL · ↑ VAL │ Last Bk ↓ PHL` |
-| 10:45 AM | `WATCH: VAL Bk / Sw ↓ · ONL Bk / Sw ↑` |
+| 10:45 AM | `WATCH: VAL ↓ · ONL ↑ · Bk / Sw` |
 | 9:42 AM (forming) | `SWEEP: PDL ↑ │ Next ↑ VAL │ Last Bk ↓ ONL` |
 | 10:54 AM (forming) | `BREAK: PDL ↓ │ Last Bk ↓ ONL` (no named level below PDL then) |
 | 8:33 AM (forming) | `BREAK: 2hL ↑ │ Next ↑ 2hH`. The live hour levels from the bars are PHH 7,435.50 and 2hL 7,416.75. The mockup's "PHH 7,425.75" is the key file's stale snapshot. |

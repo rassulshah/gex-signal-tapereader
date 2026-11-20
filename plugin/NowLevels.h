@@ -12,7 +12,7 @@
 //   a live break / sweep: [BREAK / SWEEP: <level> <arrow>] │ Next <arrow> <level> │ Last Bk <arrow> <level>    (18:54, red / green; TESTING outranks it)
 //   one badge: TESTING > BREAK / SWEEP > WATCH BkTst > WATCH Bk / Sw. Only signals at named levels; nothing from a Cob (19:02); no REV state
 //   (19:04 "remove for the Rev candle"): after a BkTst Rev the line simply moves on to the next WATCH.
-//   else:               [WATCH: <level> Bk / Sw ↓ · <level> Bk / Sw ↑] │ Last Bk <arrow> <level>    (19:03 "Watch Level Signal"; BkTst: "WATCH: <level> BkTst Rev <arrow>")
+//   else:               [WATCH: <level> ↓ · <level> ↑ · Bk / Sw] │ Last Bk <arrow> <level>    (19:06; BkTst: "WATCH: <level> BkTst Rev <arrow>", 19:03)
 //   (18:48 TESTING replaces the WATCH badge, red / green by side; 18:47 one badge at a time; 18:41 no Tst = nothing for it; 18:50 "if the
 //   levels are already mentioned in the watch they shouldnt be mentioned again": the WATCH badge carries the next levels with their arrows,
 //   no separate Next part; no level is named twice on the line - a Next level or the Last Bk level already named is left out)
@@ -248,8 +248,10 @@ inline std::vector<Seg> segments(const Out& o) {
         }
     } else if (dn.ok || up.ok) {   // 2. else the gold WATCH badge with the next levels and their arrows (18:50): "WATCH: Bk / Sw at ↓ PDL · ↑ ONL"
         // (19:03 "for watch it should be in this format : Watch Level Signal") "WATCH: PDL Bk / Sw ↓ · ONL Bk / Sw ↑" - below first, then above
-        if (dn.ok) { badge("WATCH: " + dn.name + " Bk / Sw", -1, "", C_GOLD, 2); named.push_back(dn.name); }
-        if (up.ok) { badge((dn.ok ? dot + " " : std::string("WATCH: ")) + up.name + " Bk / Sw", 1, "", C_GOLD, 2); named.push_back(up.name); }
+        // (19:06 "update to WATCH: PDL ↓ · ONL↑ · Bk / Sw") the levels with their arrows, then the signal once at the end
+        if (dn.ok) { badge("WATCH: " + dn.name, -1, "", C_GOLD, 2); named.push_back(dn.name); }
+        if (up.ok) { badge((dn.ok ? dot + " " : std::string("WATCH: ")) + up.name, 1, "", C_GOLD, 2); named.push_back(up.name); }
+        badge(dot + " Bk / Sw", 0, "", C_GOLD, 2);
     }
     if (o.haveBk && !has(o.bk.lv)) {   // 3. the last Bk (context, dropped first) - only when its level is not on the line already (18:50)
         sep(3, 2); add("Last Bk", 0, "", C_GREY, false, 3, 2);

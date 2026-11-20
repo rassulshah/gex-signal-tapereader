@@ -2,7 +2,7 @@
 // lsHodLod 2.36.0 (2026-11-19 18:35-18:47 CT, Rassul, mockup now-box-levels-mockup.html): the Now box becomes ONE line of named levels
 // (NowLevels.h 1.0.0), most important first:
 //   a Tst in progress: [TESTING: <level> · BkTst Rev <arrow>] │ Next ↓ <level> · ↑ <level> │ Last Bk <arrow> <level>     (18:48, red / green)
-//   else:              [WATCH: <level> Bk / Sw ↓ · <level> Bk / Sw ↑] │ Last Bk <arrow> <level>   (gold; 19:03 "Watch Level Signal", BkTst: "WATCH: PDL BkTst Rev ↓")
+//   else:              [WATCH: <level> ↓ · <level> ↑ · Bk / Sw] │ Last Bk <arrow> <level>   (gold; 19:06; BkTst: "WATCH: PDL BkTst Rev ↓", 19:03)
 //   no numbers at all (18:42-18:43); one badge at a time (18:47); no level named twice - the WATCH badge carries the next levels, a Next or
 //   Last Bk level already named is left out (18:50)
 //  [1] parse: the wy Bk lines (this session, the marks' level names), other sessions / garbage / bad sides / POC levels ignored
@@ -11,7 +11,7 @@
 //      badge: still extending, just topped, took out the Bk candle high, waiting for / no FT, the pullback already turned, a Bk the other way;
 //      candle, no FT, the pullback already turned, a Bk the other way since; bullish mirror
 //  [3] next levels: the marks' set (no DPoc / WPoc / Open / VWAP / gamma), hour levels live from the bars, the tested level skipped
-//  [4] his real ES 11-19: 11:33 AM TESTING: PDL · BkTst Rev down | Next | Last Bk; 10:45 AM no test: only "WATCH: VAL Bk / Sw ↓ · ONL Bk / Sw ↑"
+//  [4] his real ES 11-19: 11:33 AM TESTING: PDL · BkTst Rev down | Next | Last Bk; 10:45 AM no test: only "WATCH: VAL ↓ · ONL ↑ · Bk / Sw"
 //  [4b] live BREAK / SWEEP (18:54): 9:42 AM "SWEEP: PDL ↑ │ Next ↑ VAL", 10:54 AM "BREAK: PDL ↓"; red / green by side; TESTING outranks
 //  [4c] no Cob states, no REV state (19:02-19:04): after a BkTst Rev the line moves on to the next WATCH
 //  [5] layout: one line, badges filled with black bold text (red / green TESTING, gold WATCH), arrows drawn as strokes, cp1252 only,
@@ -131,7 +131,7 @@ int main() {
     {   const std::vector<Key> K = { { "PDL", 90 }, { "DPoc", 95.5 }, { "Open", 96.5 }, { "VWAP+1", 96.25 }, { "HVL", 96.75 }, { "VAL", 99 }, { "LonHI", 104 }, { "PHL", 95.75 } };
         const Out o = compute(bear(94.8, 96.5, 94.5, 96), {}, K, 96, 0.25);
         CHECK(o.up.ok && o.up.name == "VAL" && o.dn.ok && o.dn.name == "PDL", "no POC / Open / VWAP / gamma; the key file's PHL is not used (hour levels come from the bars): " + o.up.name + " " + o.dn.name);
-        CHECK(plain(segments(o)) == "[WATCH: PDL Bk / Sw \xE2\x86\x93 \xC2\xB7 VAL Bk / Sw \xE2\x86\x91]", "no test: the gold badge carries the next levels, no Next part (18:50): " + plain(segments(o)));
+        CHECK(plain(segments(o)) == "[WATCH: PDL \xE2\x86\x93 \xC2\xB7 VAL \xE2\x86\x91 \xC2\xB7 Bk / Sw]", "no test: the gold badge carries the next levels, no Next part (18:50): " + plain(segments(o)));
         const Out o2 = compute(bear(94.8, 96.5, 94.5, 96), M1, std::vector<Key>{ { "PDL", 97 }, { "PFL", 97 }, { "VAL", 99 }, { "PWL", 90 } }, 96, 0.25);
         CHECK(o2.tst.ok && o2.up.name == "VAL", "the level being tested is not a next level (nor its twin PFL)");
         CHECK(plain(segments(o2)) == "[TESTING: PDL \xC2\xB7 BkTst Rev \xE2\x86\x93] \xE2\x94\x82 Next \xE2\x86\x93 PWL \xC2\xB7 \xE2\x86\x91 VAL", "the whole line - the Last Bk PDL is already named (18:50): " + plain(segments(o2)));
@@ -162,7 +162,7 @@ int main() {
     }
     {   Out o; const std::string p = at(10, 45, o);
         CHECK(!o.tst.ok, "10:45 AM: no test in progress (" + o.tst.why + ")");
-        CHECK(p == "[WATCH: VAL Bk / Sw \xE2\x86\x93 \xC2\xB7 ONL Bk / Sw \xE2\x86\x91]", "10:45 line: the gold badge only - the Last Bk ONL is in it (18:50): " + p);
+        CHECK(p == "[WATCH: VAL \xE2\x86\x93 \xC2\xB7 ONL \xE2\x86\x91 \xC2\xB7 Bk / Sw]", "10:45 line: the gold badge only - the Last Bk ONL is in it (18:50): " + p);
         CHECK(p.find("Testing") == std::string::npos && noNumbers(p), "10:45: nothing for the test (18:41), no numbers");
     }
     {   Out o; at(11, 39, o); CHECK(!o.tst.ok && o.tst.why == "the pullback already turned", "11:39 AM (the BkTst Rev candle closed): the test is over");
