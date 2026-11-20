@@ -4,7 +4,7 @@
 // 20"; 12:46 "test against your setting and find ideal settings"; 12:51 "letsgo with yours.. build" (8 / 14: the settings test of 11-18 on
 // 2-3 months x 7 markets - crosses alone are ~50/50 for direction in every setting; 8 / 14 halves the fake crosses of 3 / 20 for ~2 candles).
 //
-//   raw[i] = sum over the last 20 candles of (high - low) on up-closes minus (high - low) on down-closes   (his RTL: SUM(HLR*(CL>CL.1),20) - ...)
+//   raw[i] = sum over the last SUM_LEN (0.3.1: 30, was 20) candles of (high - low) on up-closes minus (high - low) on down-closes   (his RTL: SUM(HLR*(CL>CL.1),20) - ...)
 //   SD     = simple MA(raw, SD_LEN = 3)          the green line
 //   AVG    = simple MA(SD,  AVG_LEN = 20)        the red line (his SDMA)
 //   gap    = SD - AVG; normal gap = median |gap| of the 100 candles before (30+ needed); x = |gap| / normal
@@ -28,8 +28,9 @@
 
 namespace sdmo {
 
-static const char* const VERSION = "0.3.0";   // (0.3.0, Rassul 13:31 CT "keep the sdmo indicator but switch to what i had before 3 20 and also no signals /strips": SD = MA 3, average = MA 20, no I strip)   // was "0.2.0"   // (0.2.0, Rassul 13:08 CT "yes, just like the mockup": the Reversal Read I letters on a dark gray strip at the top of the pane, read from RevRead\wy-<MKT>-<secs>.txt - the same I as the Reversal Read)
-static const int SUM_LEN = 20, SD_LEN = 3, AVG_LEN = 20;   // (0.3.0, Rassul 13:31 CT "switch to what i had before 3 20 and also no signals / strips"; was 8 / 14)
+static const char* const VERSION = "0.3.1";   // (0.3.1, Rassul 2026-11-20 11:13 CT "update the sdmomo to use 30 bars instead of 20" - the SD sum (green): SUM over the last 30 candles; the average stays MA 20, SD MA 3)
+// was VERSION = "0.3.0";   // (0.3.0, Rassul 13:31 CT "keep the sdmo indicator but switch to what i had before 3 20 and also no signals /strips": SD = MA 3, average = MA 20, no I strip)   // was "0.2.0"   // (0.2.0, Rassul 13:08 CT "yes, just like the mockup": the Reversal Read I letters on a dark gray strip at the top of the pane, read from RevRead\wy-<MKT>-<secs>.txt - the same I as the Reversal Read)
+static const int SUM_LEN = 30, SD_LEN = 3, AVG_LEN = 20;   // (0.3.1) SUM_LEN 20 -> 30   // (0.3.0, Rassul 13:31 CT "switch to what i had before 3 20 and also no signals / strips"; was 8 / 14)
 static const int NORM_LOOK = 100, NORM_MIN = 30, EXT_LOOK = 20, DIV_FROM = 6, DIV_TO = 40, DIV_WIN = 10, CROSS_RECENT = 3;
 static const double EVEN_X = 0.5;
 static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_WHITE = 0x00E5E7EB, C_GRAY = 0x009CA3AF, C_ZERO = 0x006B7280, C_STRIP = 0x00333333;

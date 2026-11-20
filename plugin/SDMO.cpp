@@ -47,7 +47,7 @@
 #define SDM_SEP "/"
 #endif
 
-static const char* SDM_VERSION = "0.3.0";   // (0.3.0) SD MA 3 / average MA 20 (his settings), no I strip   // was "0.2.0"   // (0.2.0) the Reversal Read I letters on a strip at the top   // = sdmo::VERSION = the setVersion literal
+static const char* SDM_VERSION = "0.3.1";   // (0.3.1) SD sum over 30 candles (was 20)   // (0.3.0) SD MA 3 / average MA 20 (his settings), no I strip   // was "0.2.0"   // (0.2.0) the Reversal Read I letters on a strip at the top   // = sdmo::VERSION = the setVersion literal
 
 static long long sdmMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string sdmFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + SDM_SEP "InvestorRT" SDM_SEP "rtx" SDM_SEP "lsFlexLevels" : std::string(); }
@@ -199,6 +199,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers, no settings
     p->setDescription("LRA SDMO v0.3.0 - SD momentum in its own pane: SD (green) = 3-bar average of the 20-candle sum of up-close ranges minus down-close ranges; its average (red) = 20-bar average of SD; a zero line; and a 3-line read right of the last candle: took over (SD crossed its average and pulled away), fading at the low / high (a new 20-candle extreme with SD better than at the earlier extreme), even (SD hugging its average), building or fading (the gap widening or closing, as a ratio of its normal size). Closed candles only, never repainted. No settings.");
-    p->setVersion("0.3.0");   // = SDM_VERSION (gex-build reads this literal)
+    p->setVersion("0.3.1");   // = SDM_VERSION (gex-build reads this literal)
     return p;
 }
