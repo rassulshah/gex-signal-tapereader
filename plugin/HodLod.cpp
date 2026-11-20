@@ -1,5 +1,11 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.39.1 (2026-11-20 09:32 CT, Rassul "the gamma badge should be more aligned to the left so you will have more space for the options line and fix the arrows because they are overlapping"):
+ *         the regime pill + "0DTE Exp 3:00 PM" at the FAR LEFT of the gamma row (the box's left edge); the gamma line (badge | G V C | Next)
+ *         stays centred and moves right only as far as needed to stay clear of the pill; narrow: 0DTE, setups, Next, G V C, regime word,
+ *         pill. Arrows: each in its own slot (4 px | 9 px ink | 4 px) counted in the measured width; the Now / gamma line text drawn CENTRED
+ *         in its measured box (textIn) - IRT's left-justified text sits ~4 px right of rect.left and ran into the arrows. GammaLine 1.1.0,
+ *         NowLevels 1.3.1. No settings change.
  *  2.39.0 (2026-11-20 07:45 CT, Rassul approved "build"; mockups gamma-line-mockup.html + hodlod-new-box-mockup.html): the GAMMA line
  *         between the Now line (unchanged, now one row up) and the HOD / LOD box, both centred over the box: the regime pill (moved from the
  *         Now row: "-GAMMA \xB7 Trending \xB7 Bk / BkTst" / "+GAMMA \xB7 Range \xB7 Sw / Cob") | GAMMA WATCH / TESTING (gold) / BREAK / SWEEP
@@ -496,6 +502,12 @@ public:
         FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); setTextColor(col);
         short yy = (short)(yc - (short)(sz * 0.45f + 0.5f)); int w = (int)getTextWidth(s.c_str(), -1);
         RCT rc; rc.set((short)x, (short)(yy - sz), (short)(x + w + 4), (short)(yy + sz)); rc.drawText(s.c_str(), false, false);
+    }
+    void textIn(int l, int r, int yc, const std::string& s, COLOR col, int sz, bool bold)
+    {   // (2.39.1) the text CENTRED in its measured box [l, r] by IRT itself (as DealerProfile textC 2.52.1): no ~4 px left-justified inset
+        FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); setTextColor(col);
+        const short yy = (short)(yc - (short)(sz * 0.45f + 0.5f)); const int cxm = (l + r) / 2 + ((l + r) & 1);
+        RCT rc; rc.set((short)(cxm - 400), (short)(yy - sz), (short)(cxm + 400), (short)(yy + sz)); rc.drawText(s.c_str(), true, false);
     }
     void line(int x1, int y1, int x2, int y2, COLOR c, int w)
     {
@@ -2255,7 +2267,7 @@ int HodLod::draw(void)
         if (gmDrawn) {
             for (const gml::Item& it : G.items) {
                 if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
-                else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
+                else if (it.k == 1) textIn(it.l, it.r, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);   // (2.39.1) in its measured box
                 else line(it.l, it.t, it.r, it.b, (COLOR)it.col, it.col == gml::C_SEP ? 1 : 2);
             }
             S->gmDrawnF = true; S->gmLevel = G.level; S->gmText = G.text;
@@ -2263,12 +2275,13 @@ int HodLod::draw(void)
         const int nowB = gml::nowBottom(G, anchorT - 4);
         nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, cx, nowB, l, r, 10);
         const int yB = nowB, yT = D.ok ? D.t : yB - 18;
-        if (gmDrawn && !(yT > (int)pane.top + 24) && !stripOk) { stripBox = hl::Box{ (std::min)(G.l, G.exp ? G.expL : G.l), G.t, G.r, G.b }; stripOk = true; }
+        const int gLeft = (G.pill || G.exp) ? (std::min)(G.l, G.pill ? G.pillL : G.expL) : G.l;   // (2.39.1) the pill / 0DTE at the far left
+        if (gmDrawn && !(yT > (int)pane.top + 24) && !stripOk) { stripBox = hl::Box{ gLeft, G.t, G.r, G.b }; stripOk = true; }
         if (yT > (int)pane.top + 24) {
             if (D.ok) {
                 for (const nowl::Item& it : D.items) {
                     if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
-                    else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
+                    else if (it.k == 1) textIn(it.l, it.r, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);   // (2.39.1) in its measured box
                     else line(it.l, it.t, it.r, it.b, (COLOR)it.col, it.col == nowl::C_SEP ? 1 : 2);
                 }
                 S->nlDrawn = true; S->nlBox = hl::Box{ D.l, D.t, D.r, D.b }; S->nlLevel = D.level; S->nlShown = D.shown;
@@ -2286,17 +2299,17 @@ int HodLod::draw(void)
             if (!stripOk && (D.ok || Lf.keep > 0 || gmDrawn)) {   // the confirm badges keep off the rows, as they did off the read box
                 stripBox = D.ok ? S->nlBox : (gmDrawn ? hl::Box{ G.l, G.t, G.r, G.b } : hl::Box{ xL, yT, Lf.r, yB });
                 if (D.ok && Lf.keep > 0) stripBox.l = (std::min)(stripBox.l, xL);
-                if (gmDrawn) { stripBox.l = (std::min)(stripBox.l, (std::min)(G.l, G.exp ? G.expL : G.l)); stripBox.r = (std::max)(stripBox.r, G.r); stripBox.t = (std::min)(stripBox.t, G.t); stripBox.b = (std::max)(stripBox.b, G.b); }
+                if (gmDrawn) { stripBox.l = (std::min)(stripBox.l, gLeft); stripBox.r = (std::max)(stripBox.r, G.r); stripBox.t = (std::min)(stripBox.t, G.t); stripBox.b = (std::max)(stripBox.b, G.b); }
                 stripOk = true; }
         }
     }
     S->placeLine += "NOW_LEVELS," + std::string(nowl::VERSION) + "," + (S->nlDrawn ? "box " + std::to_string(S->nlBox.l) + "," + std::to_string(S->nlBox.t) + "," + std::to_string(S->nlBox.r) + "," + std::to_string(S->nlBox.b)
                     + (S->nlLevel == 1 ? ",Last Bk dropped" : S->nlLevel == 3 ? ",liquidity phrase dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
                   + ",liq " + S->nlLiqWhy + " rows " + std::to_string(S->nlLiqRows) + " phrase " + (S->nlLiqPhrase ? "1" : "0") + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
-    S->placeLine += "GAMMA_LINE," + std::string(gml::VERSION) + "," + (S->gmDrawnF ? "drawn level " + std::to_string(S->gmLevel) + (S->gmLevel >= 1 ? " (narrow: 0DTE" + std::string(S->gmLevel >= 2 ? ", Next" : "") + (S->gmLevel >= 3 ? ", G V C" : "") + (S->gmLevel >= 4 ? ", setups" : "") + (S->gmLevel >= 5 ? ", regime word" : "") + (S->gmLevel >= 6 ? ", pill" : "") + " dropped)" : "") : std::string(S->gmReady ? "not drawn (no room)" : "not drawn"))
+    S->placeLine += "GAMMA_LINE," + std::string(gml::VERSION) + "," + (S->gmDrawnF ? "drawn level " + std::to_string(S->gmLevel) + (S->gmLevel >= 1 ? " (narrow: 0DTE" + std::string(S->gmLevel >= 2 ? ", setups" : "") + (S->gmLevel >= 3 ? ", Next" : "") + (S->gmLevel >= 4 ? ", G V C" : "") + (S->gmLevel >= 5 ? ", regime word" : "") + (S->gmLevel >= 6 ? ", pill" : "") + " dropped)" : "") : std::string(S->gmReady ? "not drawn (no room)" : "not drawn"))
                   + "," + S->gmWhy + ",book " + S->gmBookWhy + ",strikes " + std::to_string((int)S->gmBook.s.size()) + ",V/C hook " + S->gmFlowWhy
                   + ",record " + (S->gmRecFile.empty() ? std::string("-") : S->gmRecFile) + " +" + std::to_string(S->gmRecN) + (S->gmAppendFails ? " append fails " + std::to_string(S->gmAppendFails) : "") + ",line " + S->gmText + "\n";
-    S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->gmDrawnF ? std::string("pill + 0DTE moved to the gamma line (2.39.0)") : std::string()) + (S->gmDrawnF ? std::string() : S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
+    S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->gmDrawnF ? std::string("pill + 0DTE at the far left of the gamma row (2.39.1)") : std::string()) + (S->gmDrawnF ? std::string() : S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
                   + ",tag " + (S->nrTag.empty() ? std::string("-") : S->nrTag) + "\n";   // (2.37.1)
     S->placeLine += "SIGNAL_LINE," + std::string(htop::VERSION) + "," + (L.tableOk ? "font " + std::to_string(L.sigFs) + " pt" + (L.sigTight ? " tight" : "") + ",shown " + std::to_string(L.sigShown) + ",dropped " + std::to_string(L.sigDropped) : std::string("no table")) + " (Cob left | Sw centre | BkTst right)\n";
     if (S->rbox.ok && !HL_READBOX_DRAW) S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not drawn (2.34.0: removed from the price pane; still built)," + S->rbWhy + "\n";
@@ -2468,6 +2481,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.39.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.39.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

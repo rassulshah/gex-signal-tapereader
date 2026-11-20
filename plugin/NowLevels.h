@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0 = lsHodLod 2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) ONE short liquidity phrase for the level the badge names, from lsLimitProfile 2.68.0's DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that PASSED its scoring (shown = 1); "Bids building" / "Offers leaving" / "Bids holding" / "Bids pulled", the label grey, the word in the defender's colour when it helps the defence (bids green, offers red) and the attacker's when it fails; a file older than 2 min or no state = no phrase; on a narrow pane the phrase drops FIRST (before Next / Last Bk)
+static const char* const VERSION = "1.3.1";   // (1.3.1 = lsHodLod 2.39.1, Rassul 2026-11-20 09:32 CT "fix the arrows because they are overlapping") every arrow owns a slot ASP + ARW + ASP (4 | 9 px ink incl. the 2-px pen | 4) in the measured width; text items carry their measured box [l, r] and the host draws them centred in it (IRT's left-justified text sits ~4 px right of rect.left and ran into the arrows)
+// was "1.3.0";   // (1.3.0 = lsHodLod 2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) ONE short liquidity phrase for the level the badge names, from lsLimitProfile 2.68.0's DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that PASSED its scoring (shown = 1); "Bids building" / "Offers leaving" / "Bids holding" / "Bids pulled", the label grey, the word in the defender's colour when it helps the defence (bids green, offers red) and the attacker's when it fails; a file older than 2 min or no state = no phrase; on a narrow pane the phrase drops FIRST (before Next / Last Bk)
 // was "1.2.0";   // (1.2.0 = lsHodLod 2.37.2, 23:02 CT) live = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP only at the close, from the chart's Bk / Sw marks   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
 static const long long E1904 = 2082844800LL;
 static const int SW_MIN = 10;          // (1.2.0) a Sw mark counts with strength 10+ (BVMax or BRMax, "V12" / "R58" / "V99+"), as the spoken alerts
@@ -395,14 +396,14 @@ inline std::string plain(const std::vector<Seg>& v) {
 
 // the drawing, SDK-free: the host measures text (meas(s, bold)) and draws the items in order. One line centred on cx with its bottom at
 // yBottom, inside [xMin, xMax]; the Last Bk part drops first, then pieces drop off the right end (never a dangling separator) until it fits.
-struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; unsigned col = 0, fill = 0; bool bold = false; std::string s; };   // k: 0 filled box (col = border), 1 text (x = l, row t..b), 2 line
+struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; unsigned col = 0, fill = 0; bool bold = false, arw = false; std::string s; };   // k: 0 filled box (col = border), 1 text (measured box l..r, row t..b), 2 line (arw = an arrow stroke)
 struct Draw { bool ok = false; int l = 0, t = 0, r = 0, b = 0; int level = 0; int pieces = 0, shown = 0; std::vector<Item> items; };
-static const int ARW = 9, GAP = 5, PADX = 5, SEPW = 13;
+static const int ARW = 9, ASP = 4, GAP = 5, PADX = 5, SEPW = 13;   // (1.3.1) ARW = the arrow's ink width with the 2-px pen; ASP = clear space each side
 template <class M> inline int segW(const std::vector<Seg>& v, size_t q, M meas) {
     const Seg& g = v[q]; if (g.sep) return SEPW;
     int w = 0; if (!g.s.empty()) w += meas(g.s, g.bold);
-    if (g.arrow) w += (w ? 4 : 0) + ARW;
-    if (!g.s2.empty()) w += (w ? 4 : 0) + meas(g.s2, g.bold);
+    if (g.arrow) w += ASP + ARW + ASP;
+    if (!g.s2.empty()) w += (g.arrow ? 0 : (w ? 4 : 0)) + meas(g.s2, g.bold);
     return w + (badgeFirst(v, q) ? PADX : 0) + (badgeLast(v, q) ? PADX : 0);
 }
 template <class M> inline Draw layout(const std::vector<Seg>& all, M meas, int cx, int yBottom, int xMin, int xMax, int fs) {
@@ -426,13 +427,13 @@ template <class M> inline Draw layout(const std::vector<Seg>& all, M meas, int c
     for (size_t q = 0; q < v.size(); q++) { const Seg& g = v[q];
         if (g.sep) { Item L2; L2.k = 2; L2.l = L2.r = xs[q] + SEPW / 2; L2.t = t + 1; L2.b = b - 1; L2.col = C_SEP; D.items.push_back(L2); continue; }
         int xx = xs[q] + (badgeFirst(v, q) ? PADX : 0);
-        if (!g.s.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold; T.s = g.s; D.items.push_back(T); xx += meas(g.s, g.bold) + (g.arrow || !g.s2.empty() ? 4 : 0); }
-        if (g.arrow) { const int ax = xx + ARW / 2, d = g.arrow > 0 ? -1 : 1;   // a shaft + two head strokes; d = +1 points down
-            Item a1; a1.k = 2; a1.l = a1.r = ax; a1.t = ym - 4 * d; a1.b = ym + 4 * d; a1.col = g.col; D.items.push_back(a1);
+        if (!g.s.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold; T.s = g.s; T.r = xx + meas(g.s, g.bold); D.items.push_back(T); xx = T.r + (!g.arrow && !g.s2.empty() ? 4 : 0); }
+        if (g.arrow) { const int ax = xx + ASP + ARW / 2, d = g.arrow > 0 ? -1 : 1;   // a shaft + two head strokes in the arrow's own slot; d = +1 points down
+            Item a1; a1.k = 2; a1.arw = true; a1.l = a1.r = ax; a1.t = ym - 4 * d; a1.b = ym + 4 * d; a1.col = g.col; D.items.push_back(a1);
             Item a2 = a1; a2.l = ax - 3; a2.t = ym + d; a2.r = ax; a2.b = ym + 4 * d; D.items.push_back(a2);
             Item a3 = a2; a3.l = ax + 3; D.items.push_back(a3);
-            xx += ARW + (!g.s2.empty() ? 4 : 0); }
-        if (!g.s2.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold; T.s = g.s2; D.items.push_back(T); }
+            xx += ASP + ARW + ASP; }
+        if (!g.s2.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold; T.s = g.s2; T.r = xx + meas(g.s2, g.bold); D.items.push_back(T); }
     }
     return D;
 }

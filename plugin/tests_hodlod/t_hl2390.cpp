@@ -155,19 +155,19 @@ int main() {
         for (int w = 1400; w >= 100; w -= 10) {
             const int xMin = 10, xMax = xMin + w, cx = (xMin + xMax) / 2;
             const Draw D = layout(forms, C_RED, 0x450A0A, bd, gv, nx, "0DTE Exp 3:00 PM", 0xE5E7EB, meas, cx, 500, xMin, xMax, xMin, 10);
-            if (!D.ok) { if (w > 300) badge = false; continue; }
+            if (!D.ok) { if (w > 330) badge = false; continue; }   // (2.39.1) the arrow slots make the badge-only line ~10 px wider
             if (D.level < prev) { mono = false; }
             prev = D.level;
             if (seen.empty() || seen.back() != D.level) seen.push_back(D.level);
             if (D.l < xMin || D.r > xMax) inside = false;
-            if (D.exp && D.expR + EXP_GAP > D.l) expClear = false;
+            if ((D.exp || D.pill) && D.leftR + EXP_GAP > D.l) expClear = false;
             if (D.text.find("GAMMA WATCH") == std::string::npos) badge = false;
         }
-        std::string sq; for (int s : seen) sq += std::to_string(s); CHECK(sq == "0123456", "drop order 0DTE, Next, G V C, setups, regime word, pill (badge stays): " + sq);
+        std::string sq; for (int s : seen) sq += std::to_string(s); CHECK(sq == "0123456", "drop order (2.39.1) 0DTE, setups, Next, G V C, regime word, pill (badge stays): " + sq);
         CHECK(mono && inside && expClear && badge, "monotone, inside the pane, 0DTE clear of the line, badge always there while anything fits");
         const Draw full = layout(forms, C_RED, 0x450A0A, bd, gv, nx, "0DTE Exp 3:00 PM", 0xE5E7EB, meas, 565, 500, 0, 1130, 0, 10);
-        CHECK(full.ok && full.level == 0 && full.text.rfind("0DTE Exp 3:00 PM | (-GAMMA \xC2\xB7 Trending \xC2\xB7 Bk / BkTst) \xE2\x94\x82 [GAMMA WATCH: PS 7,100", 0) == 0, "mockup row: " + full.text);
-        CHECK(std::abs((full.l + full.r) / 2 - 565) <= 1, "centred over the box");
+        CHECK(full.ok && full.level == 0 && full.text.rfind("(-GAMMA \xC2\xB7 Trending \xC2\xB7 Bk / BkTst) 0DTE Exp 3:00 PM | [GAMMA WATCH: PS 7,100", 0) == 0, "row (2.39.1): pill + 0DTE at the left, then the line: " + full.text);
+        CHECK(std::abs((full.l + full.r) / 2 - 565) <= 1 || full.l == full.leftR + EXP_GAP, "centred over the box (2.39.1: or moved right just clear of the pill at the far left)");
         CHECK(nowBottom(full, 496) == full.t - 3 && nowBottom(Draw(), 496) == 496, "the Now line sits 3 px above the gamma line (no gamma line = its old spot)");
         CHECK(full.b == 500 && full.t == 482, "the gamma line's bottom = the old Now spot (above the box / Gex strip)");
         bool pillOk = false; for (const Item& it : full.items) if (it.k == 0 && it.col == C_RED && it.fill == 0x450A0A) pillOk = true; CHECK(pillOk, "pill: red border on the dark red fill (as 2.37.1)");
@@ -185,7 +185,7 @@ int main() {
         CHECK(closedStep(ce, B, a.line, "ES", 60, 2, "2.39.0").append, "the 1-min chart decides its own candles"); }
     std::printf("[10] host + versions\n");
     {   const std::string h = rd("../HodLod.cpp"), lg = rd("../HodLodLogic.h"), st = rd("../HodLodSettings.h");
-        CHECK(lg.find("HL_VERSION = \"2.39.0\"") != std::string::npos && h.find("p->setVersion(\"2.39.0\")") != std::string::npos && st.find("PLUGIN_VERSION = \"2.39.0\"") != std::string::npos, "versions 2.39.0");
+        CHECK(std::string(hl::HL_VERSION).rfind("2.39.", 0) == 0 && lg.find(std::string("HL_VERSION = \"") + hl::HL_VERSION + "\"") != std::string::npos && h.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos && st.find(std::string("PLUGIN_VERSION = \"") + hl::HL_VERSION + "\"") != std::string::npos, "versions 2.39.x everywhere (2.39.1: version-agnostic)");
         CHECK(h.find(" *  2.39.0 (2026-11-20") != std::string::npos, "header comment 2.39.0");
         CHECK(h.find("#include \"GammaLine.h\"") != std::string::npos, "host includes GammaLine.h");
         CHECK(h.find("gml::closedStep(") != std::string::npos && h.find("hlAppend(") != std::string::npos && h.find("gml::recHeader()") != std::string::npos, "host records each closed candle once (append after decide)");

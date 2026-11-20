@@ -80,7 +80,7 @@ int main() {
         CHECK(s.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos /* (2.39.0) version-agnostic: = HL_VERSION */ && s.find(" *  2.38.0 (2026-11-20 06:04 CT") != std::string::npos, "setVersion + header comment 2.38.0");
         CHECK(s.find("\"levelliq-\" + S->mkt + \"-\" + std::to_string(S->per) + \".txt\"") != std::string::npos && s.find("nowl::segments(S->nlOut, lq)") != std::string::npos && s.find("nowE - S->nlLiqChecked >= 3") != std::string::npos, "host reads levelliq-<MKT>-<per>.txt at most every 3 s and passes it to segments");
         CHECK(s.find(",liq \" + S->nlLiqWhy") != std::string::npos, "status names the liq file state");
-        CHECK(std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION && std::string(nowl::VERSION) == "1.3.0", "PLUGIN_VERSION = HL_VERSION (2.39.0: version-agnostic), NowLevels 1.3.0");
+        CHECK(std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION && std::string(nowl::VERSION).rfind("1.3.", 0) == 0, "PLUGIN_VERSION = HL_VERSION (2.39.0: version-agnostic), NowLevels 1.3.x (2.39.1: 1.3.1)");
         const std::string g = rd("../HodLodLogic.h"); CHECK(g.find(std::string("static const char* const HL_VERSION = \"") + hl::HL_VERSION + "\"") != std::string::npos && g.find("was HL_VERSION = \"2.38.0\"") != std::string::npos, "HodLodLogic HL_VERSION literal (2.38.0 kept in the history)"); }
     std::printf("t_hl2380 (lsHodLod 2.38.0): %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

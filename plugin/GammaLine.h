@@ -1,4 +1,4 @@
-// GammaLine.h -- lsHodLod 2.39.0 (GammaLine 1.0.0): the GAMMA line between the Now line and the HOD / LOD box, SDK-free
+// GammaLine.h -- lsHodLod 2.39.1 (GammaLine 1.1.0; 1.0.0 = 2.39.0): the GAMMA line between the Now line and the HOD / LOD box, SDK-free
 //
 // (2.39.0, Rassul 2026-11-20 07:45 CT "build", mockups gamma-line-mockup.html + hodlod-new-box-mockup.html):
 //   top to bottom: the Now line (unchanged) -> the GAMMA line -> the HOD / LOD box; both lines centred over the box. The 2.37.x regime pill
@@ -26,6 +26,11 @@
 //     one in the sweep direction.
 //   Narrow pane (layout): the 0DTE text drops first, then Next, then G V C, then the pill's setup words, then its regime word; the state badge
 //   always stays (no badge room = no line).
+// (2.39.1 / 1.1.0, Rassul 2026-11-20 09:32 CT "the gamma badge should be more aligned to the left so you will have more space for the options
+//   line and fix the arrows because they are overlapping"): the regime pill + "0DTE Exp" sit at the FAR LEFT of the row (the box's left edge),
+//   the centred line = badge | G V C | Next; narrow: 0DTE, then the setups, then Next, then G V C, then the regime word, then the pill; the
+//   line shifts right just enough to stay clear of the pill. Every arrow owns a slot (4 px | 9 px ink | 4 px) and text is drawn in its
+//   measured box (see the drawing below).
 #pragma once
 #include <string>
 #include <vector>
@@ -38,7 +43,7 @@
 
 namespace gml {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0 = lsHodLod 2.39.1) pill + 0DTE at the far left, arrow slots, text in its measured box   // was "1.0.0"
 static const int SIG_PCT = 50;               // significant = |% of the biggest| >= 50
 static const double G_MIN = 0.10;            // gamma at price >= 10% of the biggest strike's
 static const double FLOW_MIN = 0.10;         // flow >= 10% of its own 20-candle normal
@@ -357,63 +362,80 @@ inline std::string plain(const std::vector<Seg>& v) {   // for the tests / statu
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
-// the drawing. One line centred on cx, bottom at yBottom, inside [xMin, xMax]; the 0DTE text at xExp (the box's left edge) on the same row,
-// only while it stays >= 10 px left of the line. Levels: 0 all, 1 no 0DTE, 2 no Next, 3 no G V C, 4 pill without the setups, 5 the pill's
-// +/-GAMMA word only, 6 the badge only. Nothing fits = not drawn.
-struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; unsigned col = 0, fill = 0; bool bold = false; std::string s; };   // k: 0 filled box (col = border), 1 text, 2 line
-struct Draw { bool ok = false; int l = 0, t = 0, r = 0, b = 0; int level = -1, pillForm = -1; bool exp = false; int expL = 0, expR = 0; std::vector<Item> items; std::string text; };
-static const int ARW = 9, GAP = 5, PADX = 5, PILLX = 6, SEPW = 13, PADL = 6, EXP_GAP = 10;
+// the drawing. (1.1.0 = lsHodLod 2.39.1, Rassul 2026-11-20 09:32 CT "the gamma badge should be more aligned to the left so you will have more
+// space for the options line and fix the arrows because they are overlapping")
+//   LEFT GROUP at xExp (the HOD / LOD box's left edge): the regime pill, then "0DTE Exp 3:00 PM" (as the 2.37.x tag sat at the far left).
+//   CENTRED LINE on cx: state badge | G V C | Next (the pill no longer in it - the line gets the freed space).
+//   The left group never touches the line: the line moves right only as far as needed (>= EXP_GAP clear), else the next level.
+//   Levels: 0 all, 1 no 0DTE, 2 pill without the setups, 3 no Next, 4 no G V C, 5 the pill's +/-GAMMA word only, 6 no pill (badge only).
+//   ARROWS: every arrow owns a slot ASP + ARW + ASP, ARW = its ink width with the 2-px pen (shaft at ax, heads to ax +/- 3, pen +/- 1),
+//   counted in the measured width, so no arrow touches a character. Text items carry their measured box [l, r]; the host draws each one
+//   centred in that box (IRT's left-justified drawText sits ~4 px right of rect.left - BUILD-LESSONS 2026-11-03 - which pushed the text
+//   into the arrows in 2.39.0).
+struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; unsigned col = 0, fill = 0; bool bold = false, arw = false; std::string s; };   // k: 0 filled box (col = border), 1 text (box l..r), 2 line (arw = an arrow stroke)
+struct Draw { bool ok = false; int l = 0, t = 0, r = 0, b = 0; int level = -1, pillForm = -1; bool pill = false; int pillL = 0, pillR = 0; bool exp = false; int expL = 0, expR = 0; int leftR = 0; std::vector<Item> items; std::string text; };
+static const int ARW = 9, ASP = 4, GAP = 5, PADX = 5, PILLX = 6, SEPW = 13, PADL = 6, EXP_GAP = 10, PILL_EXP = 8;
 template <class M> inline int segW(const std::vector<Seg>& v, size_t q, M meas) {
     const Seg& g = v[q]; if (g.sep) return SEPW;
     int w = 0; if (!g.s.empty()) w += meas(g.s, g.bold || g.badge || g.pill);
-    if (g.arrow) w += (w ? (g.part == 2 ? 1 : 4) : 0) + ARW;
-    if (!g.s2.empty()) w += (w ? (g.part == 2 ? 2 : 4) : 0) + meas(g.s2, g.bold);
+    if (g.arrow) w += ASP + ARW + ASP;
+    if (!g.s2.empty()) w += (g.arrow ? 0 : (w ? (g.part == 2 ? 2 : 4) : 0)) + meas(g.s2, g.bold);
     if (g.pill) w += 2 * PILLX;
     return w + (badgeFirst(v, q) ? PADX : 0) + (badgeLast(v, q) ? PADX : 0);
 }
 inline std::vector<Seg> join(const std::vector<std::vector<Seg>>& parts) {
     std::vector<Seg> v; for (const std::vector<Seg>& p : parts) { if (p.empty()) continue; if (!v.empty()) { Seg s; s.sep = true; s.col = C_SEP; s.part = p[0].part; v.push_back(s); } v.insert(v.end(), p.begin(), p.end()); } return v;
 }
+// the arrow's strokes in its slot starting at x0 (shaft + two heads), vertically centred on ym
+inline void arrowItems(std::vector<Item>& out, int x0, int ym, int dir, unsigned col) {
+    const int ax = x0 + ASP + ARW / 2, d = dir > 0 ? -1 : 1;
+    Item a1; a1.k = 2; a1.arw = true; a1.l = a1.r = ax; a1.t = ym - 4 * d; a1.b = ym + 4 * d; a1.col = col; out.push_back(a1);
+    Item a2 = a1; a2.l = ax - 3; a2.t = ym + d; a2.r = ax; a2.b = ym + 4 * d; out.push_back(a2);
+    Item a3 = a2; a3.l = ax + 3; out.push_back(a3);
+}
 template <class M> inline Draw layout(const std::vector<std::string>& pillForms, unsigned pillCol, unsigned pillFill, const std::vector<Seg>& badge, const std::vector<Seg>& gvc,
                                       const std::vector<Seg>& next, const std::string& exp, unsigned expCol, M meas, int cx, int yBottom, int xMin, int xMax, int xExp, int fs) {
     Draw D; if (badge.empty() || xMax - xMin < 40) return D;
     const int h = fs + 8;
-    auto pill = [&](int form) { std::vector<Seg> p; if (form >= 0 && form < (int)pillForms.size()) p.push_back(pillSeg(pillForms[(size_t)form], pillCol, pillFill)); return p; };
     auto width = [&](const std::vector<Seg>& v) { int w = 2 * PADL; for (size_t q = 0; q < v.size(); q++) w += segW(v, q, meas) + (q ? GAP : 0); return w; };
     const int expW = exp.empty() ? 0 : meas(exp, false);
     const int nf = (int)pillForms.size();
     struct Cand { int level, form; bool gv, nx, ex; };
-    std::vector<Cand> C = { { 0, 0, true, true, true }, { 1, 0, true, true, false }, { 2, 0, true, false, false }, { 3, 0, false, false, false },
-                            { 4, 1, false, false, false }, { 5, 2, false, false, false }, { 6, -1, false, false, false } };
+    const std::vector<Cand> C = { { 0, 0, true, true, true }, { 1, 0, true, true, false }, { 2, 1, true, true, false }, { 3, 1, true, false, false },
+                                  { 4, 1, false, false, false }, { 5, 2, false, false, false }, { 6, -1, false, false, false } };
     for (const Cand& cd : C) {
         if (cd.ex && !expW) continue;
-        int form = cd.form; if (form >= nf) { if (cd.level == 4 || cd.level == 5) continue; form = nf - 1; }
-        if (nf == 0 && cd.form >= 0 && cd.level >= 4) continue;
-        std::vector<Seg> v = join({ pill(form), badge, cd.gv ? gvc : std::vector<Seg>(), cd.nx ? next : std::vector<Seg>() });
+        int form = cd.form; if (form >= nf) form = nf - 1;
+        if (form < 0 && cd.form >= 0 && (cd.level == 2 || cd.level == 5)) continue;   // no pill forms: levels 2 / 5 = levels 1 / 6
+        const std::vector<Seg> v = join({ badge, cd.gv ? gvc : std::vector<Seg>(), cd.nx ? next : std::vector<Seg>() });
         const int tw = width(v); if (tw > xMax - xMin) continue;
+        // the left group: pill at xExp, then the 0DTE text
+        int x = xExp; const bool hasPill = form >= 0; int pillR = xExp, eL = 0, eR = 0;
+        if (hasPill) { pillR = xExp + meas(pillForms[(size_t)form], true) + 2 * PILLX; x = pillR; }
+        if (cd.ex) { eL = hasPill ? x + PILL_EXP : x; eR = eL + expW; x = eR; }
+        const bool leftOn = hasPill || cd.ex;
+        if (leftOn && x > xMax) continue;
         int l = cx - tw / 2; if (l + tw > xMax) l = xMax - tw; if (l < xMin) l = xMin;
-        if (cd.ex && xExp + expW + EXP_GAP > l) continue;
-        D.ok = true; D.level = cd.level; D.pillForm = form; D.exp = cd.ex; D.l = l; D.r = l + tw; D.b = yBottom; D.t = yBottom - h;
-        Item bg; bg.k = 0; bg.l = D.l; bg.t = D.t; bg.r = D.r; bg.b = D.b; bg.fill = C_BG; bg.col = C_BORDER; D.items.push_back(bg);
+        if (leftOn && l < x + EXP_GAP) { l = x + EXP_GAP; if (l + tw > xMax) continue; }   // shift right only as much as needed
+        D.ok = true; D.level = cd.level; D.pillForm = hasPill ? form : -1; D.pill = hasPill; D.pillL = xExp; D.pillR = pillR; D.exp = cd.ex; D.expL = eL; D.expR = eR; D.leftR = leftOn ? x : 0;
+        D.l = l; D.r = l + tw; D.b = yBottom; D.t = yBottom - h;
         const int t = D.t + 2, b = D.b - 2, ym = (D.t + D.b) / 2;
-        std::vector<int> xs(v.size()); { int x = D.l + PADL; for (size_t q = 0; q < v.size(); q++) { if (q) x += GAP; xs[q] = x; x += segW(v, q, meas); } }
-        for (size_t q = 0; q < v.size(); q++) {
-            if (v[q].pill) { Item P; P.k = 0; P.l = xs[q]; P.t = t; P.r = xs[q] + segW(v, q, meas); P.b = b; P.col = v[q].col; P.fill = v[q].fill; D.items.push_back(P); }
+        if (hasPill) { Item P; P.k = 0; P.l = xExp; P.t = t; P.r = pillR; P.b = b; P.col = pillCol; P.fill = pillFill; D.items.push_back(P);
+                       Item T; T.k = 1; T.l = xExp + PILLX; T.r = pillR - PILLX; T.t = t; T.b = b; T.col = pillCol; T.bold = true; T.s = pillForms[(size_t)form]; D.items.push_back(T); }
+        if (cd.ex) { Item T; T.k = 1; T.l = eL; T.r = eR; T.t = t; T.b = b; T.col = expCol; T.s = exp; D.items.push_back(T); }
+        Item bg; bg.k = 0; bg.l = D.l; bg.t = D.t; bg.r = D.r; bg.b = D.b; bg.fill = C_BG; bg.col = C_BORDER; D.items.push_back(bg);
+        std::vector<int> xs(v.size()); { int xx = D.l + PADL; for (size_t q = 0; q < v.size(); q++) { if (q) xx += GAP; xs[q] = xx; xx += segW(v, q, meas); } }
+        for (size_t q = 0; q < v.size(); q++)
             if (badgeFirst(v, q)) { size_t e = q; while (!badgeLast(v, e)) e++; Item F; F.k = 0; F.l = xs[q]; F.t = t; F.r = xs[e] + segW(v, e, meas); F.b = b; F.fill = v[q].fill; F.col = v[q].fill; D.items.push_back(F); }
-        }
         for (size_t q = 0; q < v.size(); q++) { const Seg& g = v[q];
             if (g.sep) { Item L2; L2.k = 2; L2.l = L2.r = xs[q] + SEPW / 2; L2.t = t + 1; L2.b = b - 1; L2.col = C_SEP; D.items.push_back(L2); continue; }
-            int xx = xs[q] + (badgeFirst(v, q) ? PADX : 0) + (g.pill ? PILLX : 0);
-            if (!g.s.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold || g.badge || g.pill; T.s = g.s; T.r = xx + meas(g.s, T.bold); D.items.push_back(T); xx = T.r + (g.arrow || !g.s2.empty() ? (g.part == 2 ? (g.arrow ? 1 : 2) : 4) : 0); }
-            if (g.arrow) { const int ax = xx + ARW / 2, d = g.arrow > 0 ? -1 : 1;
-                Item a1; a1.k = 2; a1.l = a1.r = ax; a1.t = ym - 4 * d; a1.b = ym + 4 * d; a1.col = g.acol; D.items.push_back(a1);
-                Item a2 = a1; a2.l = ax - 3; a2.t = ym + d; a2.r = ax; a2.b = ym + 4 * d; D.items.push_back(a2);
-                Item a3 = a2; a3.l = ax + 3; D.items.push_back(a3);
-                xx += ARW + (!g.s2.empty() ? (g.part == 2 ? 2 : 4) : 0); }
+            int xx = xs[q] + (badgeFirst(v, q) ? PADX : 0);
+            if (!g.s.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold || g.badge; T.s = g.s; T.r = xx + meas(g.s, T.bold); D.items.push_back(T);
+                                xx = T.r + (!g.arrow && !g.s2.empty() ? (g.part == 2 ? 2 : 4) : 0); }
+            if (g.arrow) { arrowItems(D.items, xx, ym, g.arrow, g.acol); xx += ASP + ARW + ASP; }
             if (!g.s2.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.acol; T.bold = g.bold; T.s = g.s2; T.r = xx + meas(g.s2, g.bold); D.items.push_back(T); }
         }
-        if (cd.ex) { Item T; T.k = 1; T.l = xExp; T.r = xExp + expW; T.t = t; T.b = b; T.col = expCol; T.s = exp; D.items.push_back(T); D.expL = xExp; D.expR = xExp + expW; }
-        D.text = (cd.ex ? utf8(exp) + " | " : std::string()) + plain(v);
+        D.text = (hasPill ? "(" + utf8(pillForms[(size_t)form]) + ") " : std::string()) + (cd.ex ? utf8(exp) + " | " : std::string()) + plain(v);
         return D;
     }
     return D;
