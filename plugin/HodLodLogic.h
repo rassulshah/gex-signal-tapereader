@@ -56,7 +56,7 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.34.0";   // (2.34.0, Rassul 2026-11-19 16:18 CT "i'll go with your recommendation" - price-pane cleanup: the "Now" read box (Now / Level / Flow lines) is no longer drawn; it is still built and logged in the status file; nothing else changes)
+static const char* const HL_VERSION = "2.35.0";   // (2.35.0, Rassul 2026-11-19 17:27-18:10 CT "lets include sweeps too", "build": the right end of the top line = each market's latest Cob (Rev), Sw and BkTst as green / red badges with black text, newest first (TopSignals.h); no plain Bk)   // was "2.34.0";   // (2.34.0, Rassul 2026-11-19 16:18 CT "i'll go with your recommendation" - price-pane cleanup: the "Now" read box (Now / Level / Flow lines) is no longer drawn; it is still built and logged in the status file; nothing else changes)
 // was HL_VERSION = "2.33.0";   // (2.33.0, Rassul 2026-11-18 09:30 CT "lets put the session in the middle with lod to the left and hod to the right": LOD SWEEPS | SESSION | HOD SWEEPS)   // was "2.32.0";   // (2.32.0, Rassul 2026-11-17 12:12 CT "build": the Flow read in two lines - Now (the forming candle's market orders, fact M from lsRevRead) + Above / Below (the decided level still in play, its time and distance))   // was "2.31.0";   // (2.31.0, Rassul 2026-11-17 07:03-07:18 CT: host - the Flow read sits bottom centre above the box and follows the live price and new events every second)   // was "2.30.0";   // (2.30.0, Rassul 2026-11-17 05:55-05:58 CT) the Cob section at the right end of the top line: every market with a live Cob   // was "2.29.2";   // (2.29.2, Rassul 2026-11-17 05:31 CT "lets use percentages like 20%") the market strength line reads "CL +20%"   // was "2.29.1";   // (2.29.1) the session close + last trading day always shown, on the top line (a full header band used to drop them)   // was "2.29.0";   // (2.29.0, 2026-11-16 Rassul 21:45-21:52 CT: the market strength line on top of the box - each traded market's session move over its average session range, MktMove.h)   // was "2.28.0";   // (2.28.0, 2026-11-16 Rassul 13:06 CT: the session close and the contract's last trading day right after the market in the header band - host only, the hdrLeft segments)   // was "2.27.0";   // (2.27.0, 2026-11-16 Rassul 09:58 CT "i dont need this line": the call line under the header band - 1st extreme / 2nd / Lvl - is gone; the tables are unchanged)   // was "2.26.0";   // (2.26.0, 2026-11-11 Rassul "Ok build"): the read box gets the Book line (ReadBox 1.4.0, lsBookFlow fact F)   // was "2.25.0";   // (2.25.0, 2026-11-11 Rassul 11:57 "show mockup", 12:01 "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:02 "will the hod lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build") the read box = the Flow line only; this box: a CALL LINE under the header (1st / 2nd extreme: actual, else expected; FLIPPED hh:mm; the Lvl read), "Hrly: Up, above 7607" and "Day: ..." in the header row, the sweep tables' UPCOMING level bright ("next" / "testing") and the rest dim, the 1st-extreme time table only until the first extreme is in
 // was "2.24.0":   // (2.24.0, Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") the read box = ReadBox 1.2.0: Hrly Trend + the hourly breakout level / Day / Lvl nearest above and below / one Flow line from events still in play
 // was "2.23.1":   // (2.23.1, Rassul 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA") the read box's first line is "Hrly Trend: Up / Down / NA" (ReadBox 1.1.0)
@@ -744,7 +744,7 @@ struct View {
     // table (cumulative 0-15 / 0-30 / 0-60 / 60m+ %); the ADR (trimmed ATR10) and tonight's overnight high / low for the day forecast
     std::vector<Seg> hdrExtra, hdrLeft;
     struct MkSeg { std::string s; unsigned col; bool bold; int arrow; };   // (2.29.0) one market of the strength line; arrow +1 up / -1 down / 0 none
-    struct CobSeg { std::string mkt, when; int dir; };   // (2.30.0) one market of the Cob section: "NQ", "10:06", +1 bullish / -1 bearish
+    struct CobSeg { std::string mkt, when; int dir; std::string text; };   // (2.35.0) text = the badge ("NQ Sw PHL 1:09"); empty = the 2.30.0 Cob form   // (2.30.0) one market of the Cob section: "NQ", "10:06", +1 bullish / -1 bearish
     std::vector<CobSeg> cobs;   // (2.30.0) the markets with a live Cob, right end of the top line; empty = no section
     std::vector<MkSeg> mkts;   // (2.29.0) the market strength line on top of the box (MktMove.h); empty = no line
     std::vector<Seg> htf;   // (2.17.0) the HTF trend / RS line under the header ("60m" label grey, values coloured); empty = no line   // (2.14.3) hdrLeft = "RTH 83% done", "Bar 2:13 left" right after the market
@@ -2008,7 +2008,17 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             // THE COB SECTION, right-aligned: "Cob  NQ ^ 10:06  GC v 9:45" - each market's live Cob, newest first; it keeps its room, the market
             // moves on the left fill what is left (the weakest drop off)
             int xLim = T.r - 8;
-            if (!v.cobs.empty()) {
+            if (!v.cobs.empty() && !v.cobs[0].text.empty()) {   // (2.35.0) the signal badges: green / red fill, black text, newest first; the oldest drop when there is no room
+                const int padX = 4, gap = 6; int tot = 0; size_t nShow = 0;
+                for (size_t q = 0; q < v.cobs.size(); q++) { const int w = M(v.cobs[q].text, fs, true) + 2 * padX + (q ? gap : 0); if (tot + w > (T.r - T.l) / 2) break; tot += w; nShow = q + 1; }
+                if (nShow > 0) {
+                    int xc = T.r - 10 - tot; xLim = xc - 20;
+                    addLine(L, xc - 10, y + 4, xc - 10, y + mktH - 5, C_BORDER, 1, R_TABLE);
+                    for (size_t q = 0; q < nShow; q++) { const View::CobSeg& g = v.cobs[q]; const unsigned col = g.dir > 0 ? C_GREEN : C_RED; if (q) xc += gap;
+                        const int tw = M(g.text, fs, true); addFill(L, xc, y + 2, xc + tw + 2 * padX, y + mktH - 2, col, R_TABLE);
+                        addText(L, xc + padX, y + 1, y + mktH - 2, g.text, 0x00000000u, fs, true, tw, R_TABLE, -1); xc += tw + 2 * padX; }
+                }
+            } else if (!v.cobs.empty()) {
                 const int labW = M("Cob", fs, true); int tot = labW + 12; size_t nShow = 0;
                 for (size_t q = 0; q < v.cobs.size(); q++) { const int w = M(v.cobs[q].mkt, fs, true) + 14 + M(v.cobs[q].when, fs, false) + (q ? 14 : 0); if (tot + w > (T.r - T.l) / 2) break; tot += w; nShow = q + 1; }
                 if (nShow > 0) {

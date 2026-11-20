@@ -150,6 +150,12 @@ static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not dra
 #include "SignalBoard.h"            // (2.26.0) sb::readFacts('F'): lsBookFlow's defend ratios for the read box's Book line
 #include "ReadBox.h"                // (2.22.0) the compact READ BOX left column (SDK-free, tests_readbox)
 #include "NearLevels.h"             // (2.22.0) his key / MenthorQ level files for the Lvl line
+#ifdef _WIN32
+#define HL_SEP "\\"
+#else
+#define HL_SEP "/"
+#endif
+#include "TopSignals.h"             // (2.35.0) the top line signal badges: latest Cob / Sw / BkTst per market (SDK-free, tests_hodlod/t_hl2350)
 #include "MktMove.h"               // (2.29.0) the market strength line (SDK-free)
 #include "HodLodHtf.h"             // (2.17.0) the HTF trend + RS line (SDK-free)
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
@@ -284,6 +290,7 @@ struct HLState {
     long long sessStamp = -2; time_t sessChecked = 0; std::string sessGam, sessExp; int sessAge = -1; bool sessRec = true;
     // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
     // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
+    std::map<std::string, std::pair<long long, std::string> > tsText; int tsSigs = 0, tsShown = 0, tsFiles = 0; time_t tsChecked = 0; std::vector<hl::View::CobSeg> tsSegs;   // (2.35.0) wy / Cob record texts by path (stamp, text), the signals found / shown
     mkm::Cob mkCob; int mkCobN = 0;   // (2.30.0) this market's live Cob (lsCobSignal's live file) / Cobs read
     mkm::Stat mk; time_t mkChecked = 0, mkWritten = 0; std::string mkBody; std::vector<mkm::Item> mkItems; int mkWrites = 0, mkRead = 0;   // (2.29.0) the market strength line
     time_t avoidChecked = 0; bool trBoxOk = false; hl::Box trBox = { 0, 0, 0, 0 }; int trPos = 0; bool trSeen = false; bool dpBanner = false;
@@ -1283,6 +1290,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
     else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\nLEFT_KEEP," + std::to_string(S.leftKeepX) + " (ColumnBoard " + cb::VERSION + ")\nCANDLE_KEEPOUT," + std::to_string(S.candleAvoid) + " boxes (the table + strip never cover candles when a clear spot exists)\n";
     text += std::string("AWARENESS,") + awh::VERSION + " AWHODLOD decided " + std::to_string(S.aw.writes) + " records\nPERF," + lsperf::statusOf(this) + "\n";   // (2.8.0)
     {   char b[320]; std::snprintf(b, sizeof b, "MKT_LINE,%s,own %s move %.2f pos %.2f adr sessions %d,others read %d,shown %d,writes %d,own cob %d at %lld (of %d read),cob markets %d\n", mkm::VERSION, S.mk.ok ? "ok" : "not ready", S.mk.ratio, S.mk.pos, S.mk.sessions, S.mkRead, (int)S.view.mkts.size(), S.mkWrites, S.mkCob.dir, S.mkCob.t, S.mkCobN, (int)S.view.cobs.size()); text += b; }   // (2.29.0)
+    {   char b[200]; std::snprintf(b, sizeof b, "TOP_SIGNALS,%s,files %d,signals this session %d,badges %d (latest Cob / Sw / BkTst per market, newest first; the line shows what fits)\n", tsig::VERSION, S.tsFiles, S.tsSigs, S.tsShown); text += b; }   // (2.35.0)
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
     if (!(changed && now - S.lastStatusWrite >= 2) && now - S.lastStatusWrite < 30) return;
@@ -1776,7 +1784,26 @@ int HodLod::draw(void)
         for (const mkm::Seg& g : mkm::line(S->mkItems, (long long)nowE))
             S->view.mkts.push_back(hl::View::MkSeg{ g.s, g.flat ? hl::C_GREY : g.dir > 0 ? hl::C_GREEN : hl::C_RED, g.bold, g.bold ? g.dir : 0 });
         S->view.cobs.clear();
-        for (const mkm::CobSeg& g : mkm::cobLine(S->mkItems, (long long)nowE)) S->view.cobs.push_back(hl::View::CobSeg{ g.mkt, g.when, g.dir });   // (2.30.0)
+        // (2.35.0) the latest Cob (Rev), Sw and BkTst of every market: the 14 record files are read (bounded, kept by stamp) and parsed at
+        // most every 5 s; the draw only copies the finished badges
+        try {
+            if (S->tsChecked == 0 || nowE - S->tsChecked >= 5 || nowE < S->tsChecked) {
+                S->tsChecked = nowE; S->tsFiles = 0;
+                const long long nowL = hlNowCt(), from = tsig::sessionStart(nowL);
+                std::vector<tsig::Sig> all;
+                for (int k = 0; k < 7; k++) { const std::string m = hl::MKTS[k].code;
+                    const std::string ps[2] = { flexPath(std::string("RevRead") + HL_SEP + "wy-" + m + "-180.txt"), flexPath(std::string("CobSignal") + HL_SEP + m + "-180.csv") };
+                    for (int j = 0; j < 2; j++) { const std::string& p = ps[j]; if (p.empty()) continue; std::string t; long long st = -1;
+                        if (hlSmallRead(p, tsig::MAX_BYTES, t, st)) { auto& e = S->tsText[p]; if (e.first != st) { e.first = st; e.second.swap(t); } S->tsFiles++; }
+                        else if (st == -1) S->tsText.erase(p);   // missing: dropped; too big: the last good text is kept
+                        const auto it = S->tsText.find(p); if (it == S->tsText.end()) continue;
+                        const std::vector<tsig::Sig> v = j == 0 ? tsig::parseWy(it->second.second, m, from, nowL) : tsig::parseCob(it->second.second, m, from, nowL);
+                        all.insert(all.end(), v.begin(), v.end()); } }
+                S->tsSigs = (int)all.size(); S->tsSegs.clear();
+                for (const tsig::Sig& g : tsig::latest(all)) S->tsSegs.push_back(hl::View::CobSeg{ g.mkt, tsig::clock12(g.t), g.dir, tsig::label(g) });
+            }
+        } catch (...) {}
+        S->view.cobs = S->tsSegs; S->tsShown = (int)S->view.cobs.size();
     }
     {   // (2.14.0, Rassul 20:06-20:38 CT mockup v14) the 1st-extreme time table, the Day forecast, RTH % done and the bar's time left
         S->view.tmOk = hsw::timeCum(S->sw, S->view.tmCum); S->view.tmOpenMin = S->mi >= 0 ? hl::MKTS[S->mi].open : -1; S->view.tmQ = S->sw.tmN > 0 && S->sw.tmN < hsw::MIN_N;
@@ -2161,6 +2188,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.34.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.35.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
