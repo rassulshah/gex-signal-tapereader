@@ -25,3 +25,13 @@ levelmarks 53/53 (parity vs mk10: ES identical; NQ adds an 11:03 FT from a 10:54
 
 ## Not done
 Cob+Rev nightly scoring; CL pane-height fix (not approved).
+
+## 18:18-18:29 CT follow-up (Rassul "ok", "switch to 10", "lets keep it at 10 so the BRmax or BVmax should be at least 10")
+| File | Version | Change |
+|---|---|---|
+| VolRangeLogic.h / VolRead / RangeRead | 1.8.0 | The panes no longer compute Bk / Sw: they show them on the candles the price chart marked (RevRead\wy-<MKT>-<secs>.txt, bounded / torn-safe / mtime-cached, no file = no Bk / Sw); the pane count stays its own BVMax / BRMax, on a Bk / Sw bar from 10 up. |
+| LevelMarks.h | 1.4.0 -> 1.5.0 | Strength line from 10 up (1.4.0); NEW Sw rule (1.5.0): a Sw needs its attempt's BVMax or BRMax >= 10 (SW_MIN), else it is removed in fillStrength (so the wy file, the panes and the Reader never see it). A Bk is never removed by it. |
+| RevRead / RevReadMarks / RevReadSettings | 0.20.1 -> 0.20.2 | strength from 10 (0.20.1); the Sw rule via LevelMarks 1.5.0 (0.20.2). |
+| CobSignalLogic.h / CobSignal.cpp | 1.11.0 | Cob tag + Cob Rev strength line from 10 up. |
+| analytics/lra/revread_letters.py | 1.4.0 | sw_filter: the same Sw rule in the nightly port (attempt strength = max over the attempt candles). |
+Tests: tests_levelmarks 59/59 (5 new Sw-rule cases: BVMax 8 / BRMax 9 removed, V35 kept, attempt max counts, a weak Bk kept).

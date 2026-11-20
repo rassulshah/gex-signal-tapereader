@@ -103,6 +103,21 @@ int main(int argc, char** argv) {
         { std::vector<double> V5(30, 10.0); V5[29] = 11; V5[20] = 20; C(lvm::strength(V5, std::vector<double>(30, 0.0), std::vector<char>(30, 1), 29, 29).empty(), "(1.4.0) under 10 = no line"); }
         std::vector<double> V5(60, 10.0); V5[58] = 30; V5[59] = 5; std::vector<char> G5(60, 1); C(lvm::strength(V5, std::vector<double>(60, 0.0), G5, 57, 59) == "V58", "a Sw: the max over its attempt's candles (got " + lvm::strength(V5, std::vector<double>(60, 0.0), G5, 57, 59) + ")"); }
 
+    {   // (1.5.0, Rassul 18:29 CT "the BRmax or BVmax should be at least 10") a Sw needs its attempt's BVMax or BRMax >= 10, else it is removed; a Bk is never removed
+        std::vector<long long> T; std::vector<double> V, R; std::vector<char> G; for (int i = 0; i < 40; ++i) { T.push_back(1000 + i * 180); V.push_back(10); R.push_back(4); G.push_back(1); }
+        V[39] = 11; V[30] = 20;            // candle 39: biggest in 8 only
+        R[25] = 9; R[15] = 20;             // candle 25: range biggest in 9 only; volume 10 = not bigger
+        V[35] = 30;                        // candle 35: biggest volume in 35 (> 10)
+        std::map<long long, lvm::Mark> M; lvm::Mark sw; sw.code = 'S'; sw.dir = 1;
+        M[T[39]] = sw; M[T[25]] = sw; M[T[35]] = sw; lvm::Mark bk; bk.code = 'B'; bk.dir = 1; M[T[24]] = bk;
+        lvm::Mark at; at = sw; at.t0 = T[34]; M[T[36]] = at;   // an attempt 34..36: candle 35 inside it counts
+        lvm::fillStrength(M, T, V, R, G);
+        C(!M.count(T[39]), "(1.5.0) Sw with BVMax 8 is removed");
+        C(!M.count(T[25]), "(1.5.0) Sw with BRMax 9 is removed");
+        C(M.count(T[35]) && M.at(T[35]).st == "V35", "(1.5.0) Sw with BVMax 35 stays, V35");
+        C(M.count(T[36]), "(1.5.0) the attempt's max counts (34..36 holds the V35 candle)");
+        C(M.count(T[24]), "(1.5.0) a weak Bk is never removed by the Sw rule");
+    }
     // ---- (1.3.0) Bk -> FT -> Tst -> Rev: parity with the agreed mockup (price-pane-cleanup-mockup.html, mk10.py) on 11-19 ES / NQ 8:33 AM - 12:33 PM
     for (const char* mk : { "es", "nq" }) {
         std::vector<wyr::Bar> FB; std::vector<wyr::Lvl> FK; startOf.clear(); load((std::string(mk) + "1119full.psv").c_str(), FB, FK);
