@@ -35,3 +35,20 @@ Cob+Rev nightly scoring; CL pane-height fix (not approved).
 | CobSignalLogic.h / CobSignal.cpp | 1.11.0 | Cob tag + Cob Rev strength line from 10 up. |
 | analytics/lra/revread_letters.py | 1.4.0 | sw_filter: the same Sw rule in the nightly port (attempt strength = max over the attempt candles). |
 Tests: tests_levelmarks 59/59 (5 new Sw-rule cases: BVMax 8 / BRMax 9 removed, V35 kept, attempt max counts, a weak Bk kept).
+
+## 2026-11-19 ~18:40 CT - VolRead / RangeRead 1.9.0 + RevRead 0.20.3
+
+Rassul 18:35 CT: "ok but color so it looks nice. build" (mockup vol-range-readbox-mockup.html).
+
+- **VolRead / RangeRead 1.9.0** (VolRangeLogic.h): the read box keeps its 3 plain lines and gets the number column back next to them, for the
+  candle under the mouse: BVMax / BV / BVG / BVR (Range: BRMax / BR / BRG / BRR). Labels grey #94a3b8, the Max bold and gold #f0c040 from 10 up
+  (white below), G green, R red, the other colour's row a grey "-", a thin grey divider. Pane height unchanged; no room -> the column is dropped.
+  Tests: tests_volrange/t_vr190.cpp 58/58 (widths 1180/900/640/420, inside the pane, no overlap, NQ 5:39 PM BVMax 15 gold), t_vr180 26/26, t_vr150_split 69/69.
+- **RevRead / RevReadMarks 0.20.3** (WyFreeze.h, new): the repaint after 5 PM. Earlier sessions were recomputed with hour levels only, so their
+  key-level marks (ES 11-19 9:42 AM Sw PDL V99+ ...) vanished from wy-<MKT>-<spb>.txt. Now each session's wy lines are written (atomic) to
+  RevRead\wymarks-<MKT>-<spb>-<YYYYMMDD>.txt while it is live; once the forming candle is in a newer session the file is read back unchanged
+  (+ only the candles that closed after its last write, e.g. the 3:59 PM candle at 5 PM) and replaces the recompute in the wy file. Torn / foreign /
+  oversized file (512 KB) -> the old recompute. Sessions from before 0.20.3 have no file -> as before. The I / A / E letters of a frozen session
+  in the wy file are frozen too (lsSDMO reads them from there); the pane's own strip is still drawn from the recompute.
+  Test: tests_wyfreeze/t_wyfreeze.cpp 365/365 (a candle-by-candle replay across 5 PM keeps session A's lines byte-identical; restart; torn file;
+  no file; a file written mid-session; a session read in 2 segments = one file; the real NQ wy body round trip). No settings change.

@@ -40,14 +40,15 @@ int main() {
                 if (isTime(p.text)) continue;   // (1.5.3) the candle time is its own text, then the verdict
                 if (isHead(p.text) && p.y0 <= 2) head = true;
                 if (p.text == "Candle:") cand = true;
-                if (p.text == "BVMax" || p.text == "BRMax") oldBox = true;
+                if ((p.text == "BVMax" || p.text == "BRMax") && p.col != vrr::C_LABEL) oldBox = true;   // (1.9.0) the coloured numbers column (grey labels) is back by design; the old white-label box is not
                 if (p.x0 == 642 && p.y0 > 2) { ++sentences; leftR = std::max(leftR, p.x1); }
                 if (p.text == (mode ? "Range" : "Volume") && p.x0 > 642) dataX = std::min(dataX, p.x0);
                 if (p.x0 < v.l || p.x1 > v.r || p.y0 < v.t || p.y1 > v.b) inside = false; }
             CHECK(head && !cand && !oldBox && inside, nm << " pick " << pick << ": the verdict line is drawn, no old Candle: line or box, inside the pane");
             CHECK(sentences >= 1, nm << " pick " << pick << ": at least one sentence under the verdict (" << sentences << ")");
             CHECK(leftR <= 642 + spt::LEFT_MAX, nm << " pick " << pick << ": the sentences stay inside the left column (" << leftR << ")");
-            CHECK(dataX == (1 << 30), nm << " pick " << pick << ": (1.6.0) no numbers table - the plain read only (" << dataX << ")");
+            { bool num = false; for (const vrr::Prim& p : Pm) if (!p.fill && p.x0 > 642 + 100 && (p.text == "BVMax" || p.text == "BRMax") && p.col == vrr::C_LABEL) num = true;
+              CHECK(dataX == (1 << 30) && num, nm << " pick " << pick << ": (1.9.0) the coloured numbers column right of the read, no old numbers table (" << dataX << ")"); }
         }
         { const vrd::Out o = mode ? vrd::Out() : vrd::Out(); (void)o; }
         // the 4,000-lot candle with a 100-lot buy sweep and iceberg offers: the sentences say so in words

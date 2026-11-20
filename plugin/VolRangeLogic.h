@@ -26,7 +26,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-19 18:18 CT "ok" + 18:19 "switch to 10": the panes no longer work out Bk / Sw themselves - they show Bk / Sw exactly on the candles the price chart marked them (lsRevRead's wy-<MKT>-<secs>.txt, the same file lsRevReadMarks draws from), so the panes and the price chart can never disagree; no file = no Bk / Sw. A Bk / Sw bar shows its Max count from 10 up (other bars: from 20 up as before). A Bk / Sw wins over an SR on the same bar)   // was "1.7.0"   // (1.7.0, Rassul 2026-11-19 16:54-16:58 CT "1. ok": the panes' Bk / Sw on the price chart's rules (LevelMarks 1.3.0): a Bk bar's range >= the prior bar's and range or volume up (the BO candle rule); a Sw bar is green for a swept low, red for a swept high; DPoc / WPoc / Open are not levels)
+static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-19 18:31-18:35 CT "those info boxes for the range and vol are missing. add them back", "ok but color so it looks nice. build"): the numbers (Max / consecutive / green / red) back next to the 3-line read, coloured (grey labels, the Max gold from 10, green / red rows); dropped when there is no room   // was "1.8.0";   // (1.8.0, Rassul 2026-11-19 18:18 CT "ok" + 18:19 "switch to 10": the panes no longer work out Bk / Sw themselves - they show Bk / Sw exactly on the candles the price chart marked them (lsRevRead's wy-<MKT>-<secs>.txt, the same file lsRevReadMarks draws from), so the panes and the price chart can never disagree; no file = no Bk / Sw. A Bk / Sw bar shows its Max count from 10 up (other bars: from 20 up as before). A Bk / Sw wins over an SR on the same bar)   // was "1.7.0"   // (1.7.0, Rassul 2026-11-19 16:54-16:58 CT "1. ok": the panes' Bk / Sw on the price chart's rules (LevelMarks 1.3.0): a Bk bar's range >= the prior bar's and range or volume up (the BO candle rule); a Sw bar is green for a swept low, red for a swept high; DPoc / WPoc / Open are not levels)
 // was VERSION = "1.6.0";   // (1.6.0, 2026-11-17 21:17 CT) the read = 3 plain lines (who is winning / why / what to watch, VRRead.h 1.2.0 toPlain), no numbers table   // was "1.5.3"   // (1.5.3, 2026-11-17 14:25 CT) the verdict starts with the candle time ("2:21 PM Quiet", "Now" for the forming candle)   // was "1.5.2"   // (1.5.2, his 11:18 CT screenshot) the verdict wraps; tick decimals fixed (HG 0.011000 -> 0.0110); range size words; reason names   // was "1.5.1"   // (1.5.1, 2026-11-17 09:32 CT screenshot: the mouse right of the last candle reads the last closed candle; the sentences behind the verdict first)   // was "1.5.0"   // (1.5.0, 2026-11-17 Rassul 08:35-08:44 CT: the split read - verdict + plain-English sentences on the left, the numbers on the right)   // was "1.4.0"   // (1.4.0, 2026-11-17 Rassul 06:54-07:02 CT: the pane reads right of the last candle - verdict / candle / two behaviours + the numbers, for the candle under the mouse; Volume looks inside the candle through lsBookFlow's record; VRRead.h)   // was "1.3.5";   // (1.3.5, 2026-11-16 21:17 CT Rassul "lets not color the volume or range based on just being a rev bar . volume and range should only be colored because the volume or range is significaant": the Rev mark is gone)   // was "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
@@ -326,6 +326,7 @@ struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string 
 static const unsigned C_GREY = 0x006B6B6B;
 static const unsigned C_UP = 0x0022C55E, C_DN = 0x00EF4444, C_TXT = 0x00FFFFFF, C_BOXBG = 0x000D0D0D, C_BOXLN = 0x00888888;   // 0x00RRGGBB
 static const int BOX_W = 92, BOX_PAD = 3;
+static const unsigned C_LABEL = 0x0094A3B8, C_GOLD = 0x00F0C040;   // (1.9.0) the numbers column: grey labels, a Max of 10+ in gold
 
 // E = the closed bars; form / haveForm = the forming bar (drawn as a bar, never numbered); v.first / v.last = visible bar indexes
 // (the forming bar's index = E.V.size())
@@ -379,7 +380,16 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         { const int ai = onForm ? at : at - 1; if (ai >= 0 && ai < (int)E.ATR.size()) x.atr = E.ATR[(size_t)ai]; }
         if (!onForm) { x.cx = at < (int)E.pv.size() && E.pv[(size_t)at] ? E.pv[(size_t)at] : (at >= 1 && at - 1 < (int)E.pv.size() ? E.pv[(size_t)at - 1] : 0);
             const auto it = E.inside.find(E.T[(size_t)at]); if (it != E.inside.end()) x.in = it->second; }
-        const vrd::Out o = vrd::toPlain((!onForm && E.deadBar(at)) ? vrd::Out() : (E.mode == VOL ? vrd::volumeRead(x) : vrd::rangeRead(x)), E.mode != VOL);   // (1.6.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no numbers
+        vrd::Out o = vrd::toPlain((!onForm && E.deadBar(at)) ? vrd::Out() : (E.mode == VOL ? vrd::volumeRead(x) : vrd::rangeRead(x)), E.mode != VOL);
+        // (1.9.0, Rassul 2026-11-19 18:31-18:35 CT "those info boxes for the range and vol are missing. add them back", "ok but color so it looks nice. build")
+        // the numbers next to the read again, in his 11-14 order - Max on top, the consecutive count, green, red; the other colour's row shows "-"
+        if (o.ok) { const std::string pr = E.mode == VOL ? "BV" : "BR"; const bool dead = !onForm && E.deadBar(at);
+            auto row = [](const std::string& l, const std::string& a, int c) { vrd::Row r; r.lab = l; r.a = a; r.ca = c; return r; };
+            o.rows.clear();
+            o.rows.push_back(row(pr + "Max", dead ? "-" : fm(s.mx()), dead ? 2 : (s.mx() >= SHOW_MIN_LV ? 3 : 0)));
+            o.rows.push_back(row(pr, dead ? "-" : fm(s.all), dead ? 2 : 0));
+            o.rows.push_back(row(pr + "G", !dead && s.green ? fm(s.same) : "-", !dead && s.green ? 1 : 2));
+            o.rows.push_back(row(pr + "R", !dead && !s.green ? fm(s.same) : "-", !dead && !s.green ? -1 : 2)); }   // (1.6.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no numbers
         if (o.ok) {   // (1.5.0, Rassul 2026-11-17 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have
             // the data points") LEFT: the verdict line, then plain-English sentences word-wrapped (most important first); RIGHT: the numbers
             auto tw = [&](const std::string& q) { return v.textW ? v.textW(q) : (int)q.size() * 6; };
@@ -405,10 +415,10 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
                 for (size_t i = 0; i < EX.size(); ++i) put2(EX[i], x0, y0 + (int)(i + (size_t)nh) * rh, C_TXT, false);
                 if (cl.dataOn) {
                     const int xb = x0 + cl.leftW + spt::GAP, ca = xb + wk + 12, cb = ca + wa2 + 14;
-                    auto colOf = [](int c) -> unsigned { return c == 1 ? C_UP : c == -1 ? C_DN : c == 2 ? C_BOXLN : C_TXT; };
+                    auto colOf = [](int c) -> unsigned { return c == 1 ? C_UP : c == -1 ? C_DN : c == 2 ? C_LABEL : c == 3 ? C_GOLD : C_TXT; };   // (1.9.0) 3 = gold (a Max of 10+)
                     { Prim e; e.fill = true; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::max(nh + (int)EX.size(), std::min(fit, (int)o.rows.size())) * rh); e.col = 0x00374151; P.push_back(e); }
                     for (size_t i = 0; i < o.rows.size() && (int)i < fit; ++i) { const vrd::Row& r = o.rows[i]; const int y = y0 + (int)i * rh;
-                        put2(r.lab, xb, y, C_BOXLN, false); put2(r.a, ca, y, colOf(r.ca), true); put2(r.b, cb, y, colOf(r.cb), true); }
+                        put2(r.lab, xb, y, C_LABEL, false); put2(r.a, ca, y, colOf(r.ca), i == 0 || r.ca != 2); put2(r.b, cb, y, colOf(r.cb), true); }   // (1.9.0) grey labels; values bold (a grey - plain)
                 }
             }
         }
