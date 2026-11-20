@@ -1,5 +1,8 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.41.3 (2026-11-20 12:22 CT, Rassul "yes range instead is good. yes cob and all market sweep voice alerts"): the right pill = "Range 133%"
+ *         (RTH range so far / ADR, grey under 100%, gold from 100%) in place of the Range Day pill; every chart speaks EVERY market's sweeps and
+ *         Cobs once (SweepVoice 1.1.0 offerCob, clips cob-<MKT>-<up|down>.wav).
  *  2.41.2 (2026-11-20 12:04 CT, Rassul "lets only keep cob and sweeps because of the limited room"): no BkTst tags on the signal line.
  *  2.41.1 (2026-11-20 11:58 CT, Rassul "shorten the strip to the vertical price line so it doesnt overlap the delta profile"): the box runs
  *         to the last candle's right edge, not to the price axis.
@@ -372,7 +375,7 @@ struct HLState {
     long long sessStamp = -2; time_t sessChecked = 0; std::string sessGam, sessExp; int sessAge = -1; bool sessRec = true;
     // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
     // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
-    std::map<std::string, std::pair<long long, std::string> > tsText; int tsSigs = 0, tsShown = 0, tsFiles = 0; time_t tsChecked = 0; std::vector<tsig::Sig> tsLatest; int tsExpired = 0; long long tsClock = 0;   // (2.37.2) the latest per market / type, kept unfiltered; aged every draw on the bar clock   // (2.35.0) wy / Cob record texts by path (stamp, text), the signals found / shown
+    std::map<std::string, std::pair<long long, std::string> > tsText; int tsSigs = 0, tsShown = 0, tsFiles = 0; time_t tsChecked = 0; std::vector<tsig::Sig> tsLatest; std::vector<tsig::Sig> tsAll;   /* (2.41.3) every market's Cob / Sw this session, for the voice */ int tsExpired = 0; long long tsClock = 0;   // (2.37.2) the latest per market / type, kept unfiltered; aged every draw on the bar clock   // (2.35.0) wy / Cob record texts by path (stamp, text), the signals found / shown
     // (2.36.0) the Now levels line: this session's closed bars + the forming one (its high / low widened by the live price once a second),
     // the wy marks text (re-read at most every 3 s, by stamp), the finished line and its box
     std::vector<nowl::Bar> nlBars; double nlFh = NAN, nlFl = NAN; long long nlMs = -1, nlWyStamp = -2; time_t nlWyChecked = 0; std::string nlWy, nlWhy = "not run yet";
@@ -1882,6 +1885,13 @@ int HodLod::draw(void)
     {   hrd::In I; I.ok = S->view.rdOk; I.on = S->view.rdOn; I.pr = S->view.rdPr; I.gap = S->view.rdGap; I.news = S->view.rdNews; I.x30 = S->view.rdX30;
         S->rdOut = hrd::read(S->rdf, I);
         S->view.rangePill = S->rdOut.kind < 0 ? hl::Seg{ std::string(), 0 } : hl::Seg{ S->rdOut.s, S->rdOut.kind == 1 ? hl::C_GREEN : (S->rdOut.kind == 2 ? hl::C_RED : hl::C_GREY) };
+        // (2.41.3, Rassul 2026-11-20 12:09 / 12:22 CT "instead of big 52%, can you indicate the % of the avg day session range that has been consumed", "yes
+        // range instead is good") the pill = the RTH range so far / the average day range (ADR = the box's trimmed mean of the prior RTH ranges);
+        // grey under 100%, gold from 100%; no range yet / no ADR = no pill. The Range Day call is still computed (status / nightly), not drawn.
+        {   const double a = S->view.adrTrim, r = (double)S->view.rangeT * S->tick;
+            if (S->view.rangeT > 0 && S->tick > 0 && std::isfinite(a) && a > 0) { const int pc = (int)std::llround(100.0 * r / a);
+                S->view.rangePill = hl::Seg{ "Range " + std::to_string(pc) + "%", pc >= 100 ? hl::C_AMBER : hl::C_GREY }; }
+            else S->view.rangePill = hl::Seg{ std::string(), 0 }; }
     }
     {   std::vector<hsw::Row> hi, lo; const double openPx = (S->view.has && !S->view.prior) ? (double)S->view.open * tick : 0.0;
         hsw::build(S->sw, S->swKeys, openPx, hl::MKTS[S->mi < 0 ? 0 : S->mi].dec, hi, lo);
@@ -1997,7 +2007,7 @@ int HodLod::draw(void)
                         const auto it = S->tsText.find(p); if (it == S->tsText.end()) continue;
                         const std::vector<tsig::Sig> v = j == 0 ? tsig::parseWy(it->second.second, m, from, nowL) : tsig::parseCob(it->second.second, m, from, nowL);
                         all.insert(all.end(), v.begin(), v.end()); } }
-                S->tsSigs = (int)all.size(); S->tsLatest = tsig::latest(all);
+                S->tsSigs = (int)all.size(); S->tsLatest = tsig::latest(all); S->tsAll = all;
             }
             // (2.37.2, Rassul 22:53 CT "remove signals after an hour") a tag shows for 60 min after its candle, aged on the chart's newest
             // bar time (the last closed bar's END = the forming bar's start); the PC clock only when no bar time is known
@@ -2314,10 +2324,19 @@ int HodLod::draw(void)
                 const long long nowL = hlNowCt(); if (S->svStart == 0) S->svStart = nowL;
                 if (S->mi < 0) S->svWhy = "market not known";
                 else {
-                    const std::vector<svx::Sw> sws = svx::parseSw(S->nlWy, S->svStart, nowL + 60);
+                    // (2.41.3, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") EVERY market's sweeps and Cobs, from the same
+                    // files the signal line reads (S->tsAll); the ONE hub per DLL says each once even when several charts offer it
+                    const std::vector<svx::Sw> own = svx::parseSw(S->nlWy, S->svStart, nowL + 60);
                     auto colour = [&](long long t, int dir) -> int { for (size_t q = 0; q + 1 < S->nlBars.size(); q++) if (S->nlBars[q].t == t) { const nowl::Bar& b = S->nlBars[q]; return dir > 0 ? (b.c > b.o ? 1 : 0) : (b.c < b.o ? 1 : 0); } return -1; };
-                    std::lock_guard<std::mutex> lk(g_svMu);
-                    S->svOffered += g_sv.offer(S->mkt, S->svStart, nowL, sws, hl::MKTS[S->mi].open, hl::MKTS[S->mi].close, colour);
+                    auto unknown = [](long long, int) -> int { return -1; };   // another market's candle: the wy file holds only drawn Sw marks (colour rule applied there)
+                    std::lock_guard<std::mutex> lk(g_svMu); int nSw = (int)own.size(), nCob = 0;
+                    S->svOffered += g_sv.offer(S->mkt, S->svStart, nowL, own, hl::MKTS[S->mi].open, hl::MKTS[S->mi].close, colour);
+                    for (int k = 0; k < 7; k++) { const std::string m = hl::MKTS[k].code; std::vector<svx::Sw> sw;
+                        for (const tsig::Sig& g : S->tsAll) { if (g.mkt != m) continue;
+                            if (g.type == "Sw" && m != S->mkt) { svx::Sw x; x.t = g.t; x.dir = g.dir; x.lv = svx::canon(g.lv); x.st = 99; if (!x.lv.empty() && x.t >= S->svStart && x.t <= nowL + 60) sw.push_back(x); }
+                            else if (g.type == "Cob" && g.t >= S->svStart && g.t <= nowL + 60) { S->svOffered += g_sv.offerCob(m, S->svStart, nowL, g.t, g.dir, hl::MKTS[k].open, hl::MKTS[k].close); ++nCob; } }
+                        if (!sw.empty()) { nSw += (int)sw.size(); S->svOffered += g_sv.offer(m, S->svStart, nowL, sw, hl::MKTS[k].open, hl::MKTS[k].close, unknown); } }
+                    const int sws = nSw; (void)nCob;
                     bool miss = false; std::string usedPath;
                     const bool played = g_sv.pump(hlNowMs(), [&](const std::string& f) -> long long {
                             usedPath = flexPath(std::string("Voice") + HL_SEP + f); if (usedPath.empty()) return -1;
@@ -2329,7 +2348,7 @@ int HodLod::draw(void)
                     if (played) { const std::string lp = flexPath(std::string("HodLod") + HL_SEP + "SweepVoice.log");
                         char tb[32]; { const long long n2 = nowL; std::snprintf(tb, sizeof tb, "%s", nowl::clock12(n2).c_str()); }
                         if (!lp.empty()) hlAppend(lp, "# lsHodLod spoken sweep alerts: <CT clock>,<market>,<text>,<clip>,<played|MISSING - system sound>,<version>", std::string(tb) + "," + S->mkt + "," + g_sv.last + "," + usedPath + "," + (miss ? "MISSING - system sound" : "played") + "," + hl::HL_VERSION); }
-                    S->svWhy = "start " + nowl::clock12(S->svStart) + ",sw marks after start " + std::to_string((int)sws.size()) + ",queue " + std::to_string((int)g_sv.q.size());
+                    S->svWhy = "start " + nowl::clock12(S->svStart) + ",sw marks after start (all markets) " + std::to_string(sws) + ",cobs " + std::to_string(nCob) + ",queue " + std::to_string((int)g_sv.q.size());
                 }
             } catch (...) { S->svWhy = "fault (kept quiet)"; }
         }
@@ -2571,6 +2590,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.41.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.41.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
