@@ -3,6 +3,8 @@
 // (ES 11-19 9:42 AM Sw PDL V99+ ...) vanished from wy-<MKT>-<spb>.txt. Now each session's lines are kept in
 // RevRead\wymarks-<MKT>-<spb>-<YYYYMMDD>.txt (written atomically) while the session is live, and once it is over the file is
 // read back unchanged instead of the recompute.
+// (RevRead 0.21.7, 2026-11-20 17:10 CT: after the 4:16 PM restart ES / NQ / GC wrote their day files EMPTY over files that held the day's marks)
+// an empty computation never overwrites a session file that has lines, and an empty file of a finished session is recomputed, not kept.
 // SDK-free (tests_wyfreeze). File:  WYF|1|<MKT>|<spb>|<sess>|<t0>|<t1>|<n>  then n body lines (as in the wy file)  then END|<n>.
 #pragma once
 #include <algorithm>
@@ -86,11 +88,12 @@ inline std::vector<std::string> apply(const std::vector<std::string>& body, cons
     for (const Seg& g : ss) {
         const std::string fp = pathOf(g.nm); const std::vector<std::string> comp = inRange(body, g.t0, g.t1); const std::string old = get(fp);
         const Sess fz = parse(old, mk, spb, g.nm);
-        if (g.seg == 0) { const bool live = liveSame || !fz.ok; const std::vector<std::string> keep = live ? comp : extend(fz, comp);
+        if (g.seg == 0) { bool live = liveSame || !fz.ok; if (live && comp.empty() && fz.ok && !fz.lines.empty()) live = false;   // (0.21.7) never blank a file that has marks
+            const std::vector<std::string> keep = live ? comp : extend(fz, comp);
             const long long a = live ? g.t0 : std::min(g.t0, fz.t0), b = live ? g.t1 : std::max(g.t1, fz.t1);
             const std::string nt = fileText(mk, spb, g.nm, a, b, keep); if (nt != old) put(fp, nt);
             if (!live) { Rep r; r.t0 = a; r.t1 = b; r.lines = keep; reps.push_back(r); } }
-        else if (fz.ok) { Rep r; r.t0 = std::min(g.t0, fz.t0); r.t1 = std::max(g.t1, fz.t1); r.lines = extend(fz, comp); reps.push_back(r); } }
+        else if (fz.ok && !fz.lines.empty()) { Rep r; r.t0 = std::min(g.t0, fz.t0); r.t1 = std::max(g.t1, fz.t1); r.lines = extend(fz, comp); reps.push_back(r); } }
     return compose(body, reps);
 }
 

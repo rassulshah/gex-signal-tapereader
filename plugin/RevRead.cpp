@@ -264,7 +264,7 @@ public:
         long long stamp = -1; int ctSec = 0; long long localSec = 0; int rthO = 510, rthC = 900;
         rvh::PocStore ps; long long fedCandle = 0; bool aligned = true;
         double vwPV = 0, vwV = 0; std::string vwSession; long long vwTick = 0;
-        nl::Cache lvc; long long lvlMs = -100000; size_t nLevels = 0; int lvNoFeed = -1;   // (0.21.4) levels read without the order feed (-1 = the engine supplied them)
+        nl::Cache lvc; long long lvlMs = -100000; size_t nLevels = 0; int lvNoFeed = -1; std::string lmDiag;   // (0.21.7) LEVEL_MARKS status: candles / marks per session read, errors   // (0.21.4) levels read without the order feed (-1 = the engine supplied them)
         int hDir = 0, hRot = 0; long long hPx = 0, hTop = 0; bool hBroken = false; long hCount = -1;
         long long lastPx = 0, barLo = 0, barHi = 0;                       // the forming candle (ticks)
         long long parMs = -100000; long long parSig = -2; int parKeys = 0; int pbBits = 0; long long pbMs = -100000;
@@ -438,6 +438,7 @@ public:
         try { o << "\n" << e->sr.status(); } catch (...) {}
         try { int op = 0, cf = 0; for (const acc::Zone& z : e->ac.Z) { if (z.state == acc::OPEN) ++op; else if (z.state == acc::CONFIRMED) ++cf; }
               o << "\nACCUM,AccumLogic " << acc::VERSION << ",UNPROVEN (every zone is a ?),zones " << e->ac.Z.size() << ",open " << op << ",confirmed " << cf << ",candles " << e->ac.B.size() << ",absorbed reads " << e->ac.A.size() << ",resumed after " << e->ac.resume << ",file " << e->acPath << ",writes " << e->acWrites << ",fails " << e->acFails; } catch (...) {}
+        o << "\nLEVEL_MARKS," << (e->lmDiag.empty() ? std::string("not computed yet") : e->lmDiag) << " (0.21.7: candles / wy letters / Bk-Sw-Cx marks per session read)";
         o << "\nLEVELS_NO_FEED," << e->lvNoFeed << " (0.21.4: key levels read from the level files when the order engine is not running; -1 = the engine supplied them)" << "\nREV_READ,version " << RVS_VERSION << ",market " << e->mkt << ",session " << e->session << ",events " << e->events << ",skipped " << e->skipped << (e->note.empty() ? std::string() : ",note " + e->note)
           << ",fills " << (E ? E->fills : 0) << ",side mismatch " << (E ? E->sideMismatch : 0) << ",book " << (E ? E->book.size() : 0) << ",blocks " << (E ? E->hist.size() : 0) << ",normal p95 " << (E ? E->p95 : 0)
           << ",stories " << (E ? E->nextId - 1 : 0) << ",letters " << (E ? E->marks.size() : 0) << " (reloaded " << e->marksLoaded << ")" << ",levels " << e->nLevels << ",params keys " << e->parKeys << ",proven " << (E ? E->P.proven : 0)
@@ -667,7 +668,7 @@ public:
                         if (const off::Rec* r = recClosed(i)) { b.book = true; for (int s2 = 0; s2 < 2; ++s2) { b.addNet[s2] = r->addC[s2] - r->pullC[s2]; b.pull[s2] = r->pullC[s2]; /* (0.21.0) P / X */ b.aggrMax[s2] = r->aggrMax[s2]; b.sweepLv[s2] = r->sweepLv[s2]; b.ice[s2] = r->ice[s2]; } }
                         struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)times[i], &t)) b.when = off::clock12(t.tm_hour, t.tm_min);
                         WB.push_back(b); }
-                    nBars += (int)WB.size();
+                    nBars += (int)WB.size(); std::string dg = "s" + std::to_string(seg) + " bars " + std::to_string(WB.size());   // (0.21.7) LEVEL_MARKS
                     try { std::vector<wyr::Lvl> lvI; if (seg == 0) for (const wyr::Lvl& z : lvNow) if (lvm::levelForI(z.name, z.px)) lvI.push_back(z);   /* (0.21.2) no file PHH / PHL for the I (they move every hour - a repaint); the candle hour levels stay */
                         const wyr::Out o = wyr::run(WB, S.tick, dec, wyr::Params(), lvI); for (const auto& kv : o.marks) all.marks[kv.first] = kv.second; for (const auto& kv : o.reads) all.reads[kv.first] = kv.second;
                         // (0.19.0, Rassul 10:37 CT "put level under I too") the I's level as the candle tag's short name (MenthorQ / gamma: no name)
@@ -678,12 +679,15 @@ public:
                                 if (mk2 != o.marks.end()) for (const wyr::Mark& m : mk2->second) if (m.k == 'I') sd = m.dir;
                                 wyr::Lvl z; if (ic != o.ilvC.end() && sd != 0 && lvm::iPick(ic->second, sd, z)) { nm = z.name; lpx = z.px; h = z.hb; } }
                             if (!lvm::iKey(lvm::pri(nm, h))) { nm.clear(); h = 0; }   // (0.21.3, Rassul 10:37 CT "I should only be on key levels that are named like overnight etc..") no hour level names an I
-                            const std::string sn = lvm::iLevel(nm, h, nm.find("high") != std::string::npos); iLvAll[kv.first] = std::make_pair(sn, lpx); } } catch (...) {}
+                            const std::string sn = lvm::iLevel(nm, h, nm.find("high") != std::string::npos); iLvAll[kv.first] = std::make_pair(sn, lpx); }
+                        dg += " wy " + std::to_string(o.marks.size()); } catch (const std::exception& ex) { dg += std::string(" wy ERR ") + ex.what(); } catch (...) { dg += " wy ERR"; }
                     try { const wyr::Out o2 = wyr::more(WB, S.tick, dec); for (const auto& kv : o2.marks) moreAll.marks[kv.first] = kv.second; for (const auto& kv : o2.reads) moreAll.reads[kv.first] = kv.second; } catch (...) {}   // (0.21.0)
                     // (0.19.0, Rassul 10:20-10:40 CT, mockup v8, "go") Bk / Sw / Cx with one level each - the current session with the level files, earlier ones with their hour levels
                     try { const std::map<long long, lvm::Mark> lm = lvm::run(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>()); for (const auto& kv : lm) lvAll[kv.first] = kv.second;
                         // (0.20.0, Rassul 15:35-16:58 CT, price-pane-cleanup-mockup.html) Bk -> FT -> Tst -> Rev (LevelMarks 1.3.0 seq), the session by itself
-                        const std::map<long long, std::vector<lvm::SMark> > sq = lvm::seq(WB, lm); for (const auto& kv : sq) seqAll[kv.first] = kv.second; } catch (...) {}
+                        const std::map<long long, std::vector<lvm::SMark> > sq = lvm::seq(WB, lm); for (const auto& kv : sq) seqAll[kv.first] = kv.second;
+                        dg += " lv " + std::to_string(lm.size()) + " keys " + std::to_string(seg == 0 ? lvNow.size() : 0); } catch (const std::exception& ex) { dg += std::string(" lv ERR ") + ex.what(); } catch (...) { dg += " lv ERR"; }
+                    e.lmDiag = (seg == 0 ? std::string() : e.lmDiag + "; ") + dg;
                     { SegR r; r.seg = seg; r.nm = sessName(segEnd); r.t0 = (long long)times[first]; r.t1 = (long long)times[segEnd]; segs.push_back(r); }   // (0.20.3)
                     segEnd = first - 1; }
                     // (0.19.4, Rassul 14:14 CT "I should not print if there is no level") an I without a named level is not kept (letter strip, candle tag and file alike)
@@ -697,7 +701,7 @@ public:
                             std::vector<long long> T((size_t)nC); std::vector<double> V((size_t)nC), R((size_t)nC); std::vector<char> G((size_t)nC);
                             for (int i = 0; i < nC; ++i) { T[(size_t)i] = (long long)times[i]; const double vv = (double)vo[i]; V[(size_t)i] = std::isfinite(vv) && vv > 0 ? vv : 0.0;
                                 R[(size_t)i] = lvm::rangeTicks((double)sh[i], (double)sl[i], S.tick); G[(size_t)i] = (double)sc[i] >= (double)so[i] ? 1 : 0; }
-                            if (std::is_sorted(T.begin(), T.end())) { lvm::fillStrength(lvAll, T, V, R, G);
+                            if (std::is_sorted(T.begin(), T.end())) { lvm::fillStrength(lvAll, T, V, R, G); e.lmDiag += " | after strength " + std::to_string(lvAll.size());
                                 for (auto& kv : seqAll) for (lvm::SMark& m : kv.second) if (m.code == 'R') m.st = lvm::strengthAt(T, V, R, G, kv.first);   // (0.20.0) the Rev's strength line
                                 for (const auto& kv : all.marks) for (const wyr::Mark& m : kv.second) if (m.k == 'I') { const std::string st = lvm::strengthAt(T, V, R, G, kv.first); if (!st.empty()) iStAll[kv.first] = st; }
                                 // (0.21.3, Rassul 10:37 CT "we should have a 20 threshold just like sweeps") an I whose own candle's BVMax / BRMax is under 20 is not kept
