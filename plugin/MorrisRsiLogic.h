@@ -1,4 +1,10 @@
-// MorrisRsiLogic.h 0.1.1 (2026-11-20) -- lsMorrisRSI: the Morris modified RSI in its own pane, with regular divergences.
+// MorrisRsiLogic.h 0.1.2 (2026-11-20) -- lsMorrisRSI: the Morris modified RSI in its own pane, with regular divergences.
+// 0.1.2 Rassul 2026-11-20 (ES overnight 11-19/20: a clear bullish divergence - low ~7,148 at ~11:15 PM RSI ~20, lower low ~7,145 at ~1:18 AM
+//       RSI ~47 - was not marked because smaller ZigZag lows sat between them and they were ~40 candles apart; 08:00 CT "go"): a confirmed
+//       pivot is compared with the prior swing it UNDERCUT - the lowest confirmed pivot low (highest pivot high) within the last 60 candles,
+//       the new one excluded - instead of only the previous consecutive pivot <= 30 candles back. Same RSI tests (higher RSI low with the
+//       1st RSI <= 40 / lower RSI high with the 1st RSI >= 60), decided at the 2nd pivot's confirmation, never changed; one Dv per pivot.
+//       Measured on Sep - Nov 3-min bars, RTH sessions: count per session ~1.0 - 1.13x the old rule in all 7 markets -> no RSI-gap minimum.
 // 0.1.1 Rassul 2026-11-20 05:46 CT "make the red and green lines dashed and slightly thinner and get rid of the gray dashed line": the 70 (red)
 //       and 30 (green) lines are drawn as short explicit dashes (DASH_ON px on, DASH_OFF px off, 1 px, solid pen per dash - does not depend on
 //       the platform's pen style); the grey 50 line is gone. The RSI curve and everything else unchanged.
@@ -8,8 +14,8 @@
 //   RSI     change = close - the close 1 candle earlier; AG / AL = SIMPLE means of the gains / losses over ONLY the last 20 changes (Morris:
 //           no running Wilder average); RSI = 100 - 100 / (1 + AG / AL) (AL = 0 -> 100, both 0 -> 50); plotted = the 3-candle simple average
 //   colour  blue between 30 and 70, green under 30, red over 70 (a segment takes the colour of its middle value)
-//   Dv      regular divergence between two CONSECUTIVE pivots of the 3-bar High / Low ZigZag (the chart's ZigZag, wyr::legs rules), at most
-//           30 candles apart, decided when the 2nd pivot is confirmed (never changed after): bullish = the 2nd low lower in price, the RSI at
+//   Dv      regular divergence between a confirmed pivot of the 3-bar High / Low ZigZag (the chart's ZigZag, wyr::legs rules) and the prior
+//           swing it undercut / overshot = the lowest pivot low / highest pivot high within the last DV_LOOK (60) candles (0.1.2), decided when the 2nd pivot is confirmed (never changed after): bullish = the 2nd low lower in price, the RSI at
 //           it higher, and the RSI at the 1st low <= 40; bearish = the 2nd high higher, the RSI lower, the RSI at the 1st high >= 60
 // SDK-free: the host feeds CLOSED candles; the forming candle is drawn live from liveValue(). No settings, no hovers.
 #pragma once
@@ -23,11 +29,11 @@
 
 namespace mrsi {
 
-static const char* const VERSION = "0.1.1";
+static const char* const VERSION = "0.1.2";
 static const int N = 20, SM = 3;                      // RSI period, smoothing (simple)
 static const double OB = 70.0, OS = 30.0, MID = 50.0;
 static const int DASH_ON = 4, DASH_OFF = 4;            // 70 / 30 line dashes (px), 1 px wide
-static const int DV_MAX = 30;                          // the two pivots at most 30 candles apart
+static const int DV_LOOK = 60;                         // 0.1.2: the prior swing = the extreme pivot within the last 60 candles (was: the consecutive pivot <= 30)
 static const double BULL_ZONE = 40.0, BEAR_ZONE = 60.0;
 static const unsigned C_BLUE = 0x003D8BFF, C_GREEN = 0x0026C35A, C_RED = 0x00E04848, C_GREY = 0x00555555, C_WHITE = 0x00FFFFFF;   // IRT COLOR = 0x00RRGGBB (as SdmoLogic.h)
 
@@ -68,10 +74,14 @@ struct Engine {
     }
     void pivot(int k, int side) {                         // side +1 = a confirmed pivot LOW, -1 = a pivot HIGH
         std::vector<int>& P = side > 0 ? lows : highs;
-        if (!P.empty()) {
-            const int a = P.back();
+        int a = -1;                                       // 0.1.2: the prior swing = the lowest low / highest high pivot within DV_LOOK candles
+        for (size_t q = P.size(); q-- > 0;) {             // newest first; ties keep the later pivot
+            const int j = P[q]; if (k - j > DV_LOOK) break; if (j >= k) continue;
+            if (a < 0 || (side > 0 ? B[(size_t)j].l < B[(size_t)a].l : B[(size_t)j].h > B[(size_t)a].h)) a = j;
+        }
+        if (a >= 0) {
             const double ra = val[(size_t)a], rb = val[(size_t)k];
-            if (k - a <= DV_MAX && !std::isnan(ra) && !std::isnan(rb)) {
+            if (!std::isnan(ra) && !std::isnan(rb)) {
                 const bool bull = side > 0 && B[(size_t)k].l < B[(size_t)a].l && rb > ra && ra <= BULL_ZONE;
                 const bool bear = side < 0 && B[(size_t)k].h > B[(size_t)a].h && rb < ra && ra >= BEAR_ZONE;
                 if (bull || bear) { Dv d; d.t1 = B[(size_t)a].t; d.t2 = B[(size_t)k].t; d.dir = side; dv.push_back(d); }
@@ -159,7 +169,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v) {
 
 inline std::string statusText(const Engine& E, const std::string& mkt, const std::string& sym, int spb) {
     const int n = (int)E.B.size();
-    std::string s = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nSPB," + std::to_string(spb) + "\nRULES,Morris RSI 20 (simple means over the last 20 changes) smoothed 3 simple; 70 / 30; Dv between consecutive ZigZag pivots <= 30 candles, 1st RSI <= 40 / >= 60\nBARS," + std::to_string(n) + "\n";
+    std::string s = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nSPB," + std::to_string(spb) + "\nRULES,Morris RSI 20 (simple means over the last 20 changes) smoothed 3 simple; 70 / 30; Dv vs the undercut / overshot swing = lowest / highest ZigZag pivot within 60 candles, 1st RSI <= 40 / >= 60\nBARS," + std::to_string(n) + "\n";
     if (n > 0) s += "LAST," + std::to_string(E.B[(size_t)n - 1].t) + "," + (std::isnan(E.val[(size_t)n - 1]) ? std::string("-") : fmt1(E.val[(size_t)n - 1])) + "\n";
     s += "DIVERGENCES," + std::to_string(E.dv.size()) + "\n";
     return s;

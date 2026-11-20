@@ -1,8 +1,12 @@
-// t_morrisrsi.cpp -- MorrisRsiLogic.h 0.1.1 tests
+// t_morrisrsi.cpp -- MorrisRsiLogic.h 0.1.2 tests (0.1.2: undercut-swing divergences, ES 11-19/20 fixture, mirror, 60-candle limit, restart replay)
 #include "../MorrisRsiLogic.h"
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <map>
+#ifndef ES_FIX
+#define ES_FIX "tests_morrisrsi/mrsi_es1120_bars.txt"
+#endif
 static int ok = 0, bad = 0;
 #define C(c, m) do { if (c) ++ok; else { ++bad; std::printf("FAIL %d: %s\n", __LINE__, m); } } while (0)
 static mrsi::Bar bar(long long t, double c, double h = -1, double l = -1) { mrsi::Bar b; b.t = t; b.c = c; b.h = h < 0 ? c + 0.5 : h; b.l = l < 0 ? c - 0.5 : l; return b; }
@@ -33,13 +37,38 @@ int main(int argc, char** argv) {
       Engine E = run(c, l);
       bool bull = false; for (const Dv& d : E.dv) if (d.dir == 1) bull = true;
       C(bull, "bullish divergence: lower low, higher RSI, 1st RSI <= 40");
-      // the same path with the 2nd low 31+ candles later = no divergence
-      std::vector<double> c2, l2; p = 200; for (int k = 0; k < 25; ++k) { p -= 1.0; c2.push_back(p); l2.push_back(p - 0.25); }
-      for (int k = 0; k < 4; ++k) { p += 1.5; c2.push_back(p); l2.push_back(p - 0.25); }
-      for (int k = 0; k < 30; ++k) { p -= 0.21; c2.push_back(p); l2.push_back(p - 0.25); }
-      for (int k = 0; k < 6; ++k) { p += 1.5; c2.push_back(p); l2.push_back(p - 0.25); }
-      Engine F = run(c2, l2); bool any = false; for (const Dv& d : F.dv) if (d.dir == 1) any = true;
-      C(!any, "pivots more than 30 candles apart = no divergence"); }
+      C(E.dv.size() == 1 && E.dv[0].t1 == 24 * 180, "consecutive case: the Dv starts at the 1st low (A)");
+      // 0.1.2 60-candle limit: the same path with the 2nd low n candles later (slow drift down) - 40 apart = marked, 61+ apart = none
+      auto drift = [&](int nChop) { std::vector<double> c2, l2; double q = 200; for (int k = 0; k < 25; ++k) { q -= 1.0; c2.push_back(q); l2.push_back(q - 0.25); }
+        for (int k = 0; k < 4; ++k) { q += 1.5; c2.push_back(q); l2.push_back(q - 0.25); }
+        for (int k = 0; k < nChop; ++k) { q += (k % 2 ? 0.6 : -0.6); c2.push_back(q); l2.push_back(q - 0.25); }      // sideways above A
+        for (int k = 0; k < 4; ++k) { q -= 2.0; c2.push_back(q); l2.push_back(q - 0.25); }                             // drop under A
+        for (int k = 0; k < 6; ++k) { q += 1.5; c2.push_back(q); l2.push_back(q - 0.25); }
+        Engine F = run(c2, l2); int gap = -1; for (const Dv& d : F.dv) if (d.dir == 1) gap = (int)((d.t2 - d.t1) / 180); return gap; };
+      const int g38 = drift(30), g60 = drift(52), g61 = drift(53), g70 = drift(62);
+      C(g38 == 38, "38 candles apart = marked (0.1.1 missed these)"); C(g60 == 60, "exactly 60 candles apart = marked");
+      C(g61 == -1, "61 candles apart = no divergence"); C(g70 == -1, "more than 60 candles apart = no divergence"); }
+    { // 0.1.2 THE CASE: a deep low A (RSI ~20), then a chop of SMALLER ZigZag lows above A, then a lower low B ~44 candles later with a higher RSI
+      std::vector<double> c, l; double p = 200; for (int k = 0; k < 25; ++k) { p -= 1.0; c.push_back(p); l.push_back(p - 0.25); }   // A at index 24
+      for (int k = 0; k < 4; ++k) { p += 1.0; c.push_back(p); l.push_back(p - 0.25); }
+      for (int r = 0; r < 4; ++r) { for (int k = 0; k < 4; ++k) { p -= 0.8; c.push_back(p); l.push_back(p - 0.25); } for (int k = 0; k < 4; ++k) { p += 0.9; c.push_back(p); l.push_back(p - 0.25); } }  // small lows above A
+      for (int k = 0; k < 8; ++k) { p -= 0.9; c.push_back(p); l.push_back(p - 0.25); }    // B under A
+      for (int k = 0; k < 6; ++k) { p += 1.5; c.push_back(p); l.push_back(p - 0.25); }
+      Engine E = run(c, l); int lowsBetween = 0; for (const int j : E.lows) if (j > 24 && E.B[(size_t)j].l > E.B[24].l) ++lowsBetween;
+      bool hit = false; for (const Dv& d : E.dv) if (d.dir == 1 && d.t1 == 24 * 180 && E.B[(size_t)(d.t2 / 180)].l < E.B[24].l) hit = true;
+      C(lowsBetween >= 2, "fixture: smaller ZigZag lows sit between A and B");
+      C(hit, "undercut swing: B is compared with A (not the consecutive small low) -> bullish Dv");
+      int perPivot = 0; std::map<long long, int> cnt; for (const Dv& d : E.dv) if (++cnt[d.t2] > 1) ++perPivot; C(perPivot == 0, "at most one Dv per pivot");
+      // mirror: the same path upside down = a bearish Dv from the high A
+      std::vector<double> mc, mh; for (size_t i = 0; i < c.size(); ++i) { mc.push_back(400 - c[i]); mh.push_back(400 - l[i]); }
+      Engine M; for (size_t i = 0; i < mc.size(); ++i) M.add(bar((long long)i * 180, mc[i], mh[i], mc[i] - 0.25));
+      bool mhit = false, mbull = false; for (const Dv& d : M.dv) { if (d.dir == -1 && d.t1 == 24 * 180) mhit = true; if (d.dir == 1) mbull = true; }
+      C(mhit && !mbull, "mirror: highest pivot high overshot with a lower RSI -> bearish Dv"); }
+    { // 0.1.2 his ES overnight 11-19/20 (research 3-min bars, labels = bar START): low 7,149.75 at 11:15 PM (RSI 20.3), lower low 7,144.50
+      // at 1:27 AM (RSI 42.9), 44 candles apart with smaller lows between - 0.1.1 did not mark it
+      std::ifstream f(ES_FIX); Engine E; long long t; double c, h, l; int n = 0; while (f >> t >> c >> h >> l) { mrsi::Bar b; b.t = t; b.c = c; b.h = h; b.l = l; E.add(b); ++n; }
+      bool hit = false; for (const Dv& d : E.dv) if (d.dir == 1 && d.t1 == 27904500LL && d.t2 == 27912420LL) hit = true;
+      C(n > 300, "ES fixture loaded"); C(hit, "ES 11-19/20: bullish Dv 11:15 PM 7,149.75 -> 1:27 AM 7,144.50 is marked"); }
     { // the 40 zone: a higher RSI low but the 1st RSI above 40 = no divergence
       Engine E; std::vector<double> c, l; double p = 100;
       for (int k = 0; k < 25; ++k) { p += (k % 2 ? 1.0 : -0.9); c.push_back(p); l.push_back(p - 0.25); }   // choppy, RSI ~ 50
@@ -54,7 +83,15 @@ int main(int argc, char** argv) {
       Engine A; for (const auto& b : X) A.add(b);
       Engine B2; std::vector<Dv> seen; bool changed = false;
       for (const auto& b : X) { B2.add(b); for (size_t k = 0; k < seen.size(); ++k) if (B2.dv[k].t1 != seen[k].t1 || B2.dv[k].t2 != seen[k].t2 || B2.dv[k].dir != seen[k].dir) changed = true; seen = B2.dv; }
-      C(!changed, "a decided divergence never changes (replay)"); C(A.dv.size() == B2.dv.size() && !A.dv.empty(), "replay = one pass, divergences found");
+      C(!changed, "a decided divergence never changes (replay)");
+      { // 0.1.2 restart after every candle (fresh engine over the candles so far, record merged by t2 as the host does) = the one-pass record
+        std::map<long long, Dv> rec; bool rchg = false;
+        for (size_t m = 50; m <= X.size(); m += 1) { if (m < X.size() && m % 7 && m < 1400) continue;   // every 7th candle + the last 100 each one
+          Engine R; for (size_t i = 0; i < m; ++i) R.add(X[i]);
+          for (const Dv& d : R.dv) { auto it = rec.find(d.t2); if (it == rec.end()) rec[d.t2] = d; else if (it->second.t1 != d.t1 || it->second.dir != d.dir) rchg = true; } }
+        std::map<long long, Dv> one; for (const Dv& d : A.dv) one[d.t2] = d; bool eq = rec.size() == one.size();
+        for (const auto& kv : one) { auto it = rec.find(kv.first); if (it == rec.end() || it->second.t1 != kv.second.t1 || it->second.dir != kv.second.dir) eq = false; }
+        C(!rchg && eq, "restart replay: record identical to one pass, no decision changed"); } C(A.dv.size() == B2.dv.size() && !A.dv.empty(), "replay = one pass, divergences found");
       bool same = true; for (size_t i = 0; i < A.val.size(); ++i) if (!(std::isnan(A.val[i]) && std::isnan(B2.val[i])) && A.val[i] != B2.val[i]) same = false; C(same, "values identical");
       // the live value = what the candle gets once closed
       Engine L; for (size_t i = 0; i + 1 < X.size(); ++i) L.add(X[i]); const double lv = L.liveValue(X.back().c); L.add(X.back()); C(near(lv, L.val.back()), "live value = the closed value");
@@ -71,7 +108,7 @@ int main(int argc, char** argv) {
       Engine E; for (const auto& b : X) E.add(b);
       View v; v.l = 0; v.t = 0; v.r = 1000; v.b = 200; v.first = 0; v.last = 399; v.X = [](int j) { return (double)j * 2.5; }; v.textW = [](const std::string& t) { return (int)t.size() * 7; };
       const auto P = layout(E, v); bool inside = true, title = false, seg = false; int dvTags = 0;
-      for (const auto& q : P) { if (q.kind == 0 && (q.y0 < 0 || q.y0 > 200 || q.y1 < 0 || q.y1 > 200)) inside = false; if (q.kind == 1 && q.text.find("Morris RSI v0.1.1") == 0) title = true; if (q.kind == 0 && q.width == 2) seg = true; if (q.kind == 1 && q.text == "Dv") ++dvTags; }
+      for (const auto& q : P) { if (q.kind == 0 && (q.y0 < 0 || q.y0 > 200 || q.y1 < 0 || q.y1 > 200)) inside = false; if (q.kind == 1 && q.text.find(std::string("Morris RSI v") + VERSION) == 0) title = true; if (q.kind == 0 && q.width == 2) seg = true; if (q.kind == 1 && q.text == "Dv") ++dvTags; }
       int vis = 0; for (const Dv& d : E.dv) if (d.t2 / 180 <= 399) ++vis;
       C(inside && title && seg, "layout: inside the pane, title with version, RSI segments"); C(dvTags == vis, "one Dv tag per divergence");
       C(yOf(v, 70) < yOf(v, 30) && yOf(v, 100) == 0 && yOf(v, 0) == 200, "0 - 100 axis");
