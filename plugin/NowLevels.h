@@ -1,5 +1,14 @@
 // NowLevels.h -- the HOD / LOD "Now" line as a level map (lsHodLod 2.36.0), SDK-free
 //
+// (1.2.0 = lsHodLod 2.37.2, Rassul 2026-11-19 23:02 CT, NQ screenshot "SWEEP: PHL" while the forming candle was only trading at PHL: "why
+// does it say sweep when there is no sweep yet, its interacting with the level so its just testing it until there is a break or a sweep"):
+//   - while the FORMING candle trades at or through a watched level: the gold "TESTING: <level> Bk / Sw" (no arrow - the side is not known)
+//   - BREAK / SWEEP only at the candle's CLOSE and only from the chart's own marks on that closed candle (the wy file): BREAK = a Bk mark that
+//     passes the BO candle rule (range >= the prior's, range or volume up); SWEEP = a Sw mark of strength 10+ (V / R) in the right candle
+//     colour (a bullish Sw closes green, a bearish one red). Shown, red / green by side, while that candle is the last closed one (until the
+//     next close); a close without a mark = no BREAK / SWEEP, the line goes back to WATCH.
+//   - order: TESTING BkTst > BREAK / SWEEP (closed) > TESTING Bk / Sw (live) > WATCH BkTst > WATCH Bk / Sw
+//
 // (2.36.0, Rassul 2026-11-19 18:35-18:39 CT "i want to update the now to be more focused on levels indicating the last level broken, then
 // next level and if it is looking to tst any level that it already broke - this will tell me where to look for a test and a potential
 // reversal trade. the next level will tell me where to look for a break or sweep trade", "I dont have that much vertical space, use
@@ -37,8 +46,9 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
+static const char* const VERSION = "1.2.0";   // (1.2.0 = lsHodLod 2.37.2, 23:02 CT) live = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP only at the close, from the chart's Bk / Sw marks   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
 static const long long E1904 = 2082844800LL;
+static const int SW_MIN = 10;          // (1.2.0) a Sw mark counts with strength 10+ (BVMax or BRMax, "V12" / "R58" / "V99+"), as the spoken alerts
 static const double TST_MIN = 0.382;   // (1.1.0, Rassul 22:46 CT "after it breaks, and continues, you can then have the test of the level after it has the minimum required retracement") = LevelMarks.h's Tst minimum
 static const size_t MAX_BYTES = 512 * 1024;
 
@@ -88,12 +98,19 @@ inline std::vector<Mark> parseWy(const std::string& text, double tick, long long
         long long st = 0, d = 0; if (!toLL(f[0], st) || !toLL(f[2], d) || (d != 1 && d != -1)) continue;
         const long long t = st - E1904; if (t < from || t > to) continue;
         Mark m; m.t = t; m.code = f[1]; m.dir = (int)d;
-        if (m.code == "Bk") { if (f.size() < 5) continue; long long px = 0; if (!toLL(f[4], px) || px <= 0) continue; m.lv = f[3]; m.px = (double)px * tick; m.st = f.size() > 5 ? f[5] : std::string(); if (pri(m.lv) < 0) continue; }
+        if (m.code == "Bk" || m.code == "Sw") { if (f.size() < 5) continue; long long px = 0; if (!toLL(f[4], px) || px <= 0) continue; m.lv = f[3]; m.px = (double)px * tick; m.st = f.size() > 5 ? f[5] : std::string(); if (pri(m.lv) < 0) continue; }   // (1.2.0) Sw marks too (the closed SWEEP)
         else if (m.code != "FT") continue;
         out.push_back(m);
     }
     std::stable_sort(out.begin(), out.end(), [](const Mark& a, const Mark& b) { return a.t < b.t; });
     return out;
+}
+
+// (1.2.0) a mark's strength: "V45" / "R99+" -> 45 / 99; "" or garbage -> 0
+inline int strengthOf(const std::string& s) {
+    if (s.size() < 2 || (s[0] != 'V' && s[0] != 'R')) return 0;
+    std::string d = s.substr(1); if (!d.empty() && d.back() == '+') d.pop_back();
+    long long n = 0; if (!toLL(d, n) || n < 0 || n > 999) return 0; return (int)n;
 }
 
 inline long long hourOf(long long tEnd) { return (tEnd - 1) / 3600; }
@@ -113,10 +130,10 @@ inline std::vector<Key> hourKeys(const std::vector<Bar>& B, long long tNow) {
 struct Test { bool ok = false; int state = 0; int dir = 0;   // state 1 WATCH (a test is coming), 2 TESTING (in the Bk candle)
     std::string lv; double px = 0; int pct = 0; std::string why; };
 struct Next { bool ok = false; std::string name; double px = 0, pts = 0; };
-// (18:54 "there could also be a break so it would be green or red") the forming candle against the levels watched before it (the nearest
-// above / below the last close): state 1 BREAK = it closes through the level now in the break's colour; 2 SWEEP = it went through and closes
-// back now in the Sw colour (a swept low = green, a swept high = red); live, settled at the candle's close
-struct Live { int state = 0; int dir = 0; std::string name; double px = 0; };
+// (1.2.0, 23:02 CT) state 1 BREAK / 2 SWEEP = the LAST CLOSED candle carries the chart's Bk / Sw mark (Bk: the BO candle rule; Sw: strength
+// 10+, right colour), shown until the next close; state 3 TESTING = the forming candle trades at / through a watched level (the nearest
+// above / below the last close), gold, no side. (2.36.0 had called BREAK / SWEEP live from the forming candle.)
+struct Live { int state = 0; int dir = 0; std::string name; double px = 0; std::string why; };
 struct Out { bool ok = false; bool haveBk = false; Mark bk; Test tst; Live bs; Next up, dn; double live = NAN; };
 
 // 3-bar High / Low ZigZag pivots over B (as LevelMarks / the chart ZigZag): (index, side +1 low / -1 high)
@@ -212,24 +229,31 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
     std::vector<Key> keys; for (const Key& kk : keysIn) { const std::string s = shortName(kk.name); if (pri(s) >= 0 && pri(s) < 50 && kk.px > 0) keys.push_back(Key{ s, kk.px }); }   // the hour levels come live from the bars below, not the key file's snapshot
     for (const Key& kk : hourKeys(std::vector<Bar>(B.begin(), B.end() - 1), B.back().t)) keys.push_back(kk);
     const double eps = tick * 0.5;
-    {   // the live BREAK / SWEEP of a watched level by the forming candle (18:54)
+    {   // (1.2.0) 1. the closed candle's own marks: BREAK = a Bk mark passing the BO candle rule, SWEEP = a Sw mark of strength 10+ in the
+        // right colour - shown while that candle is the last closed one (until the next close)
+        const int lc = n - 2; const Bar& c0 = B[(size_t)lc];
+        for (const Mark& m : marksIn) {
+            if (m.t != c0.t || pri(m.lv) < 0) continue;
+            if (m.code == "Bk" && bkOk(B, lc)) { o.bs.state = 1; o.bs.dir = m.dir; o.bs.name = m.lv; o.bs.px = m.px; break; }
+        }
+        if (!o.bs.state) for (const Mark& m : marksIn) {
+            if (m.t != c0.t || m.code != "Sw" || pri(m.lv) < 0) continue;
+            if (strengthOf(m.st) < SW_MIN) { o.bs.why = "Sw mark under strength 10"; continue; }
+            if (m.dir > 0 ? !(c0.c > c0.o) : !(c0.c < c0.o)) { o.bs.why = "Sw mark in the wrong candle colour"; continue; }
+            o.bs.state = 2; o.bs.dir = m.dir; o.bs.name = m.lv; o.bs.px = m.px; break;
+        }
+    }
+    if (!o.bs.state) {   // (1.2.0) 2. the forming candle at / through a watched level (the nearest above / below the last close): TESTING, gold
         const Bar& f = B.back(); const double ref = B[(size_t)n - 2].c;
         Key wu, wd; bool hu = false, hd = false;
         for (const Key& kk : keys) {
             if (kk.px > ref + eps && (!hu || kk.px < wu.px - eps || (std::fabs(kk.px - wu.px) <= eps && pri(kk.name) < pri(wu.name)))) { wu = kk; hu = true; }
             if (kk.px < ref - eps && (!hd || kk.px > wd.px + eps || (std::fabs(kk.px - wd.px) <= eps && pri(kk.name) < pri(wd.name)))) { wd = kk; hd = true; }
         }
-        const double c = live;
-        if (hu && f.h > wu.px + eps) {   // through the level above
-            if (c > wu.px + eps && c > f.o) { o.bs.state = 1; o.bs.dir = 1; }               // BREAK up: closing above it, green
-            else if (c < wu.px - eps && c < f.o) { o.bs.state = 2; o.bs.dir = -1; }         // SWEEP of a high: back below it, red
-            if (o.bs.state) { o.bs.name = wu.name; o.bs.px = wu.px; }
-        }
-        if (!o.bs.state && hd && f.l < wd.px - eps) {   // through the level below
-            if (c < wd.px - eps && c < f.o) { o.bs.state = 1; o.bs.dir = -1; }              // BREAK down: closing below it, red
-            else if (c > wd.px + eps && c > f.o) { o.bs.state = 2; o.bs.dir = 1; }          // SWEEP of a low: back above it, green
-            if (o.bs.state) { o.bs.name = wd.name; o.bs.px = wd.px; }
-        }
+        const bool au = hu && f.h >= wu.px - eps, ad = hd && f.l <= wd.px + eps;   // at or through
+        const bool pickU = au && (!ad || std::fabs(live - wu.px) <= std::fabs(live - wd.px));
+        if (pickU) { o.bs.state = 3; o.bs.name = wu.name; o.bs.px = wu.px; }
+        else if (ad) { o.bs.state = 3; o.bs.name = wd.name; o.bs.px = wd.px; }
     }
     for (const Key& kk : keys) {
         if (o.tst.ok && std::fabs(kk.px - o.tst.px) <= eps) continue;   // the level being tested is already on the line
@@ -259,10 +283,19 @@ inline std::vector<Seg> segments(const Out& o) {
     const std::string dot = "\xB7";   // cp1252 middle dot
     const Next dn = o.dn, up = o.up;
     const bool testing = o.tst.ok && o.tst.state == 2;
-    if (!testing && o.bs.state) {   // 0. a live BREAK / SWEEP (18:54), red / green by side; then the next level that way only
+    if (!testing && (o.bs.state == 1 || o.bs.state == 2)) {   // 0. BREAK / SWEEP of the closed candle (1.2.0: from its mark), red / green by side; then the next level that way only
         badge(std::string(o.bs.state == 1 ? "BREAK: " : "SWEEP: ") + o.bs.name, o.bs.dir, "", o.bs.dir < 0 ? C_RED : C_GREEN, 1); named.push_back(o.bs.name);
         const Next& nx = o.bs.dir < 0 ? dn : up;
         if (nx.ok && !has(nx.name)) { sep(2); add("Next", 0, "", C_GREY, false, 2); add("", o.bs.dir, nx.name, C_GOLD, true, 2); named.push_back(nx.name); }
+    } else if (!testing && o.bs.state == 3) {   // (1.2.0, 23:02 CT) the forming candle at / through a watched level: gold, no side yet; then the next levels
+        badge("TESTING: " + o.bs.name + " Bk / Sw", 0, "", C_GOLD, 1); named.push_back(o.bs.name);
+        const bool d = dn.ok && !has(dn.name), u = up.ok && !has(up.name) && !(d && up.name == dn.name);
+        if (d || u) {
+            sep(2); add("Next", 0, "", C_GREY, false, 2);
+            if (d) { add("", -1, dn.name, C_GOLD, true, 2); named.push_back(dn.name); }
+            if (d && u) add(dot, 0, "", C_GREY, false, 2);
+            if (u) { add("", 1, up.name, C_GOLD, true, 2); named.push_back(up.name); }
+        }
     } else if (o.tst.ok) {   // 1. a BkTst coming / in progress: "WATCH: <level> · BkTst Rev <arrow>" (18:52, gold) / "TESTING: ..." (18:48, red / green by side)
         badge(o.tst.state == 2 ? "TESTING: " + o.tst.lv + " BkTst" : "WATCH: " + o.tst.lv + " BkTst Rev", o.tst.dir < 0 ? -1 : 1, "", o.tst.state != 2 ? C_GOLD : o.tst.dir < 0 ? C_RED : C_GREEN, 1);   // (18:53) every WATCH is gold; only TESTING is red / green
         named.push_back(o.tst.lv);

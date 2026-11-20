@@ -4,6 +4,11 @@
  *         the SIGNAL line (Cob | Sw | BkTst) shows a tag only for 60 minutes after its candle (59 min shows, 60 min is gone), aged on
  *         the chart's newest bar time (the last closed bar's end), the PC clock only when no bar time is known (TopSignals.h 1.1.0).
  *         Expired tags go; an empty group leaves its third empty; with all three empty the line stays (empty), the box keeps its height.
+ *         + (23:02 CT, Rassul, NQ "SWEEP: PHL" while the forming candle only traded at PHL: "why does it say sweep when there is no sweep
+ *         yet, its interacting with the level so its just testing it until there is a break or a sweep") the Now line (NowLevels.h 1.2.0):
+ *         the forming candle at / through a watched level = gold "TESTING: <level> Bk / Sw" (no side); BREAK / SWEEP only at the candle's
+ *         close from the chart's own marks on it (Bk + BO candle rule / Sw strength 10+ in the right colour), red / green, until the next
+ *         close; no mark = back to WATCH. TESTING <level> BkTst (Tst rules) unchanged and first.
  *  2.37.1 (2026-11-19 22:35 CT, Rassul approved, his wording, mockup gamma-tag-mockup.html rows "YOUR IDEA, once the forward test
  *         proves it", shown WITHOUT "?"): the gamma pill at the far left of the Now row carries a label inside it - "-GAMMA \xB7 Trending \xB7
  *         Bk / BkTst" (red) / "+GAMMA \xB7 Range \xB7 Sw / Cob" (green); "0DTE Exp 3:00 PM" follows as before. Narrow pane: the expiry drops
@@ -2118,7 +2123,7 @@ int HodLod::draw(void)
                 S->nlOut = nowl::compute(S->nlBars, marks, keys, std::isfinite(live) ? live : f.c, S->tick);
                 S->nlSegs = nowl::segments(S->nlOut); S->nlMarks = (int)marks.size(); S->nlRuns++;
                 S->nlWhy = !S->nlOut.ok ? std::string("too few bars / no price")
-                         : std::string(S->nlOut.bs.state == 1 ? "live break " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "live sweep " + S->nlOut.bs.name + "; " : "")
+                         : std::string(S->nlOut.bs.state == 1 ? "closed Bk " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "closed Sw " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 3 ? "testing Bk / Sw " + S->nlOut.bs.name + "; " : S->nlOut.bs.why.empty() ? "" : S->nlOut.bs.why + "; ")   // (2.37.2) BREAK / SWEEP only at the close, from the marks
                            + (S->nlOut.tst.ok ? std::string(S->nlOut.tst.state == 2 ? "testing " : "test coming ") + S->nlOut.tst.lv + " " + std::to_string(S->nlOut.tst.pct) + "% back" : "no test: " + S->nlOut.tst.why);
             } catch (...) { S->nlSegs.clear(); S->nlWhy = "fault (kept off)"; }
             try {   // (2.37.0) THE SPOKEN SWEEP ALERTS (SweepVoice.h): this chart's drawn Sw marks newer than its start, once per market + level + side

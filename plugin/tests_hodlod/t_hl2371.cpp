@@ -96,7 +96,7 @@ int main() {
         CHECK(v[0].fill == (dir < 0 ? nowl::C_RED : nowl::C_GREEN), "TESTING stays red / green by side");
         o.tst.state = 1; const std::vector<nowl::Seg> w = nowl::segments(o);
         CHECK(!w.empty() && w[0].s == "WATCH: PFL BkTst Rev" && w[0].fill == nowl::C_GOLD, "WATCH stays: WATCH: PFL BkTst Rev (gold)"); }
-    CHECK(std::string(nowl::VERSION) == "1.1.0", "NowLevels 1.1.0");
+    CHECK(std::string(nowl::VERSION) == "1.2.0", "NowLevels 1.2.0 (2.37.2)");
 
     std::printf("[5] fallbacks, host, versions\n");
     {   const htop::Left d = htop::nowLeftTag(htop::gammaTag(""), hl::C_GREY, 0, EXP, hl::C_SLATE, m, 100, 50, 68, 1000000, 2000);

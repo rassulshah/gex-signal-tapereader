@@ -6,6 +6,7 @@
 //  [3] a reload with old signals (his NQ 5:39 PM Sw at 10:51 PM, a whole session of old tags): none shown
 //  [4] idle feed: the bar clock does not move -> the tag stays while the PC clock runs on
 //  [5] the box: all three groups empty -> the signal line is still there, the box height does not jump
+//  [7] (23:02 CT) the Now line: live = gold "TESTING: <level> Bk / Sw", BREAK / SWEEP only at the close from his marks (full tests in t_hl2360 [4b])
 //  [6] host: ages every draw on ageClock(lastClosedAbs, hlNowCt()), status names expired / clock; versions 2.37.2 everywhere
 #include <cstdio>
 #include <climits>
@@ -15,6 +16,7 @@
 #include "HodLodLogic.h"
 #include "../HodLodSettings.h"
 #include "../TopSignals.h"
+#include "../NowLevels.h"
 #include "lib_widths.h"
 #include "scen.h"
 static int fails = 0, passes = 0;
@@ -110,6 +112,15 @@ int main() { (void)&fnv; (void)&itemsText;
     {   const std::string b = rd("../../tools/gex-build.bat"); const size_t p = b.find("call :one HodLod ");
         const std::string ln = p == std::string::npos ? std::string() : b.substr(p, b.find('\n', p) - p);
         CHECK(ln.find("TopSignals.h") != std::string::npos, "gex-build HodLod line lists TopSignals.h (edit triggers a rebuild)"); }
+    std::printf("[7] Now line live TESTING\n");
+    {   using namespace nowl; std::vector<Bar> B; const long long t0 = L(2026, 11, 19, 22, 0);
+        const double R[][5] = { { 100, 101, 99, 100, 10 }, { 100, 101, 99, 100.5, 10 }, { 100.5, 101, 100, 100.8, 10 }, { 100.8, 102.2, 100.6, 101.5, 10 } };
+        for (int i = 0; i < 4; i++) { Bar b; b.t = t0 + 180LL * (i + 1); b.o = R[i][0]; b.h = R[i][1]; b.l = R[i][2]; b.c = R[i][3]; b.v = R[i][4]; B.push_back(b); }
+        const std::vector<Key> K = { { "ONH", 102.0 }, { "PWL", 90 } };   // (PHL comes from the bars, not the key file)
+        std::vector<Bar> F = B; F.back().c = 101.9; Out o = compute(F, {}, K, 101.9, 0.25);   // his NQ case: the forming candle through the level, back under it
+        CHECK(o.bs.state == 3 && plain(segments(o)).rfind("[TESTING: ONH Bk / Sw]", 0) == 0, "forming through ONH: TESTING: ONH Bk / Sw, not SWEEP: " + plain(segments(o)));
+        CHECK(plain(segments(o)).find("SWEEP") == std::string::npos, "no SWEEP while forming");
+        CHECK(std::string(nowl::VERSION) == "1.2.0", "NowLevels 1.2.0"); }
     std::printf("t_hl2372 (lsHodLod 2.37.2): %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

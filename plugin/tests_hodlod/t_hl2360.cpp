@@ -12,7 +12,7 @@
 //      candle, no FT, the pullback already turned, a Bk the other way since; bullish mirror
 //  [3] next levels: the marks' set (no DPoc / WPoc / Open / VWAP / gamma), hour levels live from the bars, the tested level skipped
 //  [4] his real ES 11-19: 11:33 AM TESTING: PDL · BkTst Rev down | Next | Last Bk; 10:45 AM no test: only "WATCH: VAL ↓ · ONL ↑ · Bk / Sw"
-//  [4b] live BREAK / SWEEP (18:54): 9:42 AM "SWEEP: PDL ↑ │ Next ↑ VAL", 10:54 AM "BREAK: PDL ↓"; red / green by side; TESTING outranks
+//  [4b] (2.37.2) forming candle at / through a level = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP only at the close from his Bk / Sw marks; TESTING BkTst outranks
 //  [4c] no Cob states, no REV state (19:02-19:04): after a BkTst Rev the line moves on to the next WATCH
 //  [5] layout: one line, badges filled with black bold text (red / green TESTING, gold WATCH), arrows drawn as strokes, cp1252 only,
 //      inside its box and the pane; narrow: the Last Bk part drops first, then pieces off the right end, never a dangling separator
@@ -61,8 +61,8 @@ int main() {
         wy += st(L(2026, 11, 19, 9, 43)) + "|Bk|1|PDL|abc|\n" + "garbage\n|||\n";
         wy += st(L(2026, 11, 19, 15, 0)) + "|Bk|1|PDH|29555|\n";          // after now: ignored
         const std::vector<Mark> M = parseWy(wy, 0.25, from, to);
-        CHECK(M.size() == 2, "two Bk marks of this session");
-        CHECK(M.size() == 2 && M[0].lv == "ONL" && M[1].lv == "PDL" && M[1].dir == -1 && std::fabs(M[1].px - 7305.25) < 1e-9 && M[1].st == "V99+", "sorted, level / side / price (ticks x tick) / strength");
+        CHECK(M.size() == 3 && M[1].code == "Sw" && M[1].lv == "PDL" && M[1].st == "V99+" && M[1].dir == 1, "two Bk marks + the Sw mark of this session (2.37.2: Sw marks are read for the closed SWEEP)");
+        CHECK(M.size() == 3 && M[0].lv == "ONL" && M[2].code == "Bk" && M[2].lv == "PDL" && M[2].dir == -1 && std::fabs(M[2].px - 7305.25) < 1e-9 && M[2].st == "V99+", "sorted, level / side / price (ticks x tick) / strength");
         CHECK(parseWy(std::string(MAX_BYTES + 1, 'x'), 0.25, from, to).empty() && parseWy(wy, 0, from, to).empty(), "too big / no tick: nothing");
         CHECK(pri("PDL") == 10 && pri("2hL") == 60 && pri("PHH") == 50 && pri("DPoc") < 0 && pri("WPoc") < 0 && pri("Open") < 0 && pri("VWAP") < 0 && pri("CallRes") < 0 && pri("HVL") < 0, "the marks' level set");
         CHECK(shortName("LonLO") == "LLO" && shortName("AsiaHI") == "AHI" && shortName("PDL") == "PDL", "short names");
@@ -186,33 +186,64 @@ int main() {
         p = at(11, 21, o); CHECK(o.tst.state == 1 && o.tst.lv == "PHL" && o.tst.pct < 38, "2.37.1: 11:21 AM into the PHL Bk candle but " + std::to_string(o.tst.pct) + "% back (< 38.2%): WATCH: PHL (2.36.0 said TESTING): " + p);
         p = at(11, 24, o); CHECK(o.tst.state == 2 && o.tst.lv == "PDL", "11:24 AM TESTING: PDL (the furthest-back break reached): " + p);
     }
-    {   // (18:54) the live BREAK / SWEEP of a watched level by the forming candle (the hh:mm candle forming, at its close values)
-        auto live = [&](int hh, int mm, Out& o) { const long long T = L(2026, 11, 19, hh, mm); std::vector<Bar> B; for (const Bar& b : all) { if (b.t <= T) B.push_back(b); else break; }
-            o = compute(B, parseWy(wy, 0.25, L(2026, 11, 18, 17, 0), T - 180), keys, B.back().c, 0.25); return plain(segments(o)); };
-        Out o; std::string p = live(9, 42, o);
-        CHECK(o.bs.state == 2 && o.bs.dir == 1 && p == "[SWEEP: PDL \xE2\x86\x91] \xE2\x94\x82 Next \xE2\x86\x91 VAL \xE2\x94\x82 Last Bk \xE2\x86\x93 ONL", "9:42 AM forming: SWEEP: PDL up | Next up VAL: " + p);
-        int green = 0; for (const Item& it : layout(segments(o), MS, 600, 300, 0, 1400, 10).items) if (it.k == 0 && it.fill == C_GREEN) green++;
-        CHECK(green == 1, "a swept low = green");
-        p = live(10, 54, o);
-        CHECK(o.bs.state == 1 && o.bs.dir == -1 && p == "[BREAK: PDL \xE2\x86\x93] \xE2\x94\x82 Last Bk \xE2\x86\x93 ONL", "10:54 AM forming: BREAK: PDL down (no named level below it): " + p);
-        int red = 0; for (const Item& it : layout(segments(o), MS, 600, 300, 0, 1400, 10).items) if (it.k == 0 && it.fill == C_RED) red++;
-        CHECK(red == 1, "a break down = red");
-        at(10, 57, o); CHECK(o.bs.state == 0, "the next candle: the break is settled, the line moves on");
-        p = live(8, 33, o);   // bullish: the 8:33 candle through the nearest level above the 8:30 close (the 2hL of the bars, 7,416.75)
-        CHECK(o.bs.state == 1 && o.bs.dir == 1 && p.rfind("[BREAK: 2hL \xE2\x86\x91] \xE2\x94\x82 Next \xE2\x86\x91 2hH", 0) == 0, "8:33 AM forming: BREAK up (green): " + p);
-        green = 0; for (const Item& it : layout(segments(o), MS, 600, 300, 0, 1400, 10).items) if (it.k == 0 && it.fill == C_GREEN) green++;
-        CHECK(green == 1, "a bullish break = green (18:55)");
+    {   // (2.37.2, Rassul 23:02 CT "why does it say sweep when there is no sweep yet, its interacting with the level so its just testing it
+        // until there is a break or a sweep"): the FORMING candle at / through a watched level = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP
+        // only at the close, from the chart's own Bk / Sw marks on that closed candle
+        auto live = [&](const std::string& w, int hh, int mm, Out& o) { const long long T = L(2026, 11, 19, hh, mm); std::vector<Bar> B; for (const Bar& b : all) { if (b.t <= T) B.push_back(b); else break; }
+            o = compute(B, parseWy(w, 0.25, L(2026, 11, 18, 17, 0), T - 180), keys, B.back().c, 0.25); return plain(segments(o)); };
+        auto golds = [&](const Out& o) { int g = 0, rg = 0; for (const Item& it : layout(segments(o), MS, 600, 300, 0, 1400, 10).items) if (it.k == 0) { if (it.fill == C_GOLD) g++; else if (it.fill == C_RED || it.fill == C_GREEN) rg++; } return std::make_pair(g, rg); };
+        const std::string wySw = wy + st(L(2026, 11, 19, 9, 42)) + "|Sw|1|PDL|29221|V99+\n", wySw5 = wy + st(L(2026, 11, 19, 9, 42)) + "|Sw|1|PDL|29221|V5\n",
+                          wySwBad = wy + st(L(2026, 11, 19, 9, 42)) + "|Sw|-1|PDL|29221|V99+\n";
+        Out o; std::string p = live(wySw, 9, 42, o);
+        CHECK(o.bs.state == 3 && o.bs.name == "PDL" && p.rfind("[TESTING: PDL Bk / Sw]", 0) == 0, "9:42 AM forming through PDL: gold TESTING: PDL Bk / Sw, never SWEEP live: " + p);
+        CHECK(p.find("SWEEP") == std::string::npos && p.find("BREAK") == std::string::npos && golds(o).second == 0, "no BREAK / SWEEP and no red / green badge while forming");
+        p = atW(wySw, 9, 42, o);   // the 9:42 candle closed back above PDL (green) with a V99+ Sw mark
+        CHECK(o.bs.state == 2 && o.bs.dir == 1 && p.rfind("[SWEEP: PDL \xE2\x86\x91]", 0) == 0, "9:42 AM close with the Sw mark: SWEEP: PDL up: " + p);
+        CHECK(golds(o).second >= 1, "the SWEEP badge is green");
+        p = atW(wySw, 9, 45, o); CHECK(o.bs.state != 2 && p.find("SWEEP") == std::string::npos, "9:45 AM (the next close): the SWEEP is gone, the line moves on: " + p);
+        p = atW(wySw5, 9, 42, o); CHECK(o.bs.state != 2 && p.find("SWEEP") == std::string::npos && o.bs.why == "Sw mark under strength 10", "a V5 Sw mark (under 10): no SWEEP: " + p);
+        p = atW(wySwBad, 9, 42, o); CHECK(o.bs.state != 2 && o.bs.why == "Sw mark in the wrong candle colour", "a bearish Sw mark on the green 9:42 candle: no SWEEP: " + p);
+        p = at(9, 42, o); CHECK(o.bs.state != 2 && p.find("SWEEP") == std::string::npos && p.rfind("[WATCH: ", 0) == 0, "his real file has no 9:42 Sw mark: the close goes back to WATCH: " + p);
+        p = live(wy, 10, 54, o);
+        CHECK(o.bs.state == 3 && p.rfind("[TESTING: PDL Bk / Sw]", 0) == 0, "10:54 AM forming through PDL: TESTING: PDL Bk / Sw (not BREAK): " + p);
+        p = at(10, 54, o);
+        CHECK(o.bs.state == 1 && o.bs.dir == -1 && p.rfind("[BREAK: PDL \xE2\x86\x93]", 0) == 0, "10:54 AM close with his Bk mark: BREAK: PDL down: " + p);
+        CHECK(golds(o).second >= 1 && golds(o).first == 0, "the BREAK badge is red, no gold");
+        at(10, 57, o); CHECK(o.bs.state != 1, "10:57 AM (the next close): the break is settled, the line moves on");
+        p = at(8, 33, o);   // his 8:33 Bk PHH mark (bullish)
+        CHECK(o.bs.state == 1 && o.bs.dir == 1 && p.rfind("[BREAK: PHH \xE2\x86\x91]", 0) == 0, "8:33 AM close: BREAK: PHH up (green), from his Bk mark: " + p);
+        p = live(wy, 8, 33, o); CHECK(o.bs.state == 3 && p.rfind("[TESTING: ", 0) == 0 && p.find("Bk / Sw]") != std::string::npos, "8:33 AM forming: TESTING (gold), not BREAK: " + p);
     }
-    {   // synthetic: the level above swept (red) / broken (green); through it but the wrong colour = nothing; TESTING outranks a break
+    {   // synthetic: forming through the level above = TESTING (gold, any colour); closed candle marks decide BREAK / SWEEP
         std::vector<Bar> B = bear(94.8, 94.9, 94.5, 94.6); B[7].h = 94.6; const std::vector<Key> K = { { "VAL", 95.0 }, { "PWL", 80 } };
         B.back().h = 95.25; B.back().c = 94.5; Out o = compute(B, {}, K, 94.5, 0.25);
-        CHECK(o.bs.state == 2 && o.bs.dir == -1 && plain(segments(o)).rfind("[SWEEP: VAL \xE2\x86\x93]", 0) == 0, "a swept high = SWEEP down: " + plain(segments(o)));
+        CHECK(o.bs.state == 3 && o.bs.name == "VAL" && plain(segments(o)).rfind("[TESTING: VAL Bk / Sw]", 0) == 0, "through VAL and back while forming: TESTING, not SWEEP: " + plain(segments(o)));
         B.back().c = 95.2; o = compute(B, {}, K, 95.2, 0.25);
-        CHECK(o.bs.state == 1 && o.bs.dir == 1 && plain(segments(o)).rfind("[BREAK: VAL \xE2\x86\x91]", 0) == 0, "closing above it in a green candle = BREAK up: " + plain(segments(o)));
-        B.back().o = 95.24; o = compute(B, {}, K, 95.2, 0.25);
-        CHECK(o.bs.state == 0, "above it but a red candle: no break");
+        CHECK(o.bs.state == 3 && plain(segments(o)).rfind("[TESTING: VAL Bk / Sw]", 0) == 0, "closing above it while forming: TESTING, not BREAK: " + plain(segments(o)));
+        B.back().h = 95.0; B.back().c = 94.9; o = compute(B, {}, K, 94.9, 0.25);
+        CHECK(o.bs.state == 3, "trading AT the level (high = VAL): TESTING");
+        B.back().h = 94.7; o = compute(B, {}, K, 94.6, 0.25);
+        CHECK(o.bs.state == 0, "not reaching it: no TESTING");
+        // the closed candle (bar 7: 92.5 / 95 / 92.5 / 94.8, green, range 2.5 > 2) with marks
+        std::vector<Bar> C = bear(94.8, 94.8, 94.7, 94.8); const long long t7 = C[7].t;   // the forming candle stays under VAL
+        auto mk = [&](const char* code, int dir, const char* st2) { Mark m; m.t = t7; m.code = code; m.dir = dir; m.lv = "VAL"; m.px = 95; m.st = st2; return m; };
+        const std::vector<Key> K2 = { { "VAL", 95.0 }, { "PWL", 80 } };
+        o = compute(C, { mk("Sw", 1, "R58") }, K2, 94.8, 0.25);
+        CHECK(o.bs.state == 2 && o.bs.dir == 1 && plain(segments(o)).rfind("[SWEEP: VAL \xE2\x86\x91]", 0) == 0, "closed with a Sw R58 in a green candle: SWEEP up: " + plain(segments(o)));
+        o = compute(C, { mk("Sw", 1, "V9") }, K2, 94.8, 0.25); CHECK(o.bs.state != 2, "Sw V9: no SWEEP");
+        o = compute(C, { mk("Sw", 1, "") }, K2, 94.8, 0.25); CHECK(o.bs.state != 2, "Sw with no strength: no SWEEP");
+        o = compute(C, { mk("Sw", -1, "V40") }, K2, 94.8, 0.25); CHECK(o.bs.state != 2, "a bearish Sw on a green candle: no SWEEP");
+        o = compute(C, { mk("Bk", 1, "V40") }, K2, 94.8, 0.25);
+        CHECK(o.bs.state == 1 && o.bs.dir == 1 && plain(segments(o)).rfind("[BREAK: VAL \xE2\x86\x91]", 0) == 0, "closed with a Bk mark passing the BO rule: BREAK up: " + plain(segments(o)));
+        std::vector<Bar> C2 = C; C2[7].h = 94.0; C2[7].l = 92.6; C2[7].v = 5;   // range 1.4 < the prior 2: fails the BO candle rule
+        o = compute(C2, { mk("Bk", 1, "V40") }, K2, 94.8, 0.25); CHECK(o.bs.state != 1, "a Bk mark failing the BO candle rule: no BREAK");
+        o = compute(C, {}, K2, 94.8, 0.25); CHECK(o.bs.state == 0 && plain(segments(o)).rfind("[WATCH: ", 0) == 0, "no mark on the close: WATCH: " + plain(segments(o)));
+        std::vector<Bar> C3 = C; Bar nb = C3.back(); nb.t += 180; C3.push_back(nb);   // one more candle closed after the marked one
+        o = compute(C3, { mk("Sw", 1, "R58") }, K2, 94.8, 0.25); CHECK(o.bs.state != 2, "after the next close the SWEEP is gone");
         B = bear(94.8, 96.5, 94.5, 96); o = compute(B, M1, std::vector<Key>{ { "VAL", 95.5 } }, 96, 0.25);
-        CHECK(o.tst.state == 2 && o.bs.state == 1 && plain(segments(o)).rfind("[TESTING: PDL", 0) == 0, "TESTING outranks a live break: one badge");
+        CHECK(o.tst.state == 2 && plain(segments(o)).rfind("[TESTING: PDL BkTst", 0) == 0, "TESTING BkTst outranks a live TESTING Bk / Sw: one badge: " + plain(segments(o)));
+        o = compute(B, { M1[0], mk("Sw", 1, "R58") }, std::vector<Key>{ { "VAL", 95.5 } }, 96, 0.25);
+        CHECK(o.tst.state == 2 && plain(segments(o)).rfind("[TESTING: PDL BkTst", 0) == 0, "TESTING BkTst outranks a closed SWEEP too");
     }
     {   // (19:02-19:04) no Cob states, no REV state: after the BkTst Rev the line moves on to the next WATCH
         Out o; std::string p = at(11, 39, o);
