@@ -1,5 +1,7 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.41.1 (2026-11-20 11:58 CT, Rassul "shorten the strip to the vertical price line so it doesnt overlap the delta profile"): the box runs
+ *         to the last candle's right edge, not to the price axis.
  *  2.41.0 (2026-11-20 10:53 CT, Rassul "lets go with A", mockup hodlod-box-wide-mockup.html A): no BUY AT / SELL AT sections in the box
  *         (the Today Plan stays in the MQ Reader); one SESSION section across - Exp / Act, the 1st-extreme table right of them (2 rows shorter);
  *         the box starts at the pane's left edge (10:32 "it should be aligned to the left": the ColumnBoard left keep-out is not applied).
@@ -2101,6 +2103,9 @@ int HodLod::draw(void)
         // LIQUIDITY column (Rassul accepted). Placement / hysteresis / dock above are unchanged: pass 2 is moved onto their final spot.
         RCT sc; sc.getScaleRect();
         int axisR = (int)pane.right; if (sc.left > pane.left + 100 && sc.left < pane.right) axisR = (int)sc.left;   // the axis inside the pane rect (some hosts include it)
+        // (2.41.1, Rassul 2026-11-20 11:58 CT "shorten the strip to the vertical price line so it doesnt overlap the delta profile") the box stops
+        // at the last candle's right edge (the profiles live right of it); a box already wider than that keeps its own width
+        if (pe > (int)pane.left + 300 && pe < axisR) axisR = pe + 1;
         const int w0 = L.table.r - L.table.l;
         const bool st = hl::stretchToAxis(L, S->view, pb, yOf, M, pe, PL.pos, projX, &avoid, O, axisR);
         S->placeLine += "AXIS_FILL," + std::string(st ? "on" : "off") + ",axis " + std::to_string(axisR) + ",width " + std::to_string(w0) + " -> " + std::to_string(L.table.r - L.table.l) + (L.tableOk ? ",right " + std::to_string(L.table.r) : std::string()) + "\n";
@@ -2565,6 +2570,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.41.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.41.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
