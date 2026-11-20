@@ -19,6 +19,13 @@ int main() {
     const std::vector<tsig::Sig> c = tsig::parseCob(cob, "NQ", t0 - 7200, t0 + 7200);
     CHECK(c.size() == 1 && c[0].num == "51" && c[0].lv == "ONH/LonHI", "Cob: ZZO count + the first two swept levels");
     CHECK(tsig::cobLevels("PHH") == "PHH" && tsig::cobLevels("") == "" && tsig::cobLevels("ONH/LonHI/AsiaHI") == "ONH/LonHI", "cobLevels");
+    {   // (1.2.2, Rassul 17:22 CT "the cob is the cob wave and i only see 1 on gc but you have listed 3"): his real GC record 11-20 - one Cob, three Revs
+        const std::string g = "COB,1795167360,BEAR,Cob,PHH,3.31,1,1,1,1,0,0,SHOW\nZZO,1795167360,BEAR,31,OK,1795167360\nREV,1795174560,BEAR,1795167360,0.09,0.17\nREV,1795176180,BEAR,1795167360,0.11,0.17\nREV,1795179780,BEAR,1795167360,0.39,0.48\n"
+                              "COB,1795168000,BULL,Cob,ONL,2.1,1,1,1,1,0,0,SHOW\nZZO,1795168000,BULL,7,NO,1795168000\nCOB,1795169000,BULL,Cob,ONL,2.1,1,1,1,1,0,0,LOG\nZZO,1795169000,BULL,40,OK,1795169000\n";
+        const std::vector<tsig::Sig> gc = tsig::parseCob(g, "GC", 1795167360 - 16 * 3600, 1795180000);
+        CHECK(gc.size() == 1 && gc[0].t == 1795167360 && gc[0].num == "31" && gc[0].lv == "PHH" && gc[0].dir == -1, "(1.2.2) GC 11-20: ONE Cob tag at the 9:36 Cob candle (31), not the 11:36 / 12:03 / 1:03 Revs; ZZO 7 and LOG Cobs not shown");
+        CHECK(tsig::parseCob(g, "GC", 1795167360 + 1, 1795180000).empty(), "(1.2.2) a Cob before the session start is not shown even when its Revs are later");
+    }
     // rowOf: all fresh of a type, newest first, 60 min
     std::vector<tsig::Sig> all = w; all.insert(all.end(), c.begin(), c.end());
     { tsig::Sig o; o.mkt = "ES"; o.type = "Sw"; o.t = t0 - 4000; o.dir = 1; all.push_back(o); }
@@ -48,7 +55,7 @@ int main() {
     }
     { const htop::Row R = htop::rowLayout(std::vector<htop::Chip>(), "COB", meas, 10, 610, 100, 118); CHECK(R.ok && R.shown == 0 && R.items.size() == 1, "an empty row shows only its head"); }
     { htop::Chip u; u.mkt = "ES"; u.when = "9:03"; u.lv = "ONH/LonHI"; u.num = "51"; u.dir = 1; CHECK(htop::chipLv(u.lv) == "ONH \xB7 LonHI", "Cob levels with a middle dot"); }
-    CHECK(std::string(hl::HL_VERSION) == "2.42.3" && std::string(hlset::PLUGIN_VERSION) == "2.42.3" && std::string(htop::VERSION) == "1.2.0" && std::string(tsig::VERSION) == "1.2.1", "versions");
+    CHECK(std::string(hl::HL_VERSION) == "2.42.4" && std::string(hlset::PLUGIN_VERSION) == "2.42.4" && std::string(htop::VERSION) == "1.2.0" && std::string(tsig::VERSION) == "1.2.2", "versions");
     std::printf("t_hl2420 (lsHodLod 2.42.0): %d passed, %d failed\n", pass, fail);
     return fail ? 1 : 0;
 }

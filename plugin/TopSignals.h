@@ -21,7 +21,7 @@
 
 namespace tsig {
 
-static const char* const VERSION = "1.2.1";   // (1.2.1, Rassul 2026-11-20 16:51 CT "get rid of that rule. keep all sweeps of the session ... latest on the left and the same with cob"): the rows show the whole session (from 5 PM), no 60-min expiry   // was "1.2.0";   // (1.2.0 = lsHodLod 2.42.0, Rassul 2026-11-20 13:22 CT two signal rows "sweep row should have strength like 99", 13:36 "perfect", 14:13 build): each Sig carries its number (Sw strength, Cob ZZO count) and a Cob its swept levels; rowOf() = one row's tags   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): a tag shows for 60 min after its candle, aged on the chart's bar clock   // was "1.0.0"
+static const char* const VERSION = "1.2.2";   // (1.2.2, Rassul 2026-11-20 17:22 CT "the cob is the cob wave and i only see 1 on gc but you have listed 3"): one Cob tag per drawn Cob wave at the Cob candle, never one per Rev   // was "1.2.1";   // (1.2.1, Rassul 2026-11-20 16:51 CT "get rid of that rule. keep all sweeps of the session ... latest on the left and the same with cob"): the rows show the whole session (from 5 PM), no 60-min expiry   // was "1.2.0";   // (1.2.0 = lsHodLod 2.42.0, Rassul 2026-11-20 13:22 CT two signal rows "sweep row should have strength like 99", 13:36 "perfect", 14:13 build): each Sig carries its number (Sw strength, Cob ZZO count) and a Cob its swept levels; rowOf() = one row's tags   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): a tag shows for 60 min after its candle, aged on the chart's bar clock   // was "1.0.0"
 static const long long SHOW_SECS = 3600;      // (1.1.0) a tag is shown while its age < 60 min (59 min shows, 60 min is gone)
 static const long long E1904 = 2082844800LL;   // 1904 -> 1970, local
 static const size_t MAX_BYTES = 512 * 1024;     // a session's wy / Cob record is a few KB; anything bigger is refused (last good copy kept)
@@ -95,7 +95,7 @@ inline std::vector<Sig> parseWy(const std::string& text, const std::string& mkt,
     return out;
 }
 
-// the Cob Revs of one market from its Cob Signal record: the Rev of a drawn Cob (SHOW, ZZO 10+), from the session start to now
+// (1.2.2) the drawn Cobs of one market from its Cob Signal record (COB SHOW + ZZO 10+), one per Cob wave at its candle, from the session start to now
 inline std::vector<Sig> parseCob(const std::string& text, const std::string& mkt, long long from, long long to) {
     std::vector<Sig> out; if (text.size() > MAX_BYTES) return out;
     std::map<long long, int> cobDir; std::map<long long, bool> shown; std::map<long long, long long> zzo; std::map<long long, std::string> cobLv;
@@ -110,12 +110,12 @@ inline std::vector<Sig> parseCob(const std::string& text, const std::string& mkt
         else if (f[0] == "ZZO") { long long n = 0; if (toLL(f[3], n)) zzo[t] = n; }
         else if (f[0] == "REV") { long long c = 0; if (!toLL(f[3], c)) continue; if (t >= from && t <= to) revs.push_back(Rv{ t, c, d }); }
     }
-    for (const Rv& r : revs) {
-        const auto cd = cobDir.find(r.cob); if (cd == cobDir.end() || cd->second != r.dir) continue;
-        if (!shown[r.cob]) continue;
-        const auto z = zzo.find(r.cob); if (z == zzo.end() || z->second < ZZO_MIN) continue;
-        if (r.cob < from) continue;   // the Cob itself is in this session
-        Sig s; s.mkt = mkt; s.type = "Cob"; s.t = r.t; s.dir = r.dir; s.num = std::to_string(z->second); { const auto l = cobLv.find(r.cob); if (l != cobLv.end()) s.lv = l->second; } out.push_back(s);
+    (void)revs;   // (1.2.2) the Revs after a Cob are not Cob signals - the Cob WAVE is (one tag per drawn Cob, at its candle)
+    for (const auto& cd : cobDir) {
+        const long long t = cd.first; if (t < from || t > to) continue;
+        if (!shown[t]) continue;
+        const auto z = zzo.find(t); if (z == zzo.end() || z->second < ZZO_MIN) continue;
+        Sig s; s.mkt = mkt; s.type = "Cob"; s.t = t; s.dir = cd.second; s.num = std::to_string(z->second); { const auto l = cobLv.find(t); if (l != cobLv.end()) s.lv = l->second; } out.push_back(s);
     }
     return out;
 }
