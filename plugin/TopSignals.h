@@ -21,7 +21,8 @@
 
 namespace tsig {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0 = lsHodLod 2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): a tag shows for 60 min after its candle, aged on the chart's bar clock   // was "1.0.0"
+static const long long SHOW_SECS = 3600;      // (1.1.0) a tag is shown while its age < 60 min (59 min shows, 60 min is gone)
 static const long long E1904 = 2082844800LL;   // 1904 -> 1970, local
 static const size_t MAX_BYTES = 512 * 1024;     // a session's wy / Cob record is a few KB; anything bigger is refused (last good copy kept)
 static const int ZZO_MIN = 10;
@@ -114,6 +115,15 @@ inline std::vector<Sig> latest(const std::vector<Sig>& all) {
     std::vector<Sig> o; for (const auto& kv : best) o.push_back(kv.second);
     std::stable_sort(o.begin(), o.end(), [](const Sig& a, const Sig& b) { return a.t != b.t ? a.t > b.t : a.mkt < b.mkt; });
     return o;
+}
+
+// (1.1.0) the clock a tag is aged on: the chart's newest bar time (the market's own clock: an idle feed or a reload neither keeps nor
+// drops tags wrongly); the PC clock only when no bar time is known
+inline long long ageClock(long long barNow, long long sysNow) { return barNow > 0 ? barNow : sysNow; }
+inline bool fresh(const Sig& s, long long now) { return now - s.t < SHOW_SECS; }
+// the tags still shown (order kept; a group with none left is simply empty on the line)
+inline std::vector<Sig> freshOnly(const std::vector<Sig>& v, long long now) {
+    std::vector<Sig> o; for (const Sig& s : v) if (fresh(s, now)) o.push_back(s); return o;
 }
 
 inline std::string clock12(long long tLocal) {

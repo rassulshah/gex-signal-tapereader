@@ -100,11 +100,11 @@ int main() { (void)&fnv; (void)&itemsText;
         std::string all; for (const hl::Item& it : Lo.items) if (it.role == hl::R_TABLE && it.k == hl::K_TEXT) all += it.s + "\n";
         CHECK(all.find("Hrly") == std::string::npos && all.find("Dly") == std::string::npos && all.find("3m:") == std::string::npos, "no Hrly / 3m / Day in the box");
         CHECK(all.find("GAMMA") == std::string::npos && all.find("Exp 3:00") == std::string::npos, "no gamma pill / expiry in the box (moved to the Now row)");
-        CHECK(all.find("v2.37.1") != std::string::npos && all.find("Norm?") != std::string::npos, "line 2 right: Norm? + v2.37.1 (2.37.1: version strings updated)");
+        CHECK(all.find("v2.37.2") != std::string::npos && all.find("Norm?") != std::string::npos, "line 2 right: Norm? + v2.37.1 (2.37.1: version strings updated)");
         CHECK(all.find("Close 4:00 PM") != std::string::npos && all.find("LTD Dec 18 (29d)") != std::string::npos, "line 2 left: Close + LTD");
         CHECK(Lo.sigRow.t == Lo.table.t + 1 && Lo.sigRow.b > Lo.sigRow.t, "line 1 = the signal row, at the box top");
         const hl::Item* ver = nullptr; const hl::Item* mk = nullptr; const hl::Item* cls = nullptr;
-        for (const hl::Item& it : Lo.items) if (it.role == hl::R_TABLE && it.k == hl::K_TEXT) { if (it.s == "v2.37.1") ver = &it; if (it.s == "ES -3%" || it.s == "NQ -9%") mk = &it; if (it.s == "Close 4:00 PM") cls = &it; }
+        for (const hl::Item& it : Lo.items) if (it.role == hl::R_TABLE && it.k == hl::K_TEXT) { if (it.s == "v2.37.2") ver = &it; if (it.s == "ES -3%" || it.s == "NQ -9%") mk = &it; if (it.s == "Close 4:00 PM") cls = &it; }
         CHECK(ver && cls && ver->t == cls->t && ver->t >= Lo.sigRow.b - 1, "line 2 is one line under the signal row");
         if (mk) CHECK(mk->t == cls->t && mk->l > cls->r, "market moves on line 2 after Close / LTD");
         for (const hl::Item& it : Lo.items) if (it.role == hl::R_TABLE && it.k == hl::K_TEXT && it.t >= Lo.sigRow.t && it.b <= Lo.sigRow.b + 1) {
@@ -241,9 +241,9 @@ int main() { (void)&fnv; (void)&itemsText;
         CHECK(H3.offer("ES", L(2026, 11, 19, 9, 0), L(2026, 11, 19, 9, 42) + 5, svx::parseSw(w12, L(2026, 11, 19, 9, 0), L(2026, 11, 19, 16, 0)), 510, 900, col) == 1 && H3.q.back().text == "ES, sweep, PDL, up", "a V12 9:42 PDL sweep (green candle) speaks: ES, sweep, PDL, up"); }
 
     std::printf("[6] versions\n");
-    CHECK(std::string(hl::HL_VERSION) == "2.37.1" && std::string(hlset::PLUGIN_VERSION) == "2.37.1", "2.37.1 (version strings updated in 2.37.1)");
+    CHECK(std::string(hl::HL_VERSION) == "2.37.2" && std::string(hlset::PLUGIN_VERSION) == "2.37.2", "2.37.1 (version strings updated in 2.37.1)");
     {   const std::string s = rd("../HodLod.cpp");
-        CHECK(s.find("p->setVersion(\"2.37.1\")") != std::string::npos && s.find(" *  2.37.0 (2026-11-19") != std::string::npos, "setVersion 2.37.1 + header comment 2.37.0 still there");
+        CHECK(s.find("p->setVersion(\"2.37.2\")") != std::string::npos && s.find(" *  2.37.0 (2026-11-19") != std::string::npos, "setVersion 2.37.1 + header comment 2.37.0 still there");
         CHECK(s.find("#pragma comment(lib, \"winmm.lib\")") != std::string::npos && s.find("#include <mmsystem.h>") != std::string::npos, "winmm pragma + mmsystem.h");
         CHECK(s.find("SND_FILENAME | SND_ASYNC | SND_NODEFAULT") != std::string::npos, "PlaySound async, no default");
         CHECK(s.find("SWEEP_VOICE,%s,%d,%s") != std::string::npos, "status line SWEEP_VOICE,1.0.0,<count>,<last text>"); }

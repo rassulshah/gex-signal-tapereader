@@ -1,5 +1,9 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.37.2 (2026-11-19 22:53 CT, Rassul, screenshot of NQ at 10:51 PM still showing "NQ Sw PFL 5:39": "remove signals after an hour"):
+ *         the SIGNAL line (Cob | Sw | BkTst) shows a tag only for 60 minutes after its candle (59 min shows, 60 min is gone), aged on
+ *         the chart's newest bar time (the last closed bar's end), the PC clock only when no bar time is known (TopSignals.h 1.1.0).
+ *         Expired tags go; an empty group leaves its third empty; with all three empty the line stays (empty), the box keeps its height.
  *  2.37.1 (2026-11-19 22:35 CT, Rassul approved, his wording, mockup gamma-tag-mockup.html rows "YOUR IDEA, once the forward test
  *         proves it", shown WITHOUT "?"): the gamma pill at the far left of the Now row carries a label inside it - "-GAMMA \xB7 Trending \xB7
  *         Bk / BkTst" (red) / "+GAMMA \xB7 Range \xB7 Sw / Cob" (green); "0DTE Exp 3:00 PM" follows as before. Narrow pane: the expiry drops
@@ -326,7 +330,7 @@ struct HLState {
     long long sessStamp = -2; time_t sessChecked = 0; std::string sessGam, sessExp; int sessAge = -1; bool sessRec = true;
     // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
     // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
-    std::map<std::string, std::pair<long long, std::string> > tsText; int tsSigs = 0, tsShown = 0, tsFiles = 0; time_t tsChecked = 0; std::vector<hl::View::CobSeg> tsSegs;   // (2.35.0) wy / Cob record texts by path (stamp, text), the signals found / shown
+    std::map<std::string, std::pair<long long, std::string> > tsText; int tsSigs = 0, tsShown = 0, tsFiles = 0; time_t tsChecked = 0; std::vector<tsig::Sig> tsLatest; int tsExpired = 0; long long tsClock = 0;   // (2.37.2) the latest per market / type, kept unfiltered; aged every draw on the bar clock   // (2.35.0) wy / Cob record texts by path (stamp, text), the signals found / shown
     // (2.36.0) the Now levels line: this session's closed bars + the forming one (its high / low widened by the live price once a second),
     // the wy marks text (re-read at most every 3 s, by stamp), the finished line and its box
     std::vector<nowl::Bar> nlBars; double nlFh = NAN, nlFl = NAN; long long nlMs = -1, nlWyStamp = -2; time_t nlWyChecked = 0; std::string nlWy, nlWhy = "not run yet";
@@ -1355,7 +1359,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
     text += std::string("AWARENESS,") + awh::VERSION + " AWHODLOD decided " + std::to_string(S.aw.writes) + " records\nPERF," + lsperf::statusOf(this) + "\n";   // (2.8.0)
     {   char b[320]; std::snprintf(b, sizeof b, "MKT_LINE,%s,own %s move %.2f pos %.2f adr sessions %d,others read %d,shown %d,writes %d,own cob %d at %lld (of %d read),cob markets %d\n", mkm::VERSION, S.mk.ok ? "ok" : "not ready", S.mk.ratio, S.mk.pos, S.mk.sessions, S.mkRead, (int)S.view.mkts.size(), S.mkWrites, S.mkCob.dir, S.mkCob.t, S.mkCobN, (int)S.view.cobs.size()); text += b; }   // (2.29.0)
     {   std::lock_guard<std::mutex> lk(g_svMu); char b[400]; std::snprintf(b, sizeof b, "SWEEP_VOICE,%s,%d,%s,queued here %d,fallbacks %d,last missing %s,skipped rth %d / old %d / colour %d,%s\n", svx::VERSION, g_sv.spoken, g_sv.last.empty() ? "-" : g_sv.last.c_str(), S.svOffered, g_sv.fallbacks, g_sv.lastMissing.empty() ? "-" : g_sv.lastMissing.c_str(), g_sv.skippedRth, g_sv.skippedOld, g_sv.skippedColour, S.svWhy.c_str()); text += b; }   // (2.37.0)
-    {   char b[200]; std::snprintf(b, sizeof b, "TOP_SIGNALS,%s,files %d,signals this session %d,badges %d (latest Cob / Sw / BkTst per market, newest first; the line shows what fits)\n", tsig::VERSION, S.tsFiles, S.tsSigs, S.tsShown); text += b; }   // (2.35.0)
+    {   char b[320]; std::snprintf(b, sizeof b, "TOP_SIGNALS,%s,files %d,signals this session %d,badges %d,expired %d,clock %s (latest Cob / Sw / BkTst per market, newest first, 60 min each; the line shows what fits)\n", tsig::VERSION, S.tsFiles, S.tsSigs, S.tsShown, S.tsExpired, S.lastClosedAbs > 0 ? "bar" : "pc"); text += b; }   // (2.37.2) expired / clock   // (2.35.0)
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
     if (!(changed && now - S.lastStatusWrite >= 2) && now - S.lastStatusWrite < 30) return;
@@ -1864,11 +1868,16 @@ int HodLod::draw(void)
                         const auto it = S->tsText.find(p); if (it == S->tsText.end()) continue;
                         const std::vector<tsig::Sig> v = j == 0 ? tsig::parseWy(it->second.second, m, from, nowL) : tsig::parseCob(it->second.second, m, from, nowL);
                         all.insert(all.end(), v.begin(), v.end()); } }
-                S->tsSigs = (int)all.size(); S->tsSegs.clear();
-                for (const tsig::Sig& g : tsig::latest(all)) S->tsSegs.push_back(hl::View::CobSeg{ g.mkt, tsig::clock12(g.t), g.dir, tsig::label(g) });
+                S->tsSigs = (int)all.size(); S->tsLatest = tsig::latest(all);
             }
+            // (2.37.2, Rassul 22:53 CT "remove signals after an hour") a tag shows for 60 min after its candle, aged on the chart's newest
+            // bar time (the last closed bar's END = the forming bar's start); the PC clock only when no bar time is known
+            S->tsClock = tsig::ageClock(S->lastClosedAbs, hlNowCt());
+            const std::vector<tsig::Sig> keep = tsig::freshOnly(S->tsLatest, S->tsClock);
+            S->tsExpired = (int)(S->tsLatest.size() - keep.size());
+            for (const tsig::Sig& g : keep) S->view.cobs.push_back(hl::View::CobSeg{ g.mkt, tsig::clock12(g.t), g.dir, tsig::label(g) });
         } catch (...) {}
-        S->view.cobs = S->tsSegs; S->tsShown = (int)S->view.cobs.size();
+        S->tsShown = (int)S->view.cobs.size();
     }
     {   // (2.14.0, Rassul 20:06-20:38 CT mockup v14) the 1st-extreme time table, the Day forecast, RTH % done and the bar's time left
         S->view.tmOk = hsw::timeCum(S->sw, S->view.tmCum); S->view.tmOpenMin = S->mi >= 0 ? hl::MKTS[S->mi].open : -1; S->view.tmQ = S->sw.tmN > 0 && S->sw.tmN < hsw::MIN_N;
@@ -2347,6 +2356,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.37.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.37.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

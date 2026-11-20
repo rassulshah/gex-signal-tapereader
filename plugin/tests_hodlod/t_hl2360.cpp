@@ -251,8 +251,8 @@ int main() {
         CHECK(D3.ok && g2 == 1, "10:45: ONE gold badge across both levels");
     }
     std::printf("[6] versions\n");
-    CHECK(std::string(hl::HL_VERSION) == "2.37.1" && std::string(hlset::PLUGIN_VERSION) == "2.37.1", "2.37.1 (version strings updated in 2.37.1)");
-    {   const std::string s = rd("../HodLod.cpp"); CHECK(s.find("p->setVersion(\"2.37.1\")") != std::string::npos && s.find("#include \"NowLevels.h\"") != std::string::npos, "setVersion 2.37.1 + NowLevels.h included"); }
+    CHECK(std::string(hl::HL_VERSION) == "2.37.2" && std::string(hlset::PLUGIN_VERSION) == "2.37.2", "2.37.1 (version strings updated in 2.37.1)");
+    {   const std::string s = rd("../HodLod.cpp"); CHECK(s.find("p->setVersion(\"2.37.2\")") != std::string::npos && s.find("#include \"NowLevels.h\"") != std::string::npos, "setVersion 2.37.1 + NowLevels.h included"); }
     {   const std::string s = rd("../../tools/gex-build.bat"); const size_t a = s.find("call :one HodLod "); CHECK(a != std::string::npos && s.find("NowLevels.h", a) < s.find('\n', a), "NowLevels.h on the HodLod build line"); }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
