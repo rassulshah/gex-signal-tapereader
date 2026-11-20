@@ -26,7 +26,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-20 09:20 CT "add [the I] ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): iPick() = the ONE level an I names, by the Bk / Sw priority (session > PD > PF > volume > weekly > hours; a tie = the furthest reclaimed); iUnderSw() = the I candle is also a Sw of the same direction (only the Sw shows); no Bk / Sw / Cx rule change
+static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 10:34-10:37 CT "look at the sw signal, shouldnt it meet a threshold of 20", "the red sweep bar doesnt meet the threshold.. fix", "I should only be on key levels that are named like overnight etc.. and we should have a 20 threshold just like sweeps"; lsRevRead 0.21.3): the Sw needs the Sw CANDLE ITSELF at BVMax or BRMax >= 20 and its strength line is that candle's own (was the max over the attempt candles - HG 11-20 08:03 a weak red Sw got V99+ from the green candle before it); iPick() names only session / PD / PF / volume / weekly levels - never an hour level (PHH / PHL / 2h / 3h); I_MIN 20 = the I candle's own BVMax / BRMax minimum
+// was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-20 09:20 CT "add [the I] ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): iPick() = the ONE level an I names, by the Bk / Sw priority (session > PD > PF > volume > weekly > hours; a tie = the furthest reclaimed); iUnderSw() = the I candle is also a Sw of the same direction (only the Sw shows); no Bk / Sw / Cx rule change
 // was VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20": a Sw needs its attempt's BVMax or BRMax >= 20 (SW_MIN), was 10; the strength line still shows from 10 up (ST_MIN unchanged))   // was "1.5.0"   // (1.5.0, Rassul 2026-11-19 18:29 CT "lets keep it at 10 so the BRmax or BVmax should be at least 10": a Sw needs its attempt's BVMax or BRMax >= 10 (SW_MIN), else no Sw)   // was "1.4.0"   // (1.4.0, Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20)   // was "1.3.0"   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
 // was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 11:22-11:30 CT "sweeps of key levels on big volume or range are very meaningfull", "maybe consider sw and a second line like v50 or r50, same with breaks", "use the max numbers that we have ... biggest in green bars, red bars, consecutive", "ok.. good build it"): Bk / Sw carry a STRENGTH = his BVMax / BRMax (the Volume / Range panes' Max number) - "V<N>" / "R<N>" from 20 up, "99+" from 99; a Sw takes the max over its attempt's candles
 // was VERSION = "1.1.0";   // (1.1.0, Rassul 10:50 CT "ok build": the BO indicator's Rly gets its level too - levelNear(); same priority / short names)
@@ -286,6 +287,7 @@ inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long lon
     auto at = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
     for (auto it = M.begin(); it != M.end(); ) { Mark& m = it->second; m.st.clear(); if (m.code != 'B' && m.code != 'S') { ++it; continue; }
         const int b = at(it->first); if (b < 0) { ++it; continue; } int a = m.t0 > 0 ? at(m.t0) : b; if (a < 0 || a > b) a = b;
+        if (m.code == 'S') a = b;   // (1.8.0, Rassul 10:35 CT "the red sweep bar doesnt meet the threshold.. fix") a Sw is judged and labelled by ITS OWN candle, not the attempt's biggest
         if (m.code == 'S' && strengthN(V, R, G, a, b) < SW_MIN) { it = M.erase(it); continue; }   // (1.5.0; 1.6.0: 20) too weak for a Sw
         m.st = strength(V, R, G, a, b); if (!m.st.empty()) ++n; ++it; }
     return n;
@@ -317,9 +319,14 @@ inline bool keyForI(const std::string& name, long long px) { return px > 0 && na
 inline bool levelForI(const std::string& name, long long px) { return keyForI(name, px) && name != "PHH" && name != "PHL"; }
 // (1.7.0) the level an I names: the reclaimed level with the best Bk / Sw priority (lower pri first); a tie = the furthest reclaimed (the
 // highest for a bullish I, side +1). Unnamed levels (MenthorQ, gamma, VWAP ...) never label it. false = no named level (no I).
+// (1.8.0, Rassul 10:37 CT "I should only be on key levels that are named like overnight etc..") an I's level: session (ON / London / Asia),
+// PD, PF, VAH / VAL, weekly - priority 0..40; the hour levels (PHH / PHL, 2h / 3h back, priority 50 / 60) never name an I
+inline bool iKey(int p) { return p >= 0 && p < 50; }
+// (1.8.0, "we should have a 20 threshold just like sweeps") the I candle's own BVMax or BRMax must be at least I_MIN
+static const int I_MIN = 20;
 inline bool iPick(const std::vector<wyr::Lvl>& c, int side, wyr::Lvl& out) {
     int best = -1; bool got = false;
-    for (const wyr::Lvl& z : c) { const int p = pri(z.name, z.hb); if (p < 0) continue;
+    for (const wyr::Lvl& z : c) { const int p = pri(z.name, z.hb); if (!iKey(p)) continue;   // (1.8.0) no hour level
         if (!got || p < best || (p == best && (side > 0 ? z.px > out.px : z.px < out.px))) { out = z; best = p; got = true; } }
     return got;
 }
