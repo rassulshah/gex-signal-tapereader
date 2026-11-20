@@ -10,6 +10,8 @@
 //   broken level; TESTING once it trades into the Bk candle (<= 100% back, never past its extreme); 18:53 every WATCH badge is gold, only
 //   TESTING is red / green by side)
 //   a live break / sweep: [BREAK / SWEEP: <level> <arrow>] │ Next <arrow> <level> │ Last Bk <arrow> <level>    (18:54, red / green; TESTING outranks it)
+//   a BkTst Rev printed: [REV: <level> · BkTst <arrow>] │ Next <arrow> <level>    (18:59, red / green, for the Rev candle only; outranks all)
+//   one badge: REV > TESTING > BREAK / SWEEP > WATCH BkTst > WATCH Bk / Sw. Only signals at named levels; nothing from a Cob (19:02).
 //   else:               [WATCH: Bk / Sw at ↓ <level> · ↑ <level>] │ Last Bk <arrow> <level>
 //   (18:48 TESTING replaces the WATCH badge, red / green by side; 18:47 one badge at a time; 18:41 no Tst = nothing for it; 18:50 "if the
 //   levels are already mentioned in the watch they shouldnt be mentioned again": the WATCH badge carries the next levels with their arrows,
@@ -82,7 +84,8 @@ inline std::vector<Mark> parseWy(const std::string& text, double tick, long long
         const long long t = st - E1904; if (t < from || t > to) continue;
         Mark m; m.t = t; m.code = f[1]; m.dir = (int)d;
         if (m.code == "Bk") { if (f.size() < 5) continue; long long px = 0; if (!toLL(f[4], px) || px <= 0) continue; m.lv = f[3]; m.px = (double)px * tick; m.st = f.size() > 5 ? f[5] : std::string(); if (pri(m.lv) < 0) continue; }
-        else if (m.code != "FT") continue;
+        else if (m.code == "Tst") { m.lv = f.size() > 3 ? f[3] : std::string(); if (pri(m.lv) < 0) continue; }   // (lsRevRead 0.20+) the Tst / Rev marks, when written
+        else if (m.code != "FT" && m.code != "Rev") continue;
         out.push_back(m);
     }
     std::stable_sort(out.begin(), out.end(), [](const Mark& a, const Mark& b) { return a.t < b.t; });
@@ -110,16 +113,19 @@ struct Next { bool ok = false; std::string name; double px = 0, pts = 0; };
 // above / below the last close): state 1 BREAK = it closes through the level now in the break's colour; 2 SWEEP = it went through and closes
 // back now in the Sw colour (a swept low = green, a swept high = red); live, settled at the candle's close
 struct Live { int state = 0; int dir = 0; std::string name; double px = 0; };
-struct Out { bool ok = false; bool haveBk = false; Mark bk; Test tst; Live bs; Next up, dn; double live = NAN; };
+// (18:59) REV = the candle a BkTst Rev printed on (the last closed one); (19:02 "no lets remove anyting that is associated with a cob") no Cob states
+struct Rev { bool ok = false; int kind = 1; int dir = 0; std::string lv; double px = 0; };
+struct Out { bool ok = false; bool haveBk = false; Mark bk; Test tst; Live bs; Rev rev; Next up, dn; double live = NAN; };
 
 // 3-bar High / Low ZigZag pivots over B (as LevelMarks / the chart ZigZag): (index, side +1 low / -1 high)
-inline std::vector<std::pair<int, int> > pivots(const std::vector<Bar>& B) {
-    std::vector<std::pair<int, int> > P; const int n = (int)B.size(); if (n < 2) return P;
+struct Piv { int first = 0, second = 0, at = 0; };   // the pivot candle, side (+1 low / -1 high), the candle that confirmed it
+inline std::vector<Piv> pivots(const std::vector<Bar>& B) {
+    std::vector<Piv> P; const int n = (int)B.size(); if (n < 2) return P;
     int zd = B[1].h >= B[0].h ? 1 : -1, zext = 0;
     for (int i = 1; i < n; i++) {
         const int a = std::max(0, i - 3); double pl = 1e300, ph = -1e300; for (int j = a; j < i; j++) { pl = std::min(pl, B[(size_t)j].l); ph = std::max(ph, B[(size_t)j].h); }
-        if (zd == 1) { if (B[(size_t)i].h > B[(size_t)zext].h) zext = i; else if (B[(size_t)i].l < pl && i != zext) { P.push_back({ zext, -1 }); zext = i; zd = -1; } }
-        else { if (B[(size_t)i].l < B[(size_t)zext].l) zext = i; else if (B[(size_t)i].h > ph && i != zext) { P.push_back({ zext, +1 }); zext = i; zd = 1; } }
+        if (zd == 1) { if (B[(size_t)i].h > B[(size_t)zext].h) zext = i; else if (B[(size_t)i].l < pl && i != zext) { P.push_back(Piv{ zext, -1, i }); zext = i; zd = -1; } }
+        else { if (B[(size_t)i].l < B[(size_t)zext].l) zext = i; else if (B[(size_t)i].h > ph && i != zext) { P.push_back(Piv{ zext, +1, i }); zext = i; zd = 1; } }
     }
     return P;
 }
@@ -148,7 +154,7 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
     // back, never past its extreme, no close beyond the move origin) - the furthest-back Bk it reaches is named; WATCH = the move topped
     // and the pullback is heading back but has not reached the Bk candle yet - the nearest Bk ahead (the latest) is named; else neither
     if (o.haveBk) {
-        const std::vector<std::pair<int, int> > P = pivots(B);
+        const std::vector<Piv> P = pivots(B);
         const int dr = o.bk.dir; std::string why = "no pullback yet";
         long long lastOpp = -1; for (const Mark& m : marks) if (m.dir == -dr) lastOpp = m.t;   // only the Bks since the last Bk the other way
         Test testing, watching; bool pending = false;
@@ -162,8 +168,14 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
             const double origin = dr < 0 ? B[(size_t)oi].h : B[(size_t)oi].l;
             int e = k; for (int i = k; i < n; i++) if (dr < 0 ? B[(size_t)i].l < B[(size_t)e].l : B[(size_t)i].h > B[(size_t)e].h) e = i;   // the move's extreme so far
             if (e >= n - 1) { why = "still extending"; continue; }
-            bool turned = false; for (const auto& p : P) if (p.first > e && p.second == dr) turned = true;   // the pullback leg already turned (its pivot confirmed)
-            if (turned) { why = "the pullback already turned"; continue; }
+            const Piv* tp = nullptr; for (const Piv& p : P) if (p.first > e && p.second == dr) { tp = &p; break; }   // the pullback leg already turned (its pivot confirmed)
+            if (tp) {   // (18:59) REV: it turned on the last closed candle from inside the Bk candle (<= 100%, never past its extreme, no close beyond the origin)
+                const Bar& pv = B[(size_t)tp->first]; const Bar& bk = B[(size_t)k];
+                const double ext = dr < 0 ? pv.h : pv.l, top = dr < 0 ? B[(size_t)e].l : B[(size_t)e].h, span = std::fabs(origin - top);
+                bool beyond = false; for (int i = k; i <= tp->at; i++) if (dr < 0 ? B[(size_t)i].c > origin : B[(size_t)i].c < origin) beyond = true;
+                const bool inK = dr < 0 ? (ext >= bk.l && ext <= bk.h) : (ext <= bk.h && ext >= bk.l);
+                if (tp->at == n - 2 && !beyond && inK && span > 0 && std::fabs(ext - top) / span <= 1.0 && !o.rev.ok) { o.rev.ok = true; o.rev.dir = dr; o.rev.lv = bm.lv; o.rev.px = bm.px; }
+                why = "the pullback already turned"; continue; }
             bool closedBeyond = false; for (int i = k; i < n - 1; i++) if (dr < 0 ? B[(size_t)i].c > origin : B[(size_t)i].c < origin) closedBeyond = true;
             if (closedBeyond) { why = "closed back beyond the move origin"; continue; }
             double pb = dr < 0 ? -1e300 : 1e300; for (int i = e + 1; i < n; i++) pb = dr < 0 ? std::max(pb, B[(size_t)i].h) : std::min(pb, B[(size_t)i].l);
@@ -201,8 +213,14 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
             if (o.bs.state) { o.bs.name = wd.name; o.bs.px = wd.px; }
         }
     }
+    {   // (lsRevRead 0.20+) a Rev line on the last closed candle after a Tst of the same side = a BkTst REV of the Tst's level
+        std::string tl[3]; for (const Mark& m : marksIn) { if (m.code == "Tst") tl[m.dir + 1] = m.lv;
+            else if (m.code == "Rev" && m.t == B[(size_t)n - 2].t && !tl[m.dir + 1].empty() && !o.rev.ok) { o.rev.ok = true; o.rev.dir = m.dir; o.rev.lv = tl[m.dir + 1]; o.rev.px = NAN;
+                for (const Mark& b2 : marks) if (b2.lv == o.rev.lv && b2.dir == m.dir) o.rev.px = b2.px; } }
+    }
     for (const Key& kk : keys) {
         if (o.tst.ok && std::fabs(kk.px - o.tst.px) <= eps) continue;   // the level being tested is already on the line
+        if (o.rev.ok && (kk.name == o.rev.lv || std::fabs(kk.px - o.rev.px) <= eps)) continue;
         if (o.bs.state && std::fabs(kk.px - o.bs.px) <= eps) continue;   // the level broken / swept now is already on the line
         if (kk.px > live + eps) { if (!o.up.ok || kk.px < o.up.px - eps || (std::fabs(kk.px - o.up.px) <= eps && pri(kk.name) < pri(o.up.name))) { o.up.ok = true; o.up.name = kk.name; o.up.px = kk.px; } }
         else if (kk.px < live - eps) { if (!o.dn.ok || kk.px > o.dn.px + eps || (std::fabs(kk.px - o.dn.px) <= eps && pri(kk.name) < pri(o.dn.name))) { o.dn.ok = true; o.dn.name = kk.name; o.dn.px = kk.px; } }
@@ -229,7 +247,11 @@ inline std::vector<Seg> segments(const Out& o) {
     const std::string dot = "\xB7";   // cp1252 middle dot
     const Next dn = o.dn, up = o.up;
     const bool testing = o.tst.ok && o.tst.state == 2;
-    if (!testing && o.bs.state) {   // 0. a live BREAK / SWEEP (18:54), red / green by side; then the next level that way only
+    if (o.rev.ok) {   // REV (18:59), red / green by side, for the candle the Rev printed on; then the next level that way only
+        badge("REV: " + o.rev.lv + " " + dot + " BkTst", o.rev.dir, "", o.rev.dir < 0 ? C_RED : C_GREEN, 1); named.push_back(o.rev.lv);
+        const Next& nx = o.rev.dir < 0 ? dn : up;
+        if (nx.ok && !has(nx.name)) { sep(2); add("Next", 0, "", C_GREY, false, 2); add("", o.rev.dir, nx.name, C_GOLD, true, 2); named.push_back(nx.name); }
+    } else if (!testing && o.bs.state) {   // 0. a live BREAK / SWEEP (18:54), red / green by side; then the next level that way only
         badge(std::string(o.bs.state == 1 ? "BREAK: " : "SWEEP: ") + o.bs.name, o.bs.dir, "", o.bs.dir < 0 ? C_RED : C_GREEN, 1); named.push_back(o.bs.name);
         const Next& nx = o.bs.dir < 0 ? dn : up;
         if (nx.ok && !has(nx.name)) { sep(2); add("Next", 0, "", C_GREY, false, 2); add("", o.bs.dir, nx.name, C_GOLD, true, 2); named.push_back(nx.name); }

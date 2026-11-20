@@ -8,7 +8,8 @@
  *         TESTING: <level> · BkTst Rev <arrow> (the pullback trades into a broken level's Bk candle) > BREAK / SWEEP: <level> <arrow>
  *         (the forming candle through a watched level, closing through it / back) > WATCH: <level> · BkTst Rev <arrow> (the move topped,
  *         the pullback heads back toward a broken level) > WATCH: Bk / Sw at <arrow> <level> · <arrow> <level> (the nearest levels).
- *         WATCH is gold; TESTING / BREAK / SWEEP red or green by side. Then "Next <arrow> <level>" and "Last Bk <arrow> <level>" (lsRevRead's
+ *         18:59-19:02: REV: <level> · BkTst <arrow> on the candle a BkTst Rev printed on (outranks all); nothing from a Cob.
+ *         WATCH is gold; REV / TESTING / BREAK / SWEEP red or green by side. Then "Next <arrow> <level>" and "Last Bk <arrow> <level>" (lsRevRead's
  *         wy file, this session) only for levels not already named. Levels = the marks' set + the prior 3 clock hours (no POC / Open /
  *         VWAP / gamma). No numbers. The Last Bk part drops first when the pane is narrow. The 2.34.0 read box stays undrawn.
  *  2.20.0 (2026-11-07, Rassul 11:52 CT "there is a read on top of each chart, that is where i need your guidance explained to me depending
@@ -2067,7 +2068,8 @@ int HodLod::draw(void)
                 S->nlOut = nowl::compute(S->nlBars, marks, keys, std::isfinite(live) ? live : f.c, S->tick);
                 S->nlSegs = nowl::segments(S->nlOut); S->nlMarks = (int)marks.size(); S->nlRuns++;
                 S->nlWhy = !S->nlOut.ok ? std::string("too few bars / no price")
-                         : std::string(S->nlOut.bs.state == 1 ? "live break " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "live sweep " + S->nlOut.bs.name + "; " : "")
+                         : std::string(S->nlOut.rev.ok ? "rev BkTst " + S->nlOut.rev.lv + "; " : "")
+                           + std::string(S->nlOut.bs.state == 1 ? "live break " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "live sweep " + S->nlOut.bs.name + "; " : "")
                            + (S->nlOut.tst.ok ? std::string(S->nlOut.tst.state == 2 ? "testing " : "test coming ") + S->nlOut.tst.lv + " " + std::to_string(S->nlOut.tst.pct) + "% back" : "no test: " + S->nlOut.tst.why);
             } catch (...) { S->nlSegs.clear(); S->nlWhy = "fault (kept off)"; }
         }

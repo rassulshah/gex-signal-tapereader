@@ -13,6 +13,7 @@
 //  [3] next levels: the marks' set (no DPoc / WPoc / Open / VWAP / gamma), hour levels live from the bars, the tested level skipped
 //  [4] his real ES 11-19: 11:33 AM TESTING: PDL · BkTst Rev down | Next | Last Bk; 10:45 AM no test: only "WATCH: Bk / Sw at ↓ VAL · ↑ ONL"
 //  [4b] live BREAK / SWEEP (18:54): 9:42 AM "SWEEP: PDL ↑ │ Next ↑ VAL", 10:54 AM "BREAK: PDL ↓"; red / green by side; TESTING outranks
+//  [4c] REV for a BkTst only (18:59-19:02): 11:39 AM "REV: PDL · BkTst ↓ │ Next ↓ PHL", red, for the Rev candle only; no Cob states
 //  [5] layout: one line, badges filled with black bold text (red / green TESTING, gold WATCH), arrows drawn as strokes, cp1252 only,
 //      inside its box and the pane; narrow: the Last Bk part drops first, then pieces off the right end, never a dangling separator
 //  [6] versions 2.36.0 everywhere + the build list
@@ -173,7 +174,8 @@ int main() {
         CHECK(o.tst.state == 1 && p.rfind("[WATCH: PDL \xC2\xB7 BkTst Rev \xE2\x86\x93]", 0) == 0, "PDL marks: 11:12 AM WATCH: PDL · BkTst Rev down (gold): " + p);
         p = atW(wyPdl, 11, 21, o); CHECK(o.tst.state == 1 && o.tst.lv == "PDL", "11:21 AM still WATCH PDL: " + p);
         p = atW(wyPdl, 11, 24, o); CHECK(o.tst.state == 2 && p.rfind("[TESTING: PDL \xC2\xB7 BkTst Rev \xE2\x86\x93]", 0) == 0, "11:24 AM TESTING: PDL: " + p);
-        p = atW(wyPdl, 11, 39, o); CHECK(!o.tst.ok && p.rfind("[WATCH: Bk / Sw at", 0) == 0, "11:39 AM the pullback turned: back to the Bk / Sw badge: " + p);
+        p = atW(wyPdl, 11, 39, o); CHECK(!o.tst.ok && o.rev.ok && p.rfind("[REV: PDL", 0) == 0, "11:39 AM the pullback turned out of the Bk candle: REV (18:59): " + p);
+        p = atW(wyPdl, 11, 42, o); CHECK(!o.rev.ok && p.rfind("[WATCH: Bk / Sw at", 0) == 0, "11:42 AM the line moved on: " + p);
         // with the 11:03 PHL break too: the nearest break ahead is watched first, then each is tested in turn
         p = at(11, 12, o); CHECK(o.tst.state == 1 && o.tst.lv == "PHL", "all marks: 11:12 AM WATCH: PHL (the nearest break ahead): " + p);
         p = at(11, 21, o); CHECK(o.tst.state == 2 && o.tst.lv == "PHL", "11:21 AM TESTING: PHL: " + p);
@@ -206,6 +208,17 @@ int main() {
         CHECK(o.bs.state == 0, "above it but a red candle: no break");
         B = bear(94.8, 96.5, 94.5, 96); o = compute(B, M1, std::vector<Key>{ { "VAL", 95.5 } }, 96, 0.25);
         CHECK(o.tst.state == 2 && o.bs.state == 1 && plain(segments(o)).rfind("[TESTING: PDL", 0) == 0, "TESTING outranks a live break: one badge");
+    }
+    {   // (18:59-19:02) REV for a BkTst only, on the Rev candle, red / green; then the line moves on; nothing from a Cob
+        Out o; std::string p = at(11, 39, o);
+        CHECK(o.rev.ok && p == "[REV: PDL \xC2\xB7 BkTst \xE2\x86\x93] \xE2\x94\x82 Next \xE2\x86\x93 PHL", "11:39 AM REV: PDL · BkTst down | Next down PHL: " + p);
+        int red = 0; for (const Item& it : layout(segments(o), MS, 600, 300, 0, 1400, 10).items) if (it.k == 0 && it.fill == C_RED) red++;
+        CHECK(red == 1, "a bearish REV = red");
+        p = at(11, 42, o); CHECK(!o.rev.ok, "11:42 AM: the line moved on: " + p);
+        p = at(10, 21, o); CHECK(p.find("Cob") == std::string::npos, "10:21 AM (the Cob Rev candle): no Cob state: " + p);
+        CHECK(rd("../HodLod.cpp").find("CobSignal\") + HL_SEP + S->mkt") == std::string::npos, "the Now line reads nothing from CobSignal");
+        const Out o2 = compute(mirror(bear(94.8, 96.5, 94.5, 96)), { bk(kT, 1, "PDH", 103) }, {}, 104, 0.25);
+        CHECK(!o2.rev.ok, "no REV while still testing");
     }
     std::printf("[5] layout\n");
     {   Out o; at(11, 33, o); const std::vector<Seg> S = segments(o);
