@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
     const auto M = lvm::run(B, K);
     long long t700 = 0; for (const auto& b : B) if (b.when == "7:00") t700 = b.t;   // the LAST 7:00 = 7:00 AM (the session starts 5 PM)
     const std::string got = str(M, t700);
-    const std::string want = "7:09 Sw PHH; 7:33 Bk AHI; 8:27 Cx AHI; 8:30 Bk PHH; 8:33 Sw PHH; 8:39 Sw PHL; 8:45 Bk PHL; 9:12 Bk PDH; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; the BO candle rule drops the small 7:06 / 8:54 breaks
+    const std::string want = "7:09 Sw 1hH; 7:33 Bk AHI; 8:27 Cx AHI; 8:30 Bk PhrH; 8:33 Sw 1hH; 8:39 Sw LLO; 8:45 Bk PhrL; 9:12 Bk PDH; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; the BO candle rule drops the small 7:06 / 8:54 breaks
     std::printf("ES 11-19 7:00-9:48: %s\n", got.c_str());
     C(got == want, "ES 11-19 = mockup v8 + the 1.3.0 rules (1.8.0: + 7:09 / 8:33 Sw PHH, no volume gate in run(); the own-candle 20 test is fillStrength)");
     for (const auto& kv : M) if (startOf[kv.first] == "9:39") C(kv.second.dir == 1 && kv.second.px == 29221, "Sw PDL bullish at 7305.25");
@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
     // the I's level (WyRead 1.7.0 Out.ilv): the 7:54 AM I reclaimed the prior hour's low = I / PHL
     { const wyr::Out o = wyr::run(B, 0.25, 2, wyr::Params(), K); std::string got; for (const auto& kv : o.ilv) if (kv.first >= t700) { const auto hb = o.ilvHb.find(kv.first);
         got += startOf[kv.first] + " " + lvm::iLevel(kv.second.second, hb != o.ilvHb.end() ? hb->second : 0, kv.second.second.find("high") != std::string::npos) + "; "; }
-      std::printf("I levels: %s\n", got.c_str()); C(got.find("7:51 PHL") != std::string::npos || got.find("7:54 PHL") != std::string::npos, "the 7:54 AM I = I / PHL"); }
+      std::printf("I levels: %s\n", got.c_str()); C(got.find("7:51 1hL") != std::string::npos || got.find("7:54 1hL") != std::string::npos, "the 7:54 AM I = I / 1hL (1.9.0 name)"); }
     // (1.1.0) levelNear: the Rly at the 9:39 AM low (7293.00) - PDL 7305.25 is inside the candle -> "PDL"
     { int i = -1; for (size_t q = 0; q < B.size(); ++q) if (startOf[B[q].t] == "9:39" && B[q].t > t700) i = (int)q;
       std::string sn; long long px = 0; C(i >= 0 && lvm::levelNear(B, i, K, B[(size_t)i].l, 8, sn, px) && sn == "PDL" && px == 29221, "levelNear: the 9:39 AM low = PDL (" + sn + ")");
@@ -56,8 +56,24 @@ int main(int argc, char** argv) {
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v[3] = bar(v[3].t, 120, 120, 108, 118, 100);                // PDL already traded through earlier
       v.push_back(bar(T + 13 * 180, 106, 120, 104, 114, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (14 + i) * 180, 114, 118, 112, 116, 100));
-      auto m = lvm::run(v, k); C(!m.count(v[12].t) || m[v[12].t].code != 'S', "Sw only on the first break"); }
+      auto m = lvm::run(v, k); C(m.count(v[12].t) && m[v[12].t].code == 'S', "(1.9.0) an earlier poke that CLOSED back leaves the level: the later failed break is a Sw (GC 11-20 9:00 PhrH)"); }
+    { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
+      v[3] = bar(v[3].t, 120, 120, 105, 108, 100);                // (1.9.0) PDL CLOSED through earlier = used up
+      v[4] = bar(v[4].t, 108, 121, 107, 118, 100);
+      v.push_back(bar(T + 13 * 180, 106, 120, 104, 114, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (14 + i) * 180, 114, 118, 112, 116, 100));
+      auto m = lvm::run(v, k); C(!m.count(v[12].t) || m[v[12].t].code != 'S', "(1.9.0) a level closed through earlier gives no Sw"); }
+    { // (1.9.0, NQ 11-20 9:00 LonHI) a SESSION level counts from the candle that formed it: earlier (Asia) candles above it do not use it up
+      auto v = flat(12, 100); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "LonHI";
+      v[2] = bar(v[2].t, 100, 125, 99, 121, 100); v[3] = bar(v[3].t, 121, 122, 100, 101, 100);   // Asia: above 110, closed above it too
+      v[6] = bar(v[6].t, 100, 110, 98, 104, 100);                                                // London makes its high 110 here
+      v.push_back(bar(T + 13 * 180, 108, 116, 103, 105, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (14 + i) * 180, 104, 106, 100, 102, 100));
+      auto m = lvm::run(v, k); C(m.count(v[12].t) && m[v[12].t].code == 'S' && m[v[12].t].lv == "LHI" && m[v[12].t].dir == -1, "(1.9.0) LonHI swept after it formed, despite Asia above it");
+      std::vector<wyr::Lvl> k2(1); k2[0] = k[0]; k2[0].name = "PDH";   // a prior-day level is NOT session-formed: Asia's close above it used it up
+      auto m2 = lvm::run(v, k2); C(!m2.count(v[12].t) || m2[v[12].t].code != 'S', "(1.9.0) PDH stays used up by the earlier close above it"); }
+    { C(lvm::pri("ONL/PHL", 0) == 0 && lvm::shortName("ONL/PHL", 0, false) == "ONL" && lvm::pri("LonHI/PFL", 0) == 0 && lvm::shortName("LonHI/PFL", 0, true) == "LHI", "(1.9.0) combined names: best part");
+      C(lvm::pri("CR/PS", 0) == -1 && lvm::pri("PFH/PDH", 0) == 10, "(1.9.0) gamma-only combos still label nothing; listed combos unchanged"); }
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(2); k[0].px = 110; k[0].name = "VAL"; k[1].px = 111; k[1].name = "ONL";   // priority: session > volume
+      v[1] = bar(v[1].t, 120, 122, 111, 120, 100);   // (1.9.0) the overnight low is printed by a candle (a session level exists from then on)
       v.push_back(bar(T + 13 * 180, 120, 120, 104, 106, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (14 + i) * 180, 106, 108, 103, 105, 100));
       auto m = lvm::run(v, k); C(m.count(v[12].t) && m[v[12].t].lv == "ONL", "one level: ONL (session) over VAL (volume)"); }
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "MQ CR";   // a MenthorQ name does not label
@@ -72,7 +88,7 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 10; ++i) v.push_back(bar(T + (15 + i) * 180, 112, 113, 111, 112, 100));
       v.push_back(bar(T + 25 * 180, 112, 112, 106, 107, 300)); for (int i = 0; i < 3; ++i) v.push_back(bar(T + (26 + i) * 180, 107, 108, 106, 107, 100));
       auto m = lvm::run(v, k); int nb = 0; for (auto& kv : m) if (kv.second.code == 'B' && kv.second.dir == -1) ++nb; C(nb == 1, "repeat cut: the same Bk PDL again without a 1-ATR move away = not shown (" + std::to_string(nb) + ")"); }
-    C(lvm::shortName("Open", 0, false) == "Op" && lvm::shortName("LonLO", 0, false) == "LLO" && lvm::shortName("x", 1, true) == "PHH" && lvm::shortName("x", 3, false) == "3hL", "short names");
+    C(lvm::shortName("Open", 0, false) == "Op" && lvm::shortName("LonLO", 0, false) == "LLO" && lvm::shortName("x", 1, true) == "1hH" && lvm::shortName("PHH", 0, true) == "PhrH" && lvm::shortName("PHL", 0, false) == "PhrL" && lvm::shortName("x", 3, false) == "3hL", "short names");
     // (1.2.0) the strength line = his BVMax / BRMax over the chart's candles (the 1,500 before the session + the session), as the panes count it
     {   std::vector<long long> T; std::vector<double> V, R; std::vector<char> G;
         std::ifstream in(argc > 2 ? argv[2] : "es1119hist.psv"); std::string line;
@@ -82,10 +98,10 @@ int main(int argc, char** argv) {
         auto M2 = lvm::run(B, K); lvm::fillStrength(M2, T, V, R, G);
         auto stOf = [&](const std::string& when, char code) { for (const auto& kv : M2) if (startOf[kv.first] == when && kv.second.code == code) return kv.second.lv + "/" + kv.second.st; return std::string("none"); };
         C(stOf("7:33", 'B') == "AHI/R99+", "7:33 Bk AHI R99+ (got " + stOf("7:33", 'B') + ")");
-        C(stOf("8:30", 'B') == "PHH/V99+", "8:30 Bk PHH V99+ (got " + stOf("8:30", 'B') + ")");
+        C(stOf("8:30", 'B') == "PhrH/V99+", "8:30 Bk PhrH V99+ (got " + stOf("8:30", 'B') + ")");
         C(stOf("8:36", 'B') == "none", "(1.3.0) no Bk at the open - Open is not a level (got " + stOf("8:36", 'B') + ")");
         C(stOf("7:06", 'B') == "none" && stOf("8:54", 'B') == "none", "(1.3.0) the BO candle rule drops the 7:06 / 8:54 small breaks");
-        C(stOf("8:39", 'S') == "PHL/V99+", "8:39 Sw PHL V99+ (got " + stOf("8:39", 'S') + ")");
+        C(stOf("8:39", 'S') == "LLO/V99+", "(1.9.0) 8:39 Sw LLO V99+ - LonLO (Asia traded below it before London formed it) outranks PHL (got " + stOf("8:39", 'S') + ")");
         C(stOf("9:30", 'B') == "ONL/V99+", "9:30 Bk ONL V99+ (got " + stOf("9:30", 'B') + ")");
         C(stOf("9:39", 'S') == "PDL/V99+", "9:39 Sw PDL V99+ (got " + stOf("9:39", 'S') + ")");
         for (const char* w : { "8:45", "9:12", "9:18" }) C(stOf(w, 'B').size() > 0 && stOf(w, 'B').back() == '/', std::string("no strength line on the ") + w + " Bk (got " + stOf(w, 'B') + ")");

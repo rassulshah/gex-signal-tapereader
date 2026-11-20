@@ -26,7 +26,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 10:34-10:37 CT "look at the sw signal, shouldnt it meet a threshold of 20", "the red sweep bar doesnt meet the threshold.. fix", "I should only be on key levels that are named like overnight etc.. and we should have a 20 threshold just like sweeps"; lsRevRead 0.21.3): the Sw needs the Sw CANDLE ITSELF at BVMax or BRMax >= 20 and its strength line is that candle's own (was the max over the attempt candles - HG 11-20 08:03 a weak red Sw got V99+ from the green candle before it); the attempt-volume gate is gone (11:00 CT "shouldnt this be a sweep", ES 09:00 ONH); iPick() names only session / PD / PF / volume / weekly levels - never an hour level (PHH / PHL / 2h / 3h); I_MIN 20 = the I candle's own BVMax / BRMax minimum
+static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 14:20 CT "the 9:09 was a lonHi" - NQ 9:00 swept LonHI 26,447.75 but was labelled PHH): a SESSION level (ON / London / Asia / the pre-open hour / Open) counts "unbroken" from the candle that FORMED it (its high / low = the level), not from 5 PM - Asia trading above the later LonHI hid it; combined names ("ONL/PHL") take the best part's priority and short name instead of being dropped
+// was VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 10:34-10:37 CT "look at the sw signal, shouldnt it meet a threshold of 20", "the red sweep bar doesnt meet the threshold.. fix", "I should only be on key levels that are named like overnight etc.. and we should have a 20 threshold just like sweeps"; lsRevRead 0.21.3): the Sw needs the Sw CANDLE ITSELF at BVMax or BRMax >= 20 and its strength line is that candle's own (was the max over the attempt candles - HG 11-20 08:03 a weak red Sw got V99+ from the green candle before it); the attempt-volume gate is gone (11:00 CT "shouldnt this be a sweep", ES 09:00 ONH); iPick() names only session / PD / PF / volume / weekly levels - never an hour level (PHH / PHL / 2h / 3h); I_MIN 20 = the I candle's own BVMax / BRMax minimum
 // was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-20 09:20 CT "add [the I] ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): iPick() = the ONE level an I names, by the Bk / Sw priority (session > PD > PF > volume > weekly > hours; a tie = the furthest reclaimed); iUnderSw() = the I candle is also a Sw of the same direction (only the Sw shows); no Bk / Sw / Cx rule change
 // was VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20": a Sw needs its attempt's BVMax or BRMax >= 20 (SW_MIN), was 10; the strength line still shows from 10 up (ST_MIN unchanged))   // was "1.5.0"   // (1.5.0, Rassul 2026-11-19 18:29 CT "lets keep it at 10 so the BRmax or BVmax should be at least 10": a Sw needs its attempt's BVMax or BRMax >= 10 (SW_MIN), else no Sw)   // was "1.4.0"   // (1.4.0, Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20)   // was "1.3.0"   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
 // was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 11:22-11:30 CT "sweeps of key levels on big volume or range are very meaningfull", "maybe consider sw and a second line like v50 or r50, same with breaks", "use the max numbers that we have ... biggest in green bars, red bars, consecutive", "ok.. good build it"): Bk / Sw carry a STRENGTH = his BVMax / BRMax (the Volume / Range panes' Max number) - "V<N>" / "R<N>" from 20 up, "99+" from 99; a Sw takes the max over its attempt's candles
@@ -36,6 +37,50 @@ struct Mark { char code = 0; int dir = 0; long long px = 0; std::string lv; long
 inline const char* codeText(char c) { return c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : ""; }
 
 // the priority of a level name (lower = shown first); -1 = this name never labels a mark (MenthorQ, gamma, VWAP ...)
+inline int pri(const std::string& n, int hb);
+// (1.9.0) a combined name "ONL/PHL" / "LonHI/PFL": the best priority of its parts (a part that labels nothing is skipped); -1 = none
+inline int priParts(const std::string& n, std::string* bestPart = nullptr) {
+    int best = -1; size_t a = 0;
+    for (;;) { const size_t p = n.find('/', a); const std::string part = n.substr(a, p == std::string::npos ? std::string::npos : p - a);
+        const int q = part.empty() || part == n ? -1 : pri(part, 0); if (q >= 0 && (best < 0 || q < best)) { best = q; if (bestPart) *bestPart = part; }
+        if (p == std::string::npos) break;
+        a = p + 1; }
+    return best;
+}
+// (1.9.0) a level formed INSIDE the session (ON, London, Asia, the pre-open hour PHH / PHL of the level file, Open), alone or in a combined name
+inline bool sessFormed(const std::string& n) {
+    static const char* const S[] = { "ONH", "ONL", "LonHI", "LonLO", "AsiaHI", "AsiaLO", "PHH", "PHL", "Open" };
+    size_t a = 0; for (;;) { const size_t p = n.find('/', a); const std::string part = n.substr(a, p == std::string::npos ? std::string::npos : p - a);
+        for (const char* x : S) { if (part == x) return true; }
+        if (p == std::string::npos) break;
+        a = p + 1; }
+    return false;
+}
+// (1.9.0) the clock window a session level is printed in (candle END, local): Asia (6 PM, 1 AM], London (2 AM, 7:30 AM], ON (5 PM, 8:30 AM],
+// the pre-open hour PHH / PHL (6:20 AM, 8:30 AM], Open (7:20 AM, 8:40 AM]; a combined name: any of its parts
+inline bool formWindow(const std::string& n, long long tEnd) {
+    long long s = tEnd % 86400; if (s < 0) s += 86400; const int m = (int)(s / 60);
+    size_t a = 0;
+    for (;;) { const size_t p = n.find('/', a); const std::string q = n.substr(a, p == std::string::npos ? std::string::npos : p - a);
+        if ((q == "AsiaHI" || q == "AsiaLO") && (m > 18 * 60 || m <= 60)) return true;
+        if ((q == "LonHI" || q == "LonLO") && m > 120 && m <= 450) return true;
+        if ((q == "ONH" || q == "ONL") && (m > 17 * 60 || m <= 510)) return true;
+        if ((q == "PHH" || q == "PHL") && m > 380 && m <= 510) return true;
+        if (q == "Open" && m > 440 && m <= 520) return true;
+        if (p == std::string::npos) break;
+        a = p + 1; }
+    return false;
+}
+// (1.9.0) the window's end (minutes after midnight, candle END) of a session level's best-known part; -1 = not a session level
+inline int formEnd(const std::string& n) {
+    int e = -1; size_t a = 0;
+    for (;;) { const size_t p = n.find('/', a); const std::string q = n.substr(a, p == std::string::npos ? std::string::npos : p - a);
+        const int x = (q == "AsiaHI" || q == "AsiaLO") ? 60 : (q == "LonHI" || q == "LonLO") ? 450 : (q == "ONH" || q == "ONL" || q == "PHH" || q == "PHL") ? 510 : q == "Open" ? 520 : -1;
+        if (x > e) e = x;
+        if (p == std::string::npos) break;
+        a = p + 1; }
+    return e;
+}
 inline int pri(const std::string& n, int hb) {
     if (hb > 0) return hb == 1 ? 50 : 60;
     static const char* const S0[] = { "ONL", "ONH", "ONH/LonHI", "ONL/LonLO", "LonLO", "LonHI", "AsiaLO", "AsiaHI" };   // (1.3.0, 16:34 "just remove it") no Open
@@ -50,13 +95,16 @@ inline int pri(const std::string& n, int hb) {
     for (const char* x : S3) if (n == x) return 30;
     for (const char* x : S4) if (n == x) return 40;
     for (const char* x : S5) if (n == x) return 50;
+    if (n.find('/') != std::string::npos) return priParts(n);   // (1.9.0) a combined name not listed above
     return -1;
 }
 inline std::string shortName(const std::string& n, int hb, bool high) {
-    if (hb > 0) return hb == 1 ? (high ? "PHH" : "PHL") : std::to_string(hb) + "h" + (high ? "H" : "L");
-    static const std::pair<const char*, const char*> M[] = { { "Open", "Op" }, { "LonLO", "LLO" }, { "LonHI", "LHI" }, { "ONH/LonHI", "ONH" },
+    if (hb > 0) return std::to_string(hb) + "h" + (high ? "H" : "L");   // (1.9.0, Rassul 14:26 CT "the sweep label changes") the prior hour = 1hH / 1hL (was PHH / PHL)
+    static const std::pair<const char*, const char*> M[] = { { "PHH", "PhrH" }, { "PHL", "PhrL" },   // (1.9.0) the level file's pre-open hour, as his chart names it
+        { "Open", "Op" }, { "LonLO", "LLO" }, { "LonHI", "LHI" }, { "ONH/LonHI", "ONH" },
         { "ONL/LonLO", "ONL" }, { "AsiaLO", "ALO" }, { "AsiaHI", "AHI" }, { "PFL/PDL", "PDL" }, { "PFH/PDH", "PDH" }, { "DPoc", "DP" }, { "WPoc", "WP" } };
     for (const auto& m : M) if (n == m.first) return m.second;
+    if (n.find('/') != std::string::npos) { std::string b; if (priParts(n, &b) >= 0 && !b.empty()) return shortName(b, 0, high); }   // (1.9.0) the best part's short name
     return n;
 }
 
@@ -64,7 +112,19 @@ struct Lv { long long px = 0; std::string name; int from = 0; int hb = 0; bool h
 // the levels at candle i: the key / volume levels (from the session start) + the high / low of the 3 full clock hours before i's hour
 inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std::vector<wyr::Lvl>& key) {
     std::vector<Lv> v; for (const wyr::Lvl& z : key) { if (z.px <= 0 || pri(z.name, 0) < 0) continue;   // MenthorQ / gamma / VWAP never make or label a mark
-        Lv a; a.px = z.px; a.name = z.name; a.from = 0; v.push_back(a); }
+        Lv a; a.px = z.px; a.name = z.name; a.from = 0;
+        // (1.9.0, Rassul 14:20 CT "the 9:09 was a lonHi") a SESSION level (ON / London / Asia / the pre-open hour / Open) exists from the candle
+        // that printed it (the first candle whose high or low is the level): before it, it is not a level (no Sw / Bk / Cx of it); its "unbroken"
+        // check starts after that candle - trading beyond it earlier (Asia above the later LonHI) does not use it up
+        if (sessFormed(z.name)) {
+            int fk = -1; for (int k = 0; k < i && k < (int)B.size(); ++k) if ((B[(size_t)k].h == z.px || B[(size_t)k].l == z.px) && formWindow(z.name, B[(size_t)k].t)) { fk = k; break; }
+            if (fk < 0) {   // no candle printed it exactly (another data source): it exists from the first candle after its window
+                const int e = formEnd(z.name);
+                for (int k = 0; k < i && k < (int)B.size(); ++k) { long long q = B[(size_t)k].t % 86400; if (q < 0) q += 86400; const int mm = (int)(q / 60); if (mm > e && mm < 17 * 60) { fk = k - 1; break; } }
+                if (fk < -1 || fk == -1) { bool found = false; for (int k = 0; k < i && k < (int)B.size(); ++k) { long long q = B[(size_t)k].t % 86400; if (q < 0) q += 86400; const int mm = (int)(q / 60); if (mm > e && mm < 17 * 60) { found = true; break; } }
+                    if (!found) continue; } }
+            a.from = fk + 1; }
+        v.push_back(a); }
     if (B.empty() || i <= 0) return v;
     const long long hp = wyr::hourOf(B[(size_t)i].t), h0 = wyr::hourOf(B[0].t);
     for (long long hh = hp - 1; hh >= hp - 3; --hh) {
@@ -94,7 +154,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     std::map<int, std::pair<char, std::vector<Cand> > > raw;   // candle -> code + its candidate levels (mockup order: Sw, then Bk, then Cx)
     std::map<int, int> rawDir; std::map<int, int> rawA;   // (1.2.0) the mark candle -> the first candle of its Sw attempt
     // Sw: one attempt per level
-    { std::set<std::pair<long long, std::string> > done;
+    { std::set<std::pair<long long, std::string> > done; std::map<std::pair<long long, std::string>, int> nextOk;
       for (int f = 5; f < n; ++f) {
         const std::vector<Lv> L = levelsAt(B, f, key);
         for (const Lv& z : L) {
@@ -102,10 +162,15 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             const bool sup = B[(size_t)f - 1].c > z.px;
             auto thr = [&](int k) { return sup ? B[(size_t)k].l < z.px : B[(size_t)k].h > z.px; };
             if (!thr(f)) continue;
-            bool before = false; for (int k = std::max(0, z.from); k < f; ++k) if (thr(k)) { before = true; break; }
+            const int from = std::max(0, z.from);   // (1.9.0) a session level: after the candle that printed it (levelsAt)
+            // (1.9.0, Rassul 14:22 CT "the sw candle clearly swept the Phrh key level" - GC 9:00 PhrH 3,582.4: the 8:18 candle poked 4 ticks through
+            // and closed back, and that green poke used the level up) a level is used up by a CLOSE beyond it, or by its Sw; a poke that closes back
+            // without making a Sw leaves it for the next attempt (after that attempt's candles)
+            bool before = false; for (int k = from; k < f; ++k) if (sup ? B[(size_t)k].c < z.px : B[(size_t)k].c > z.px) { before = true; break; }
             if (before) continue;
-            done.insert(id);
+            { const auto nx = nextOk.find(id); if (nx != nextOk.end() && f < nx->second) continue; }
             std::vector<int> att(1, f); while (att.back() + 1 < n && att.size() < 3 && thr(att.back() + 1)) att.push_back(att.back() + 1);
+            nextOk[id] = att.back() + 1;   // (1.9.0) a failed attempt: the next one starts after these candles
             int dpt = att[0]; for (int k : att) if (sup ? B[(size_t)k].l < B[(size_t)dpt].l : B[(size_t)k].h > B[(size_t)dpt].h) dpt = k;
             int back = -1; for (int k = dpt; k < std::min(n, dpt + 3); ++k) if (sup ? B[(size_t)k].c > z.px : B[(size_t)k].c < z.px) { back = k; break; }
             if (back < 0) continue;
@@ -114,6 +179,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             double am = 0; for (int k : att) am = std::max(am, v[(size_t)k]);
             (void)am;   // (1.8.0, Rassul 11:00 CT "shouldnt this be a sweep" - ES 11-20 09:00 ONH: the attempt's volume was under the 08:54 breakout candle's, so no Sw) no volume gate any more: his sweep rule has none ("no volume requirement", 2026-10-26); the Sw candle's own BVMax / BRMax >= 20 (fillStrength) is the strength test
             if (sup ? !(B[(size_t)dpt].c > B[(size_t)dpt].o) : !(B[(size_t)dpt].c < B[(size_t)dpt].o)) continue;   // (1.3.0, 16:42 "a bullish sweep should be green and vice versa")
+            done.insert(id);   // (1.9.0) used up by its Sw
             Cand c; c.px = z.px; c.name = z.name; c.hb = z.hb; c.high = z.high;
             auto it = raw.find(dpt);
             if (it != raw.end()) { if (it->second.first == 'S') { it->second.second.push_back(c); rawA[dpt] = std::min(rawA[dpt], att[0]); } continue; }
@@ -156,7 +222,9 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     std::map<std::pair<char, std::string>, std::pair<int, long long> > last;
     for (const auto& kv : raw) {
         const int i = kv.first; Mark m; m.code = kv.second.first; m.dir = rawDir[i];
-        Cand c; if (pick(kv.second.second, c)) { m.px = c.px; m.lv = shortName(c.name, c.hb, c.high); }
+        std::vector<Cand> cs = kv.second.second;
+        if (m.code == 'S') std::stable_sort(cs.begin(), cs.end(), [&](const Cand& x, const Cand& y) { if ((x.hb == 0) != (y.hb == 0)) return x.hb == 0; return m.dir > 0 ? x.px < y.px : x.px > y.px; });   // (1.9.0) a tie in priority: a named level before a candle-hour level (GC 9:00 PhrH over the prior hour), then the deepest swept (ES 9:00 ONH over AsiaHI)
+        Cand c; if (pick(cs, c)) { m.px = c.px; m.lv = shortName(c.name, c.hb, c.high); }
         if (!m.lv.empty()) {
             const std::pair<char, std::string> id(m.code, m.lv); auto it = last.find(id);
             if (it != last.end()) { bool away = false; for (int k = it->second.first + 1; k < i; ++k) if (std::fabs((double)(B[(size_t)k].c - m.px)) >= atr[(size_t)k] && atr[(size_t)k] > 0) { away = true; break; }

@@ -21,7 +21,7 @@
 
 namespace svx {
 
-static const char* const VERSION = "1.1.1";   // (1.1.1, Rassul 2026-11-20 13:36 CT "how come i cant hear signals": the NQ 1:00 PM PHH sweep was dropped as too old - a Sw is stamped on its deepest candle but decided up to 3 candles later and the file can lag, so 5 min was too short; now 15 min)   // was "1.1.0";   // (1.1.0, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") + Cobs: offerCob, clips cob-<MKT>-<up|down>.wav "<market>, cob, <up|down>"; every chart offers every market (lsHodLod 2.41.3)
+static const char* const VERSION = "1.1.2";   // (1.1.2, lsRevRead 0.21.6 / LevelMarks 1.9.0 names, Rassul 14:26 CT): the prior hour = 1hH / 1hL ("one hour high"), the pre-open hour = PhrH / PhrL ("pre-open high"); old PHH / PHL clips still play for old marks   // was "1.1.1";   // (1.1.1, Rassul 2026-11-20 13:36 CT "how come i cant hear signals": the NQ 1:00 PM PHH sweep was dropped as too old - a Sw is stamped on its deepest candle but decided up to 3 candles later and the file can lag, so 5 min was too short; now 15 min)   // was "1.1.0";   // (1.1.0, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") + Cobs: offerCob, clips cob-<MKT>-<up|down>.wav "<market>, cob, <up|down>"; every chart offers every market (lsHodLod 2.41.3)
 static const long long E1904 = 2082844800LL;
 static const int ST_MIN = 10;          // LevelMarks 1.5.0 SW_MIN: a Sw needs its attempt's BVMax or BRMax >= 10
 static const long long MAX_AGE = 900;   // (1.1.1) was 300: a Sw is decided up to 3 candles (9 min on 3-min) after the candle it is stamped on, plus the file write delay  // s: a mark older than this when first seen is not spoken (feed catching up)
@@ -38,13 +38,13 @@ inline std::string canon(const std::string& n) {
     if (n == "AsiaLO") return "ALO";
     if (n == "AsiaHI") return "AHI";
     static const char* const K[] = { "ONL", "ONH", "LLO", "LHI", "ALO", "AHI", "PDH", "PDL", "PFH", "PFL", "VAH", "VAL", "PWH", "PWL", "CWH", "CWL",
-                                     "PHH", "PHL", "2hH", "2hL", "3hH", "3hL" };
+                                     "PHH", "PHL", "2hH", "2hL", "3hH", "3hL", "1hH", "1hL", "PhrH", "PhrL" };
     for (const char* k : K) if (n == k) return k;
     return std::string();
 }
 inline const std::vector<std::string>& levels() {
     static const std::vector<std::string> v = { "ONL", "ONH", "LLO", "LHI", "ALO", "AHI", "PDH", "PDL", "PFH", "PFL", "VAH", "VAL", "PWH", "PWL", "CWH", "CWL",
-                                                "PHH", "PHL", "2hH", "2hL", "3hH", "3hL" };
+                                                "PHH", "PHL", "2hH", "2hL", "3hH", "3hL", "1hH", "1hL", "PhrH", "PhrL" };
     return v;
 }
 inline const std::vector<std::string>& markets() { static const std::vector<std::string> v = { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" }; return v; }
@@ -56,6 +56,10 @@ inline std::string levelSpoken(const std::string& c) {
     if (c == "AHI") return "Asia high";
     if (c == "VAH") return "V eh H";
     if (c == "VAL") return "V eh L";
+    if (c == "PhrH") return "pre-open high";   // (1.1.2)
+    if (c == "PhrL") return "pre-open low";
+    if (c == "1hH") return "one hour high";
+    if (c == "1hL") return "one hour low";
     if (c.size() == 3 && c[1] == 'h' && (c[0] == '2' || c[0] == '3')) return std::string(c[0] == '2' ? "two" : "three") + " hour " + (c[2] == 'H' ? "high" : "low");
     std::string o; for (size_t i = 0; i < c.size(); i++) { if (i) o += ' '; o += c[i]; } return o;   // "PDL" -> "P D L"
 }
