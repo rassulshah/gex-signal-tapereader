@@ -20,9 +20,9 @@ int main(int argc, char** argv) {
     const auto M = lvm::run(B, K);
     long long t700 = 0; for (const auto& b : B) if (b.when == "7:00") t700 = b.t;   // the LAST 7:00 = 7:00 AM (the session starts 5 PM)
     const std::string got = str(M, t700);
-    const std::string want = "7:33 Bk AHI; 8:27 Cx AHI; 8:30 Bk PHH; 8:39 Sw PHL; 8:45 Bk PHL; 9:12 Bk PDH; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; the BO candle rule drops the small 7:06 / 8:54 breaks
+    const std::string want = "7:09 Sw PHH; 7:33 Bk AHI; 8:27 Cx AHI; 8:30 Bk PHH; 8:33 Sw PHH; 8:39 Sw PHL; 8:45 Bk PHL; 9:12 Bk PDH; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; the BO candle rule drops the small 7:06 / 8:54 breaks
     std::printf("ES 11-19 7:00-9:48: %s\n", got.c_str());
-    C(got == want, "ES 11-19 = mockup v8 + the 1.3.0 rules");
+    C(got == want, "ES 11-19 = mockup v8 + the 1.3.0 rules (1.8.0: + 7:09 / 8:33 Sw PHH, no volume gate in run(); the own-candle 20 test is fillStrength)");
     for (const auto& kv : M) if (startOf[kv.first] == "9:39") C(kv.second.dir == 1 && kv.second.px == 29221, "Sw PDL bullish at 7305.25");
     for (const auto& kv : M) if (startOf[kv.first] == "9:12") C(kv.second.dir == -1 && kv.second.px == 29555, "Bk PDH bearish at 7388.75");
     // no repaint: candle-by-candle replay gives the same marks for every candle already decided 6+ candles earlier
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v.push_back(bar(T + 13 * 180, 106, 120, 104, 114, 50));    // the sweep without volume
       for (int i = 0; i < 4; ++i) v.push_back(bar(T + (14 + i) * 180, 114, 118, 112, 116, 100));
-      auto m = lvm::run(v, k); C(!m.count(v[12].t), "Sw needs the attempt's volume >= the 5 candles before"); }
+      auto m = lvm::run(v, k); C(m.count(v[12].t) && m[v[12].t].code == 'S', "(1.8.0) no volume gate: a sweep on low volume is still a Sw in run() (fillStrength's own-candle 20 judges it)"); }
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v[3] = bar(v[3].t, 120, 120, 108, 118, 100);                // PDL already traded through earlier
       v.push_back(bar(T + 13 * 180, 106, 120, 104, 114, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (14 + i) * 180, 114, 118, 112, 116, 100));
@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
         C(!M.count(T[39]), "(1.5.0) Sw with BVMax 8 is removed");
         C(!M.count(T[25]), "(1.5.0) Sw with BRMax 9 is removed");
         C(M.count(T[35]) && M.at(T[35]).st == "V35", "(1.5.0) Sw with BVMax 35 stays, V35");
-        C(M.count(T[36]), "(1.5.0) the attempt's max counts (34..36 holds the V35 candle)");
+        C(!M.count(T[36]), "(1.8.0) the attempt's max no longer counts: the Sw candle 36 itself is weak (34..36 holds the V35 candle) -> removed");
         C(M.count(T[24]), "(1.5.0) a weak Bk is never removed by the Sw rule");
     }
     {   // (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20") a Sw needs BVMax or BRMax >= 20; the strength line still shows from 10
@@ -134,6 +134,25 @@ int main(int argc, char** argv) {
         C(one('S', 5, 26, st) == 1 && st == "R25", "(1.6.0) a Sw with BRMax 25 stays, R25 (got " + st + ")");
         C(one('B', 16, 0, st) == 1 && st == "V15", "(1.6.0) a Bk with max 15 keeps its V15 line (got " + st + ")");
         C(one('B', 3, 0, st) == 1 && st.empty(), "(1.6.0) a weak Bk is never removed");
+    }
+    {   // (1.8.0, Rassul 2026-11-20 10:35 CT "the red sweep bar doesnt meet the threshold.. fix") HG 11-20 shape: a big GREEN candle (99+) then the
+        // weak RED Sw candle in the same attempt - the Sw is judged on its own candle and is removed; a strong red Sw candle stays with ITS own count
+        std::vector<long long> T; std::vector<double> V(120, 10.0), R(120, 4.0); std::vector<char> G(120, 1); for (int i = 0; i < 120; ++i) T.push_back(50000 + i * 180);
+        V[118] = 500; R[118] = 40; G[118] = 1;     // the green 99+ candle
+        V[119] = 6;   R[119] = 3;  G[119] = 0;     // the red Sw candle: small
+        std::map<long long, lvm::Mark> M; lvm::Mark sw; sw.code = 'S'; sw.dir = -1; sw.t0 = T[118]; M[T[119]] = sw;
+        lvm::fillStrength(M, T, V, R, G);
+        C(!M.count(T[119]), "(1.8.0) HG shape: weak red Sw after a 99+ green candle is removed (was V99+ from the attempt)");
+        V[119] = 40; R[119] = 3; for (int i = 90; i < 118; ++i) G[(size_t)i] = 0; std::map<long long, lvm::Mark> M2; M2[T[119]] = sw; lvm::fillStrength(M2, T, V, R, G);
+        // red candle volume 40: bigger than the 1 candle before? no (500) -> all = 0; same colour (red) none before -> counts back to the cap/look
+        C(M2.count(T[119]) && M2.at(T[119]).st.size() > 1 && M2.at(T[119]).st[0] == 'V', "(1.8.0) a strong red Sw candle stays with its own line (got " + (M2.count(T[119]) ? M2.at(T[119]).st : std::string("gone")) + ")");
+        // iKey / I_MIN
+        C(lvm::I_MIN == 20, "(1.8.0) I_MIN 20");
+        C(lvm::iKey(lvm::pri("ONL", 0)) && lvm::iKey(lvm::pri("PDL", 0)) && lvm::iKey(lvm::pri("PWH", 0)) && lvm::iKey(lvm::pri("VAL", 0)), "(1.8.0) ON / PD / weekly / VA name an I");
+        C(!lvm::iKey(lvm::pri("PHL", 0)) && !lvm::iKey(lvm::pri("x hour low", 1)) && !lvm::iKey(lvm::pri("x hour low", 2)) && !lvm::iKey(lvm::pri("x", 3)) && !lvm::iKey(lvm::pri("HVL", 0)), "(1.8.0) PHL / 2hL / 3hL / gamma never name an I");
+        std::vector<wyr::Lvl> c(2); c[0].px = 100; c[0].name = "x hour low"; c[0].hb = 2; c[1].px = 99; c[1].name = "x hour low"; c[1].hb = 1; wyr::Lvl z;
+        C(!lvm::iPick(c, 1, z), "(1.8.0) iPick: only hour levels -> no level (no I)");
+        c.push_back(wyr::Lvl()); c[2].px = 98; c[2].name = "ONL"; C(lvm::iPick(c, 1, z) && z.name == "ONL", "(1.8.0) iPick: ONL with hour levels -> ONL");
     }
     // ---- (1.3.0) Bk -> FT -> Tst -> Rev: parity with the agreed mockup (price-pane-cleanup-mockup.html, mk10.py) on 11-19 ES / NQ 8:33 AM - 12:33 PM
     for (const char* mk : { "es", "nq" }) {
