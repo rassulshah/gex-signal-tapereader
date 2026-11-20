@@ -57,7 +57,7 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.41.4";   // (2.41.4) SweepVoice 1.1.1   // was "2.41.3";   // (2.41.3, Rassul 2026-11-20 12:22 CT) the right pill = "Range N%" (range so far / ADR, host) + every market's sweep and Cob spoken (SweepVoice 1.1.0)
+static const char* const HL_VERSION = "2.42.0";   // (2.42.0, Rassul 2026-11-20 13:36 "perfect" / 14:13 build) the two signal rows SW / COB (HodLodTop 1.2.0, TopSignals 1.2.0)   // was "2.41.4";   // (2.41.4) SweepVoice 1.1.1   // was "2.41.3";   // (2.41.3, Rassul 2026-11-20 12:22 CT) the right pill = "Range N%" (range so far / ADR, host) + every market's sweep and Cob spoken (SweepVoice 1.1.0)
 // was HL_VERSION = "2.41.2";   // (2.41.2, Rassul 2026-11-20 12:04 CT "lets only keep cob and sweeps because of the limited room") the signal line shows Cob (left) and Sw (centre) only - no BkTst
 // was HL_VERSION = "2.41.1";   // (2.41.1, Rassul 11:58 CT) the box ends at the last candle (host axisR = priceEdge), not the price axis
 // was HL_VERSION = "2.41.0";   // (2.41.0, Rassul 2026-11-20 10:47 CT "get rid of the left and right buy and sell sections and use the horizontal space for hod values", 10:53 "lets go with A", mockup hodlod-box-wide-mockup.html A; 10:32 "it should be aligned to the left") the BUY AT / SELL AT sections are gone (the Today Plan stays in the MQ Reader): ONE SESSION section across the whole box - Exp / Act with the 1st and 2nd extreme as before, the "1st extreme by / % of days" table moved to the RIGHT of those two rows (the box is 2 rows shorter); the box starts at the pane's left edge (no left keep-out, host)
@@ -762,6 +762,7 @@ struct View {
     std::vector<Seg> hdrExtra, hdrLeft;
     struct MkSeg { std::string s; unsigned col; bool bold; int arrow; };   // (2.29.0) one market of the strength line; arrow +1 up / -1 down / 0 none
     struct CobSeg { std::string mkt, when; int dir; std::string text; };   // (2.35.0) text = the badge ("NQ Sw PHL 1:09"); empty = the 2.30.0 Cob form   // (2.30.0) one market of the Cob section: "NQ", "10:06", +1 bullish / -1 bearish
+    std::vector<htop::Chip> swChips, cobChips;   // (2.42.0) the two signal rows: SW (top) and COB, all markets, newest first
     std::vector<CobSeg> cobs;   // (2.30.0) the markets with a live Cob, right end of the top line; empty = no section
     std::vector<MkSeg> mkts;   // (2.29.0) the market strength line on top of the box (MktMove.h); empty = no line
     std::vector<Seg> htf;   // (2.17.0) the HTF trend / RS line under the header ("60m" label grey, values coloured); empty = no line   // (2.14.3) hdrLeft = "RTH 83% done", "Bar 2:13 left" right after the market
@@ -2029,10 +2030,10 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int htfH = 0;   // (2.17.2, Rassul 14:41 CT) the HTF trend / RS values moved INTO the header (no own row)
         const int callH = CALL_ROW ? rowH + 3 : 0;   // (2.25.0) the call line
         const int mktH = rowH + 3;   // (2.37.0) the signal line, always there (the box keeps one height) - was (2.29.0) the market strength line, only when it had something   // (2.29.0) the market strength line above the header band
-        const int H0 = mktH + callH + htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
+        const int H0 = mktH * 2 + callH + htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
         const int sessRows = 1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size() + (v.tmOk ? 3 : 0);   // (2.14.2) + 1 spacer row above the time table   // (2.14.0) strip + Exp / Act (+ Pre / notes) + the time table
-        const int H = wide ? mktH + callH + htfH + 1 + hdrH + 1 + rowH * (1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size()) + 3 + 2   // (2.41.0) strip + Exp / Act (+ Pre / notes)
-                    : useSw ? mktH + callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
+        const int H = wide ? mktH * 2 + callH + htfH + 1 + hdrH + 1 + rowH * (1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size()) + 3 + 2   // (2.41.0) strip + Exp / Act (+ Pre / notes)
+                    : useSw ? mktH * 2 + callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
         const int Htot = H + (lad.ok ? stripH + STRIP_GAP : 0);
         if (fillW > 0 && !fillOn) return;                    // (2.17.7) pass 2 that cannot reach the width: the caller keeps pass 1
         if (fillOn) area.r = area.l + W;                     // (2.17.7) laid out at the area's left; the host moves it onto pass 1's final spot
@@ -2058,12 +2059,18 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             // THE SIGNAL LINE: the 2.35.0 tags in three groups - Cob left (left-aligned), Sw centre, BkTst right (right-aligned), newest first in
             // each; (19:28 "if there are too many signals you will have to adjust font size") 11 pt -> 10 pt (his floor) -> tighter spacing ->
             // only then the oldest tag of the most crowded group drops (HodLodTop.h). Replaces the 2.29.0 market strength line's top spot.
-            std::vector<htop::Tag> tags;
-            for (const View::CobSeg& g : v.cobs) { if (g.text.empty()) continue; htop::Tag t; t.text = g.text; t.dir = g.dir; t.group = htop::groupOf(htop::typeOf(g.text)); if (t.group == 2) continue;   /* (2.41.2, Rassul 12:04 CT "lets only keep cob and sweeps because of the limited room") no BkTst tags */ if (t.group >= 0) tags.push_back(t); }
+            // (2.42.0, Rassul 2026-11-20 13:22 CT "two signal rows 1 for cobs and the other for sweeps .. sweep signal row above the cob row ...
+            // sweep row should have strength like 99", mockup hodlod-signal-rows-mockup.html, 13:36 "perfect", 14:13 build) TWO rows replace the
+            // one signal line: SW on top, COB under it; chips newest first, each "NQ 1:00 PHH (arrow) 38" (HodLodTop.h rowLayout)
             auto mf = [&](const std::string& s2, int f, bool b2) { return M(s2, f, b2); };
-            const htop::Sig sg = htop::sigLayout(tags, mf, T.l + 8, T.r - 8, y, y + mktH);
-            L.sigFs = sg.fs; L.sigTight = sg.tight; L.sigDropped = sg.dropped; L.sigShown = sg.shown[0] + sg.shown[1] + sg.shown[2]; L.sigRow = Box{ T.l, y, T.r, y + mktH };
-            for (const htop::It& it : sg.items) { if (it.k == 0) addFill(L, it.l, it.t, it.r, it.b, it.col, R_TABLE); else if (it.k == 1) addText(L, it.l, it.t, it.b, it.s, it.col, it.fs, it.bold, it.r - it.l, R_TABLE, -1); }
+            L.sigFs = 0; L.sigTight = false; L.sigDropped = 0; L.sigShown = 0;
+            for (int rr = 0; rr < 2; rr++) {
+                const htop::Row row = htop::rowLayout(rr == 0 ? v.swChips : v.cobChips, rr == 0 ? "SW" : "COB", mf, T.l + 8, T.r - 8, y, y + mktH);
+                if (row.ok) { L.sigFs = L.sigFs ? (std::min)(L.sigFs, row.fs) : row.fs; L.sigTight = L.sigTight || row.tight; L.sigDropped += row.dropped; L.sigShown += row.shown; }
+                for (const htop::It& it : row.items) { if (it.k == 0) addFill(L, it.l, it.t, it.r, it.b, it.col, R_TABLE); else if (it.k == 1) addText(L, it.l, it.t, it.b, it.s, it.col, it.fs, it.bold, it.r - it.l, R_TABLE, -1); else if (it.k == 4) addLine(L, it.l, it.t, it.r, it.b, it.col, it.fs, R_TABLE); }
+                if (rr == 0) addLine(L, T.l + 1, y + mktH - 1, T.r - 1, y + mktH - 1, C_BORDER, 1, R_TABLE);
+                y += rr == 0 ? mktH : 0; }
+            L.sigRow = Box{ T.l, y - mktH, T.r, y + mktH };
             y += mktH; addLine(L, T.l, y - 1, T.r, y - 1, C_BORDER, 1, R_TABLE);
         }
         {   // (2.37.0) LINE 2 = the old two header lines in one, without Hrly / 3m / Day: "ES  Close 4:00 PM | LTD Dec 18 (29d) | NQ -9%  ES -3%" left,

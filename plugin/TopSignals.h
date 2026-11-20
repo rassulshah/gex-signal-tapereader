@@ -21,13 +21,13 @@
 
 namespace tsig {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0 = lsHodLod 2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): a tag shows for 60 min after its candle, aged on the chart's bar clock   // was "1.0.0"
+static const char* const VERSION = "1.2.0";   // (1.2.0 = lsHodLod 2.42.0, Rassul 2026-11-20 13:22 CT two signal rows "sweep row should have strength like 99", 13:36 "perfect", 14:13 build): each Sig carries its number (Sw strength, Cob ZZO count) and a Cob its swept levels; rowOf() = one row's tags   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): a tag shows for 60 min after its candle, aged on the chart's bar clock   // was "1.0.0"
 static const long long SHOW_SECS = 3600;      // (1.1.0) a tag is shown while its age < 60 min (59 min shows, 60 min is gone)
 static const long long E1904 = 2082844800LL;   // 1904 -> 1970, local
 static const size_t MAX_BYTES = 512 * 1024;     // a session's wy / Cob record is a few KB; anything bigger is refused (last good copy kept)
 static const int ZZO_MIN = 10;
 
-struct Sig { std::string mkt, type, lv; long long t = 0; int dir = 0; };   // t = candle end, local secs (unix-naive local)
+struct Sig { std::string mkt, type, lv; long long t = 0; int dir = 0; std::string num; };   // (1.2.0) num = "99+" / "38" (Sw strength) or the Cob's ZZO count   // t = candle end, local secs (unix-naive local)
 
 inline bool toLL(const std::string& s, long long& v) {
     if (s.empty() || s.size() > 20) return false;
@@ -52,12 +52,24 @@ inline bool cleanLevel(const std::string& s) {
     return true;
 }
 
+// (1.2.0) a strength token "V99+" / "R38" -> "99+" / "38"; anything else -> ""
+inline std::string strengthNum(const std::string& st) {
+    if (st.size() < 2 || st.size() > 5 || (st[0] != 'V' && st[0] != 'R')) return std::string();
+    std::string n = st.substr(1); const bool plus = !n.empty() && n.back() == '+'; if (plus) n.pop_back();
+    long long v = 0; if (!toLL(n, v) || v < 0 || v > 99) return std::string();
+    return std::to_string(v) + (plus ? "+" : "");
+}
+// (1.2.0) a Cob's swept levels "ONH/LonHI/AsiaHI/PHH" -> the first two clean ones, "ONH/LonHI"
+inline std::string cobLevels(const std::string& s) {
+    std::string o; int n = 0; for (const std::string& p : split(s, '/')) { if (n >= 2 || !cleanLevel(p) || p.find('/') != std::string::npos) continue; o += (n ? "/" : "") + p; ++n; }
+    return o;
+}
 // the Sw and BkTst signals of one market from its wy file, from the session start to now (later candles are ignored)
 inline std::vector<Sig> parseWy(const std::string& text, const std::string& mkt, long long from, long long to) {
     std::vector<Sig> out; if (text.size() > MAX_BYTES) return out;
     std::map<int, std::string> lastTst;   // side -> the level of its latest Tst (the Rev after it is the BkTst)
     std::vector<std::string> lines = split(text, '\n');
-    struct Row { long long t; std::string code; int dir; std::string lv; };
+    struct Row { long long t; std::string code; int dir; std::string lv; std::string st; };
     std::vector<Row> rows;
     for (const std::string& ln : lines) {
         if (ln.empty()) continue;
@@ -68,11 +80,11 @@ inline std::vector<Sig> parseWy(const std::string& text, const std::string& mkt,
         const long long t = st - E1904; if (t < from || t > to) continue;
         const std::string& c = f[1];
         if (c != "Sw" && c != "Tst" && c != "Rev") continue;
-        rows.push_back(Row{ t, c, (int)d, f.size() > 3 ? f[3] : std::string() });
+        rows.push_back(Row{ t, c, (int)d, f.size() > 3 ? f[3] : std::string(), f.size() > 5 ? f[5] : std::string() });
     }
     std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.t < b.t; });
     for (const Row& r : rows) {
-        if (r.code == "Sw") { if (!cleanLevel(r.lv)) continue; Sig s; s.mkt = mkt; s.type = "Sw"; s.lv = r.lv; s.t = r.t; s.dir = r.dir; out.push_back(s); }
+        if (r.code == "Sw") { if (!cleanLevel(r.lv)) continue; Sig s; s.mkt = mkt; s.type = "Sw"; s.lv = r.lv; s.t = r.t; s.dir = r.dir; s.num = strengthNum(r.st); out.push_back(s); }
         else if (r.code == "Tst") { if (cleanLevel(r.lv)) lastTst[r.dir] = r.lv; }
         else {   // Rev: a BkTst only when a Tst of the same side came before it
             const auto it = lastTst.find(r.dir); if (it == lastTst.end()) continue;
@@ -86,7 +98,7 @@ inline std::vector<Sig> parseWy(const std::string& text, const std::string& mkt,
 // the Cob Revs of one market from its Cob Signal record: the Rev of a drawn Cob (SHOW, ZZO 10+), from the session start to now
 inline std::vector<Sig> parseCob(const std::string& text, const std::string& mkt, long long from, long long to) {
     std::vector<Sig> out; if (text.size() > MAX_BYTES) return out;
-    std::map<long long, int> cobDir; std::map<long long, bool> shown; std::map<long long, long long> zzo;
+    std::map<long long, int> cobDir; std::map<long long, bool> shown; std::map<long long, long long> zzo; std::map<long long, std::string> cobLv;
     struct Rv { long long t, cob; int dir; }; std::vector<Rv> revs;
     for (const std::string& ln : split(text, '\n')) {
         if (ln.empty() || ln[0] == '#') continue;
@@ -94,7 +106,7 @@ inline std::vector<Sig> parseCob(const std::string& text, const std::string& mkt
         if (f.size() < 4) continue;
         long long t = 0; if (!toLL(f[1], t)) continue;
         const int d = f[2] == "BULL" ? 1 : f[2] == "BEAR" ? -1 : 0; if (!d) continue;
-        if (f[0] == "COB") { cobDir[t] = d; shown[t] = f.back() == "SHOW"; }
+        if (f[0] == "COB") { cobDir[t] = d; shown[t] = f.back() == "SHOW"; if (f.size() > 4) cobLv[t] = cobLevels(f[4]); }
         else if (f[0] == "ZZO") { long long n = 0; if (toLL(f[3], n)) zzo[t] = n; }
         else if (f[0] == "REV") { long long c = 0; if (!toLL(f[3], c)) continue; if (t >= from && t <= to) revs.push_back(Rv{ t, c, d }); }
     }
@@ -103,7 +115,7 @@ inline std::vector<Sig> parseCob(const std::string& text, const std::string& mkt
         if (!shown[r.cob]) continue;
         const auto z = zzo.find(r.cob); if (z == zzo.end() || z->second < ZZO_MIN) continue;
         if (r.cob < from) continue;   // the Cob itself is in this session
-        Sig s; s.mkt = mkt; s.type = "Cob"; s.t = r.t; s.dir = r.dir; out.push_back(s);
+        Sig s; s.mkt = mkt; s.type = "Cob"; s.t = r.t; s.dir = r.dir; s.num = std::to_string(z->second); { const auto l = cobLv.find(r.cob); if (l != cobLv.end()) s.lv = l->second; } out.push_back(s);
     }
     return out;
 }
@@ -126,6 +138,12 @@ inline std::vector<Sig> freshOnly(const std::vector<Sig>& v, long long now) {
     std::vector<Sig> o; for (const Sig& s : v) if (fresh(s, now)) o.push_back(s); return o;
 }
 
+// (1.2.0) one signal row (lsHodLod 2.42.0): every shown tag of a type (Sw or Cob) from all markets, newest first (a tie: by market)
+inline std::vector<Sig> rowOf(const std::vector<Sig>& all, const std::string& type, long long now) {
+    std::vector<Sig> o; for (const Sig& s : all) if (s.type == type && s.t <= now + 60 && fresh(s, now)) o.push_back(s);
+    std::stable_sort(o.begin(), o.end(), [](const Sig& a, const Sig& b) { return a.t != b.t ? a.t > b.t : a.mkt < b.mkt; });
+    return o;
+}
 inline std::string clock12(long long tLocal) {
     long long sod = tLocal % 86400; if (sod < 0) sod += 86400;
     const int h = (int)(sod / 3600), m = (int)((sod % 3600) / 60);

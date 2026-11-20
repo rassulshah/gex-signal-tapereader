@@ -1,5 +1,7 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.42.0 (2026-11-20 14:13 CT, Rassul 13:22 "two signal rows ... sweep row should have strength like 99", 13:36 "perfect"): the signal line becomes TWO rows - SW (top) and
+ *         COB - every market's sweeps / Cobs of the last 60 min, newest first, chips "NQ 1:00 PHH (arrow) 38" (HodLodTop 1.2.0, TopSignals 1.2.0)
  *  2.41.4 (2026-11-20 13:40 CT, Rassul "how come i cant hear signals"): SweepVoice 1.1.1 - a sweep is still spoken when it reaches the file up to 15 min after its candle (was 5 min)
  *  2.41.3 (2026-11-20 12:22 CT, Rassul "yes range instead is good. yes cob and all market sweep voice alerts"): the right pill = "Range 133%"
  *         (RTH range so far / ADR, grey under 100%, gold from 100%) in place of the Range Day pill; every chart speaks EVERY market's sweeps and
@@ -1992,7 +1994,7 @@ int HodLod::draw(void)
         S->view.mkts.clear();
         for (const mkm::Seg& g : mkm::line(S->mkItems, (long long)nowE))
             S->view.mkts.push_back(hl::View::MkSeg{ g.s, g.flat ? hl::C_GREY : g.dir > 0 ? hl::C_GREEN : hl::C_RED, g.bold, g.bold ? g.dir : 0 });
-        S->view.cobs.clear();
+        S->view.cobs.clear(); S->view.swChips.clear(); S->view.cobChips.clear();
         // (2.35.0) the latest Cob (Rev), Sw and BkTst of every market: the 14 record files are read (bounded, kept by stamp) and parsed at
         // most every 5 s; the draw only copies the finished badges
         try {
@@ -2016,6 +2018,10 @@ int HodLod::draw(void)
             const std::vector<tsig::Sig> keep = tsig::freshOnly(S->tsLatest, S->tsClock);
             S->tsExpired = (int)(S->tsLatest.size() - keep.size());
             for (const tsig::Sig& g : keep) S->view.cobs.push_back(hl::View::CobSeg{ g.mkt, tsig::clock12(g.t), g.dir, tsig::label(g) });
+            // (2.42.0) the two rows: every Sw / Cob of the last 60 min (not only the latest per market), newest first
+            S->view.swChips.clear(); S->view.cobChips.clear();
+            for (int rr = 0; rr < 2; rr++) for (const tsig::Sig& g : tsig::rowOf(S->tsAll, rr == 0 ? "Sw" : "Cob", S->tsClock)) {
+                htop::Chip c; c.mkt = tsig::mktLabel(g.mkt); c.when = tsig::clock12(g.t); c.lv = g.lv; c.num = g.num; c.dir = g.dir; (rr == 0 ? S->view.swChips : S->view.cobChips).push_back(c); }
         } catch (...) {}
         S->tsShown = (int)S->view.cobs.size();
     }
@@ -2421,7 +2427,7 @@ int HodLod::draw(void)
                   + ",record " + (S->gmRecFile.empty() ? std::string("-") : S->gmRecFile) + " +" + std::to_string(S->gmRecN) + (S->gmAppendFails ? " append fails " + std::to_string(S->gmAppendFails) : "") + ",line " + S->gmText + "\n";
     S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->gmDrawnF ? std::string("pill + 0DTE at the far left of the gamma row (2.39.1)") : std::string()) + (S->gmDrawnF ? std::string() : S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
                   + ",tag " + (S->nrTag.empty() ? std::string("-") : S->nrTag) + "\n";   // (2.37.1)
-    S->placeLine += "SIGNAL_LINE," + std::string(htop::VERSION) + "," + (L.tableOk ? "font " + std::to_string(L.sigFs) + " pt" + (L.sigTight ? " tight" : "") + ",shown " + std::to_string(L.sigShown) + ",dropped " + std::to_string(L.sigDropped) : std::string("no table")) + " (Cob left | Sw centre | BkTst right)\n";
+    S->placeLine += "SIGNAL_LINE," + std::string(htop::VERSION) + "," + (L.tableOk ? "font " + std::to_string(L.sigFs) + " pt" + (L.sigTight ? " tight" : "") + ",shown " + std::to_string(L.sigShown) + ",dropped " + std::to_string(L.sigDropped) : std::string("no table")) + ",sw " + std::to_string(S->view.swChips.size()) + ",cob " + std::to_string(S->view.cobChips.size()) + " (2.42.0: SW row over COB row, last 60 min, newest first)\n";
     if (S->rbox.ok && !HL_READBOX_DRAW) S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not drawn (2.34.0: removed from the price pane; still built)," + S->rbWhy + "\n";
     else if (S->rbox.ok) {   // (2.22.0) the READ BOX left column; (2.22.1) at the pane top, as wide as its text, clear of the left-edge labels
         const int fs = 10;
@@ -2591,6 +2597,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.41.4");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.42.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

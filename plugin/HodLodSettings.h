@@ -5,7 +5,8 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.41.4";   // (2.41.4) SweepVoice 1.1.1 - no settings change
+static const char* const PLUGIN_VERSION = "2.42.0";   // (2.42.0) the two signal rows - no settings change
+// was PLUGIN_VERSION = "2.41.4";   // (2.41.4) SweepVoice 1.1.1 - no settings change
 // was PLUGIN_VERSION = "2.41.3";   // (2.40.0) the TODAY PLAN sections replace the drawn sweep sections - no settings change
 // was PLUGIN_VERSION = "2.39.1";   // (2.39.1) pill at the far left + arrow slots - no settings change
 // was PLUGIN_VERSION = "2.39.0";   // (2.39.0) the GAMMA line - no settings change

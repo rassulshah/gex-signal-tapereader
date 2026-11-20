@@ -20,7 +20,7 @@
 
 namespace htop {
 
-static const char* const VERSION = "1.1.0";   // was "1.0.0" (lsHodLod 2.37.0)
+static const char* const VERSION = "1.2.0";   // (1.2.0 = lsHodLod 2.42.0) the two signal rows (rowLayout)   // was "1.1.0";   // was "1.0.0" (lsHodLod 2.37.0)
 static const int FS_NORMAL = 11, FS_MIN = 10;
 
 struct Tag { std::string text; int dir = 0; int group = 0; };   // in newest-first order
@@ -76,6 +76,60 @@ template <class M> inline Sig sigLayout(const std::vector<Tag>& tags, M meas, in
         S.gr[g] = x;
     }
     return S;
+}
+
+// (1.2.0 = lsHodLod 2.42.0, Rassul 2026-11-20 13:22 CT "two signal rows 1 for cobs and the other for sweeps .. sweep signal row above the cob
+// row and make the values look nice for both rows. sweep row should have strength like 99", mockup hodlod-signal-rows-mockup.html, 13:36
+// "perfect", 14:13 build): ONE row = a grey head ("SW" / "COB") then chips, newest first: a 3 px bar in the side's colour, a dark tint of it,
+// the market (bold white), the time, the level(s), an arrow drawn with lines (no glyph) and the number (sweep strength / Cob ZZO count) in
+// black on the side's colour. Crowding: 11 pt -> 10 pt (his floor) -> tight spacing -> the OLDEST chip drops (the right end), repeated.
+// Items: k 0 fill, k 1 text, k 4 line (l,t)->(r,b) width fs (2).
+struct Chip { std::string mkt, when, lv, num; int dir = 0; };
+struct Row { bool ok = false; int fs = 0; bool tight = false; int shown = 0, dropped = 0, r = 0; std::vector<It> items; };
+static const unsigned CH_TINT_DN = 0x002A0F12u, CH_TINT_UP = 0x000D2617u, CH_WHITE = 0x00FFFFFFu, CH_TIME = 0x00CBD5E1u, CH_LV = 0x00E5E7EBu, CH_HEAD = 0x008A93A3u;
+inline std::string chipLv(const std::string& lv) { std::string o; for (char c : lv) { if (c == '/') o += " \xB7 "; else o += c; } return o; }
+inline int arrowW(int fs) { return fs / 2 + 4; }
+template <class M> inline int chipW(const Chip& c, M meas, int fs, int pad) {
+    const int g = fs >= 11 ? 4 : 3; int w = 3 + pad + meas(c.mkt, fs, true) + g + meas(c.when, fs, false);
+    if (!c.lv.empty()) w += g + meas(chipLv(c.lv), fs, false);
+    w += g + arrowW(fs);
+    if (!c.num.empty()) w += g + meas(c.num, fs, true) + 6;
+    return w + pad;
+}
+template <class M> inline Row rowLayout(const std::vector<Chip>& chips, const std::string& head, M meas, int x0, int x1, int top, int bot, int fsNorm = FS_NORMAL, int fsMin = FS_MIN) {
+    Row R; if (x1 - x0 < 40 || bot - top < 8) return R;
+    if (fsNorm < fsMin) fsNorm = fsMin;
+    const int hfs = fsMin;   // the head: small, grey
+    const int headW = head.empty() ? 0 : meas(head, hfs, true) + 8;
+    const int c0 = x0 + (headW < 34 ? 34 : headW);
+    int n = (int)chips.size();
+    auto total = [&](int k, int fs, int pad, int gap) { int w = 0; for (int i = 0; i < k; i++) w += chipW(chips[(size_t)i], meas, fs, pad) + (i ? gap : 0); return w; };
+    int fs = fsNorm, pad = 5, gap = 6; bool fit = false;
+    for (int f = fsNorm; f >= fsMin && !fit; --f) if (c0 + total(n, f, 5, 6) <= x1) { fs = f; pad = 5; gap = 6; fit = true; }
+    if (!fit && c0 + total(n, fsMin, 3, 3) <= x1) { fs = fsMin; pad = 3; gap = 3; fit = true; R.tight = true; }
+    while (!fit && n > 0) { --n; R.dropped++; if (c0 + total(n, fsMin, 3, 3) <= x1) { fs = fsMin; pad = 3; gap = 3; fit = true; R.tight = true; } }
+    R.ok = true; R.fs = fs; R.shown = n;
+    if (headW) { It T; T.k = 1; T.l = x0; T.t = top + 1; T.r = x0 + headW - 8; T.b = bot - 1; T.col = CH_HEAD; T.s = head; T.fs = hfs; T.bold = true; R.items.push_back(T); }
+    const int ct = top + 2, cb = bot - 2, g = fs >= 11 ? 4 : 3; int x = c0;
+    auto text = [&](int l, const std::string& s, unsigned col, bool b) { const int w = meas(s, fs, b); It T; T.k = 1; T.l = l; T.t = top + 1; T.r = l + w; T.b = bot - 1; T.col = col; T.s = s; T.fs = fs; T.bold = b; R.items.push_back(T); return w; };
+    for (int i = 0; i < n; i++) { const Chip& c = chips[(size_t)i]; if (i) x += gap;
+        const int w = chipW(c, meas, fs, pad); const unsigned side = c.dir > 0 ? 0x0022C55Eu : 0x00EF4444u;
+        It F; F.k = 0; F.l = x; F.t = ct; F.r = x + w; F.b = cb; F.col = c.dir > 0 ? CH_TINT_UP : CH_TINT_DN; R.items.push_back(F);
+        It Bar; Bar.k = 0; Bar.l = x; Bar.t = ct; Bar.r = x + 3; Bar.b = cb; Bar.col = side; R.items.push_back(Bar);
+        int xx = x + 3 + pad;
+        xx += text(xx, c.mkt, CH_WHITE, true) + g;
+        xx += text(xx, c.when, CH_TIME, false);
+        if (!c.lv.empty()) { xx += g; xx += text(xx, chipLv(c.lv), CH_LV, false); }
+        xx += g; { const int aw = arrowW(fs), ax = xx + aw / 2, h = fs - 2, yc = (ct + cb) / 2, ya = yc - h / 2, yb = yc + h / 2;
+            const int tip = c.dir > 0 ? ya : yb, d = c.dir > 0 ? 3 : -3;
+            It a; a.k = 4; a.l = ax; a.t = ya; a.r = ax; a.b = yb; a.col = side; a.fs = 2; R.items.push_back(a);
+            It b1; b1.k = 4; b1.l = ax - 3; b1.t = tip + d; b1.r = ax; b1.b = tip; b1.col = side; b1.fs = 2; R.items.push_back(b1);
+            It b2; b2.k = 4; b2.l = ax + 3; b2.t = tip + d; b2.r = ax; b2.b = tip; b2.col = side; b2.fs = 2; R.items.push_back(b2);
+            xx += aw; }
+        if (!c.num.empty()) { xx += g; const int nw = meas(c.num, fs, true) + 6; It N; N.k = 0; N.l = xx; N.t = ct + 1; N.r = xx + nw; N.b = cb - 1; N.col = side; R.items.push_back(N);
+            text(xx + 3, c.num, 0x00000000u, true); xx += nw; }
+        x += w; }
+    R.r = x; return R;
 }
 
 // "Exp 3:00 PM" (the header's short expiry) -> "0DTE Exp 3:00 PM"; empty stays empty
