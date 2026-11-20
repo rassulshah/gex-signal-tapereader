@@ -116,13 +116,13 @@ int main(int argc, char** argv) {
       const int y70 = yOf(v, 70), y30 = yOf(v, 30), y50 = yOf(v, 50); int d70 = 0, d30 = 0, grey = 0, at50 = 0; bool thin = true, shortD = true, gaps = true; int prev70 = -100;
       for (const auto& q : P) { if (q.kind != 0) continue; if (q.col == C_GREY) ++grey;
         if (q.y0 == q.y1 && q.y0 == y50 && q.x0 == v.l && q.x1 == v.r) ++at50;
-        const bool horiz = q.y0 == q.y1 && q.width == 1 && q.dash;
+        const bool horiz = q.y0 == q.y1 && q.width == 1 && q.x0 == v.l && q.x1 == v.r;   // (0.1.4) one solid line each
         if (horiz && q.y0 == y70 && q.col == C_RED) { ++d70; if (q.x0 - prev70 < DASH_ON + DASH_OFF) gaps = false; prev70 = q.x0; if (q.x1 - q.x0 + 1 > DASH_ON) shortD = false; }
         if (horiz && q.y0 == y30 && q.col == C_GREEN) { ++d30; if (q.x1 - q.x0 + 1 > DASH_ON) shortD = false; }
         if (q.dash && q.width != 1) thin = false; }
       C(grey == 0 && at50 == 0, "no grey 50 line");
-      C(d70 >= 100 && d30 == d70, "70 / 30 lines drawn as many short dashes across the pane");
-      C(thin && shortD && gaps, "dashes 1 px wide, <= DASH_ON px long, with gaps");
+      C(d70 == 1 && d30 == 1, "(0.1.4) 70 / 30 drawn as one solid 1 px line each, across the pane");
+      (void)thin; (void)shortD; (void)gaps;
       bool curveSame = true; for (const auto& q : P) if (q.kind == 0 && !q.dash && q.width == 2 && q.col != C_BLUE && q.col != C_RED && q.col != C_GREEN) curveSame = false; C(curveSame, "RSI curve: width 2, blue / red / green");
       View tiny = v; tiny.r = 5; tiny.b = 5; C(layout(E, tiny).empty(), "too small a pane draws nothing"); }
     // parity with the Python reference on ES 11-19 (es_close.txt: t c h l per line; ref_rsi.txt: index value)
@@ -135,6 +135,6 @@ int main(int argc, char** argv) {
       while (f >> t >> h >> l >> c >> d >> tm) { Bar b; b.t = i; b.h = h; b.l = l; b.c = c; E.add(b); T[i++] = tm; }
       bool hit = false; for (const Dv& x : E.dv) if (T[x.t2] == "09:00:00" && T[x.t1] == "08:36:00" && x.dir == -1) hit = true;
       { const std::string m = "0.1.3: ES 11-20 08:36 -> 09:00 bearish Dv marked (" + std::to_string(i) + " candles)"; C(i > 300 && hit, m.c_str()); }
-      C(ZZ_REV == 1 && std::string(VERSION) == "0.1.3", "0.1.3: 1-bar walk, version"); }
+      C(ZZ_REV == 1 && std::string(VERSION) == "0.1.4", "0.1.3: 1-bar walk; version 0.1.4"); }
     std::printf("%s %d pass, %d fail\n", bad ? "FAILED" : "ALL PASS", ok, bad); return bad;
 }

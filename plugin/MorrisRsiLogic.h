@@ -1,4 +1,5 @@
-// MorrisRsiLogic.h 0.1.3 (2026-11-20)
+// MorrisRsiLogic.h 0.1.4 (2026-11-20)
+// 0.1.4 Rassul 2026-11-20 17:04 CT "morris rsi updates to have solid green and red lines": the 70 (red) and 30 (green) lines are SOLID 1 px lines (were dashes)
 // 0.1.3 Rassul 2026-11-20 10:58 CT ("why are you not showing divergences" / "same issue", ES 08:36 high RSI 78 -> 09:00 higher high RSI 70 not marked):
 //       the Dv pivots come from the 1-bar High / Low walk (a lower low than the previous candle turns an up leg; the swings his chart's
 //       ZigZag line shows) - was the 3-bar walk, which skipped the 08:27 / 08:36 swings (no low under the previous 3 lows). Same RSI
@@ -34,7 +35,7 @@
 
 namespace mrsi {
 
-static const char* const VERSION = "0.1.3";
+static const char* const VERSION = "0.1.4";
 static const int ZZ_REV = 1;   // 0.1.3: pivots on the 1-bar High / Low walk (was 3)
 static const int N = 20, SM = 3;                      // RSI period, smoothing (simple)
 static const double OB = 70.0, OS = 30.0, MID = 50.0;
@@ -139,7 +140,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v) {
     std::vector<Prim> P; if (v.r - v.l < 20 || v.b - v.t < 20) return P;
     auto hline = [&](double lv, unsigned col) {              // short dashes, 1 px (0.1.1); no 50 line
         const int y = yOf(v, lv);
-        for (int x = v.l; x <= v.r; x += DASH_ON + DASH_OFF) { Prim p; p.kind = 0; p.x0 = x; p.x1 = std::min(v.r, x + DASH_ON - 1); p.y0 = p.y1 = y; p.col = col; p.width = 1; p.dash = true; P.push_back(p); }
+        Prim p; p.kind = 0; p.x0 = v.l; p.x1 = v.r; p.y0 = p.y1 = y; p.col = col; p.width = 1; p.dash = false; P.push_back(p);   // (0.1.4) one solid line
     };
     hline(OB, C_RED); hline(OS, C_GREEN);
     const int n = (int)E.B.size();
