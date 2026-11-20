@@ -26,7 +26,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 14:20 CT "the 9:09 was a lonHi" - NQ 9:00 swept LonHI 26,447.75 but was labelled PHH): a SESSION level (ON / London / Asia / the pre-open hour / Open) counts "unbroken" from the candle that FORMED it (its high / low = the level), not from 5 PM - Asia trading above the later LonHI hid it; combined names ("ONL/PHL") take the best part's priority and short name instead of being dropped
+static const char* const VERSION = "1.10.0";   // (1.10.0, Rassul 2026-11-20 16:44 CT "yes, use strict rule"): a Sw needs a level nobody TRADED through since it formed (wicks count, one attempt per level - the 1.8.0 rule), and the mark is LABELLED with the best key level its candle crossed (wick through, close back) even if that key level was touched earlier (GC 11-20 9:00: swept the untouched 1-hour high 3,582.8, crossed PhrH 3,582.4 -> "PhrH"); 1.9.0's formation start, combined names, repeat fallback and 1hH / PhrH names stay
+// was VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 14:20 CT "the 9:09 was a lonHi" - NQ 9:00 swept LonHI 26,447.75 but was labelled PHH): a SESSION level (ON / London / Asia / the pre-open hour / Open) counts "unbroken" from the candle that FORMED it (its high / low = the level), not from 5 PM - Asia trading above the later LonHI hid it; combined names ("ONL/PHL") take the best part's priority and short name instead of being dropped
 // was VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 10:34-10:37 CT "look at the sw signal, shouldnt it meet a threshold of 20", "the red sweep bar doesnt meet the threshold.. fix", "I should only be on key levels that are named like overnight etc.. and we should have a 20 threshold just like sweeps"; lsRevRead 0.21.3): the Sw needs the Sw CANDLE ITSELF at BVMax or BRMax >= 20 and its strength line is that candle's own (was the max over the attempt candles - HG 11-20 08:03 a weak red Sw got V99+ from the green candle before it); the attempt-volume gate is gone (11:00 CT "shouldnt this be a sweep", ES 09:00 ONH); iPick() names only session / PD / PF / volume / weekly levels - never an hour level (PHH / PHL / 2h / 3h); I_MIN 20 = the I candle's own BVMax / BRMax minimum
 // was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-20 09:20 CT "add [the I] ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): iPick() = the ONE level an I names, by the Bk / Sw priority (session > PD > PF > volume > weekly > hours; a tie = the furthest reclaimed); iUnderSw() = the I candle is also a Sw of the same direction (only the Sw shows); no Bk / Sw / Cx rule change
 // was VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20": a Sw needs its attempt's BVMax or BRMax >= 20 (SW_MIN), was 10; the strength line still shows from 10 up (ST_MIN unchanged))   // was "1.5.0"   // (1.5.0, Rassul 2026-11-19 18:29 CT "lets keep it at 10 so the BRmax or BVmax should be at least 10": a Sw needs its attempt's BVMax or BRMax >= 10 (SW_MIN), else no Sw)   // was "1.4.0"   // (1.4.0, Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20)   // was "1.3.0"   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
@@ -154,7 +155,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     std::map<int, std::pair<char, std::vector<Cand> > > raw;   // candle -> code + its candidate levels (mockup order: Sw, then Bk, then Cx)
     std::map<int, int> rawDir; std::map<int, int> rawA;   // (1.2.0) the mark candle -> the first candle of its Sw attempt
     // Sw: one attempt per level
-    { std::set<std::pair<long long, std::string> > done; std::map<std::pair<long long, std::string>, int> nextOk;
+    { std::set<std::pair<long long, std::string> > done;
       for (int f = 5; f < n; ++f) {
         const std::vector<Lv> L = levelsAt(B, f, key);
         for (const Lv& z : L) {
@@ -163,14 +164,11 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             auto thr = [&](int k) { return sup ? B[(size_t)k].l < z.px : B[(size_t)k].h > z.px; };
             if (!thr(f)) continue;
             const int from = std::max(0, z.from);   // (1.9.0) a session level: after the candle that printed it (levelsAt)
-            // (1.9.0, Rassul 14:22 CT "the sw candle clearly swept the Phrh key level" - GC 9:00 PhrH 3,582.4: the 8:18 candle poked 4 ticks through
-            // and closed back, and that green poke used the level up) a level is used up by a CLOSE beyond it, or by its Sw; a poke that closes back
-            // without making a Sw leaves it for the next attempt (after that attempt's candles)
-            bool before = false; for (int k = from; k < f; ++k) if (sup ? B[(size_t)k].c < z.px : B[(size_t)k].c > z.px) { before = true; break; }
+            // (1.10.0, "use strict rule") nobody TRADED through it since it formed (a wick counts); the first candle through is its one attempt
+            bool before = false; for (int k = from; k < f; ++k) if (thr(k)) { before = true; break; }
             if (before) continue;
-            { const auto nx = nextOk.find(id); if (nx != nextOk.end() && f < nx->second) continue; }
+            done.insert(id);
             std::vector<int> att(1, f); while (att.back() + 1 < n && att.size() < 3 && thr(att.back() + 1)) att.push_back(att.back() + 1);
-            nextOk[id] = att.back() + 1;   // (1.9.0) a failed attempt: the next one starts after these candles
             int dpt = att[0]; for (int k : att) if (sup ? B[(size_t)k].l < B[(size_t)dpt].l : B[(size_t)k].h > B[(size_t)dpt].h) dpt = k;
             int back = -1; for (int k = dpt; k < std::min(n, dpt + 3); ++k) if (sup ? B[(size_t)k].c > z.px : B[(size_t)k].c < z.px) { back = k; break; }
             if (back < 0) continue;
@@ -179,7 +177,6 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             double am = 0; for (int k : att) am = std::max(am, v[(size_t)k]);
             (void)am;   // (1.8.0, Rassul 11:00 CT "shouldnt this be a sweep" - ES 11-20 09:00 ONH: the attempt's volume was under the 08:54 breakout candle's, so no Sw) no volume gate any more: his sweep rule has none ("no volume requirement", 2026-10-26); the Sw candle's own BVMax / BRMax >= 20 (fillStrength) is the strength test
             if (sup ? !(B[(size_t)dpt].c > B[(size_t)dpt].o) : !(B[(size_t)dpt].c < B[(size_t)dpt].o)) continue;   // (1.3.0, 16:42 "a bullish sweep should be green and vice versa")
-            done.insert(id);   // (1.9.0) used up by its Sw
             Cand c; c.px = z.px; c.name = z.name; c.hb = z.hb; c.high = z.high;
             auto it = raw.find(dpt);
             if (it != raw.end()) { if (it->second.first == 'S') { it->second.second.push_back(c); rawA[dpt] = std::min(rawA[dpt], att[0]); } continue; }
@@ -218,6 +215,14 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             std::stable_sort(in.begin(), in.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first < b.first; });
             std::vector<Cand> cs; for (size_t q = 0; q < in.size() && q < 4; ++q) cs.push_back(in[q].second);
             raw[kk] = std::make_pair('C', cs); rawDir[kk] = side; break; } } }
+    // (1.10.0) a Sw's label may be any KEY level its mark candle crossed (wick through it, close back on the other side), touched earlier or not:
+    // the untouched level (often an hour high / low) decides THAT it is a sweep, the key level it crossed names it
+    for (auto& kv : raw) { if (kv.second.first != 'S') continue; const int i = kv.first; const int d = rawDir[i]; const wyr::Bar& b = B[(size_t)i];
+        for (const Lv& z : levelsAt(B, i, key)) { if (z.hb != 0 || pri(z.name, 0) < 0) continue;
+            const int a0 = rawA.count(i) ? rawA[i] : i; const long long pc = a0 > 0 ? B[(size_t)a0 - 1].c : b.o;   // the close before the attempt: still on the level's original side
+            const bool crossed = d > 0 ? (pc > z.px && b.l < z.px && b.c > z.px) : (pc < z.px && b.h > z.px && b.c < z.px); if (!crossed) continue;
+            bool have = false; for (const Cand& x : kv.second.second) if (x.px == z.px && x.name == z.name) have = true;
+            if (!have) { Cand c; c.px = z.px; c.name = z.name; c.hb = 0; c.high = d < 0; kv.second.second.push_back(c); } } }
     // one level each, repeats cut (per code + level, in candle order)
     std::map<std::pair<char, std::string>, std::pair<int, long long> > last;
     for (const auto& kv : raw) {

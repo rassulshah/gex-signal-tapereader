@@ -21,7 +21,7 @@
 
 namespace tsig {
 
-static const char* const VERSION = "1.2.0";   // (1.2.0 = lsHodLod 2.42.0, Rassul 2026-11-20 13:22 CT two signal rows "sweep row should have strength like 99", 13:36 "perfect", 14:13 build): each Sig carries its number (Sw strength, Cob ZZO count) and a Cob its swept levels; rowOf() = one row's tags   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): a tag shows for 60 min after its candle, aged on the chart's bar clock   // was "1.0.0"
+static const char* const VERSION = "1.2.1";   // (1.2.1, Rassul 2026-11-20 16:51 CT "get rid of that rule. keep all sweeps of the session ... latest on the left and the same with cob"): the rows show the whole session (from 5 PM), no 60-min expiry   // was "1.2.0";   // (1.2.0 = lsHodLod 2.42.0, Rassul 2026-11-20 13:22 CT two signal rows "sweep row should have strength like 99", 13:36 "perfect", 14:13 build): each Sig carries its number (Sw strength, Cob ZZO count) and a Cob its swept levels; rowOf() = one row's tags   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): a tag shows for 60 min after its candle, aged on the chart's bar clock   // was "1.0.0"
 static const long long SHOW_SECS = 3600;      // (1.1.0) a tag is shown while its age < 60 min (59 min shows, 60 min is gone)
 static const long long E1904 = 2082844800LL;   // 1904 -> 1970, local
 static const size_t MAX_BYTES = 512 * 1024;     // a session's wy / Cob record is a few KB; anything bigger is refused (last good copy kept)
@@ -140,7 +140,7 @@ inline std::vector<Sig> freshOnly(const std::vector<Sig>& v, long long now) {
 
 // (1.2.0) one signal row (lsHodLod 2.42.0): every shown tag of a type (Sw or Cob) from all markets, newest first (a tie: by market)
 inline std::vector<Sig> rowOf(const std::vector<Sig>& all, const std::string& type, long long now) {
-    std::vector<Sig> o; for (const Sig& s : all) if (s.type == type && s.t <= now + 60 && fresh(s, now)) o.push_back(s);
+    std::vector<Sig> o; for (const Sig& s : all) if (s.type == type && s.t <= now + 60) o.push_back(s);   // (1.2.1) the whole session, no 60-min expiry
     std::stable_sort(o.begin(), o.end(), [](const Sig& a, const Sig& b) { return a.t != b.t ? a.t > b.t : a.mkt < b.mkt; });
     return o;
 }

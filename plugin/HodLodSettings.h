@@ -5,7 +5,8 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.42.1";   // (2.42.1) voice names - no settings change
+static const char* const PLUGIN_VERSION = "2.42.2";   // (2.42.2) rows keep the session - no settings change
+// was PLUGIN_VERSION = "2.42.1";   // (2.42.1) voice names - no settings change
 // was PLUGIN_VERSION = "2.42.0";   // (2.42.0) the two signal rows - no settings change
 // was PLUGIN_VERSION = "2.41.4";   // (2.41.4) SweepVoice 1.1.1 - no settings change
 // was PLUGIN_VERSION = "2.41.3";   // (2.40.0) the TODAY PLAN sections replace the drawn sweep sections - no settings change

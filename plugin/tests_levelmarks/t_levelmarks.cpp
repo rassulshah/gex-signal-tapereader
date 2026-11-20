@@ -20,9 +20,9 @@ int main(int argc, char** argv) {
     const auto M = lvm::run(B, K);
     long long t700 = 0; for (const auto& b : B) if (b.when == "7:00") t700 = b.t;   // the LAST 7:00 = 7:00 AM (the session starts 5 PM)
     const std::string got = str(M, t700);
-    const std::string want = "7:09 Sw 1hH; 7:33 Bk AHI; 8:27 Cx AHI; 8:30 Bk PhrH; 8:33 Sw 1hH; 8:39 Sw LLO; 8:45 Bk PhrL; 9:12 Bk PDH; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; the BO candle rule drops the small 7:06 / 8:54 breaks
+    const std::string want = "7:09 Sw PFH; 7:33 Bk AHI; 8:27 Cx AHI; 8:30 Bk PhrH; 8:33 Sw PFH; 8:39 Sw LLO; 8:45 Bk PhrL; 9:12 Bk PDH; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; the BO candle rule drops the small 7:06 / 8:54 breaks
     std::printf("ES 11-19 7:00-9:48: %s\n", got.c_str());
-    C(got == want, "ES 11-19 = mockup v8 + the 1.3.0 rules (1.8.0: + 7:09 / 8:33 Sw PHH, no volume gate in run(); the own-candle 20 test is fillStrength)");
+    C(got == want, "ES 11-19 = mockup v8 + the 1.3.0 rules (1.10.0: 7:09 / 8:33 Sw of the untouched 1-hour high name PFH, the key level the attempt crossed from below and closed back under) (1.8.0: + 7:09 / 8:33 Sw PHH, no volume gate in run(); the own-candle 20 test is fillStrength)");
     for (const auto& kv : M) if (startOf[kv.first] == "9:39") C(kv.second.dir == 1 && kv.second.px == 29221, "Sw PDL bullish at 7305.25");
     for (const auto& kv : M) if (startOf[kv.first] == "9:12") C(kv.second.dir == -1 && kv.second.px == 29555, "Bk PDH bearish at 7388.75");
     // no repaint: candle-by-candle replay gives the same marks for every candle already decided 6+ candles earlier
@@ -56,7 +56,13 @@ int main(int argc, char** argv) {
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v[3] = bar(v[3].t, 120, 120, 108, 118, 100);                // PDL already traded through earlier
       v.push_back(bar(T + 13 * 180, 106, 120, 104, 114, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (14 + i) * 180, 114, 118, 112, 116, 100));
-      auto m = lvm::run(v, k); C(m.count(v[12].t) && m[v[12].t].code == 'S', "(1.9.0) an earlier poke that CLOSED back leaves the level: the later failed break is a Sw (GC 11-20 9:00 PhrH)"); }
+      auto m = lvm::run(v, k); C(!m.count(v[12].t) || m[v[12].t].code != 'S', "(1.10.0 strict) PDL traded through earlier (a wick, closed back) - no Sw of it later"); }
+    { // (1.10.0, GC 11-20 9:00) the untouched hour high decides the sweep, the key level the candle crossed names it, even though a wick touched it before
+      auto v = flat(45, 100); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDH";
+      v[25] = bar(v[25].t, 104, 111, 103, 108, 100);          // 3 AM hour: a wick 1 above PDH, closed back below (PDH used: strict); the 3 AM hour high = 111
+      v.push_back(bar(T + 46 * 180, 108, 118, 104, 105, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (47 + i) * 180, 104, 106, 100, 102, 100));
+      auto m = lvm::run(v, k); const long long t = v[45].t;
+      C(m.count(t) && m[t].code == 'S' && m[t].lv == "PDH" && m[t].px == 110 && m[t].dir == -1, "(1.10.0) Sw of the untouched 1-hour high, labelled with the crossed key level PDH (got " + (m.count(t) ? m[t].lv : std::string("none")) + ")"); }
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v[3] = bar(v[3].t, 120, 120, 105, 108, 100);                // (1.9.0) PDL CLOSED through earlier = used up
       v[4] = bar(v[4].t, 108, 121, 107, 118, 100);

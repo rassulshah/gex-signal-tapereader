@@ -23,7 +23,7 @@ int main() {
     std::vector<tsig::Sig> all = w; all.insert(all.end(), c.begin(), c.end());
     { tsig::Sig o; o.mkt = "ES"; o.type = "Sw"; o.t = t0 - 4000; o.dir = 1; all.push_back(o); }
     const std::vector<tsig::Sig> r = tsig::rowOf(all, "Sw", t0 + 1900);
-    CHECK(r.size() == 3 && r[0].t == t0 + 1800 && r[2].t == t0 + 600, "rowOf: Sw only, newest first, the 66 min old one gone");
+    CHECK(r.size() == 4 && r[0].t == t0 + 1800 && r[2].t == t0 + 600 && r[3].mkt == "ES", "(1.2.1) rowOf: Sw only, newest first, the 66 min old one KEPT (whole session)");
     CHECK(tsig::rowOf(all, "Cob", t0 + 1900).size() == 1, "rowOf Cob");
     // rowLayout: inside the row, no overlap, oldest drops first at the right
     auto meas = [](const std::string& s, int fs, bool b) { return (int)s.size() * (fs * 6 / 10 + (b ? 1 : 0)); };
@@ -48,7 +48,7 @@ int main() {
     }
     { const htop::Row R = htop::rowLayout(std::vector<htop::Chip>(), "COB", meas, 10, 610, 100, 118); CHECK(R.ok && R.shown == 0 && R.items.size() == 1, "an empty row shows only its head"); }
     { htop::Chip u; u.mkt = "ES"; u.when = "9:03"; u.lv = "ONH/LonHI"; u.num = "51"; u.dir = 1; CHECK(htop::chipLv(u.lv) == "ONH \xB7 LonHI", "Cob levels with a middle dot"); }
-    CHECK(std::string(hl::HL_VERSION) == "2.42.1" && std::string(hlset::PLUGIN_VERSION) == "2.42.1" && std::string(htop::VERSION) == "1.2.0" && std::string(tsig::VERSION) == "1.2.0", "versions");
+    CHECK(std::string(hl::HL_VERSION) == "2.42.2" && std::string(hlset::PLUGIN_VERSION) == "2.42.2" && std::string(htop::VERSION) == "1.2.0" && std::string(tsig::VERSION) == "1.2.1", "versions");
     std::printf("t_hl2420 (lsHodLod 2.42.0): %d passed, %d failed\n", pass, fail);
     return fail ? 1 : 0;
 }
