@@ -1,5 +1,16 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.36.0 (2026-11-19 18:35-18:48 CT, Rassul "i want to update the now to be more focused on levels indicating the last level broken,
+ *         then next level and if it is looking to tst any level that it already broke", "I dont have that much vertical space, use
+ *         horizonal", "empasize watch", "remove now", "get rid of the values, just keep the named levels", "Watch becomes testing when
+ *         it is testing"; mockup now-box-levels-mockup.html): THE NOW LEVELS LINE - one line at the old Now box spot (centred above the
+ *         table / its Gex strip), NowLevels.h 1.0.0 (SDK-free, tests_hodlod/t_hl2360). ONE badge first, live on the forming candle:
+ *         TESTING: <level> · BkTst Rev <arrow> (the pullback trades into a broken level's Bk candle) > BREAK / SWEEP: <level> <arrow>
+ *         (the forming candle through a watched level, closing through it / back) > WATCH: <level> · BkTst Rev <arrow> (the move topped,
+ *         the pullback heads back toward a broken level) > WATCH: Bk / Sw at <arrow> <level> · <arrow> <level> (the nearest levels).
+ *         WATCH is gold; TESTING / BREAK / SWEEP red or green by side. Then "Next <arrow> <level>" and "Last Bk <arrow> <level>" (lsRevRead's
+ *         wy file, this session) only for levels not already named. Levels = the marks' set + the prior 3 clock hours (no POC / Open /
+ *         VWAP / gamma). No numbers. The Last Bk part drops first when the pane is narrow. The 2.34.0 read box stays undrawn.
  *  2.20.0 (2026-11-07, Rassul 11:52 CT "there is a read on top of each chart, that is where i need your guidance explained to me depending
  *         on the situation the market is in ... and can grade yourself"; 12:50 "it cant be more than 3 lines"; 12:51 "build it", mockup v2):
  *         the CHART READ - 3 lines across the top of the price area (ChartRead.h 1.0.0, SDK-free, tests_chartread): L1 situation + what
@@ -155,6 +166,7 @@ static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not dra
 #else
 #define HL_SEP "/"
 #endif
+#include "NowLevels.h"               // (2.36.0) the Now levels line: TESTING / WATCH badge, Next, Last Bk (SDK-free, tests_hodlod/t_hl2360)
 #include "TopSignals.h"             // (2.35.0) the top line signal badges: latest Cob / Sw / BkTst per market (SDK-free, tests_hodlod/t_hl2350)
 #include "MktMove.h"               // (2.29.0) the market strength line (SDK-free)
 #include "HodLodHtf.h"             // (2.17.0) the HTF trend + RS line (SDK-free)
@@ -291,6 +303,10 @@ struct HLState {
     // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
     // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
     std::map<std::string, std::pair<long long, std::string> > tsText; int tsSigs = 0, tsShown = 0, tsFiles = 0; time_t tsChecked = 0; std::vector<hl::View::CobSeg> tsSegs;   // (2.35.0) wy / Cob record texts by path (stamp, text), the signals found / shown
+    // (2.36.0) the Now levels line: this session's closed bars + the forming one (its high / low widened by the live price once a second),
+    // the wy marks text (re-read at most every 3 s, by stamp), the finished line and its box
+    std::vector<nowl::Bar> nlBars; double nlFh = NAN, nlFl = NAN; long long nlMs = -1, nlWyStamp = -2; time_t nlWyChecked = 0; std::string nlWy, nlWhy = "not run yet";
+    nowl::Out nlOut; std::vector<nowl::Seg> nlSegs; int nlRuns = 0, nlMarks = 0; bool nlDrawn = false; hl::Box nlBox = { 0, 0, 0, 0 }; int nlLevel = 0, nlShown = 0;
     mkm::Cob mkCob; int mkCobN = 0;   // (2.30.0) this market's live Cob (lsCobSignal's live file) / Cobs read
     mkm::Stat mk; time_t mkChecked = 0, mkWritten = 0; std::string mkBody; std::vector<mkm::Item> mkItems; int mkWrites = 0, mkRead = 0;   // (2.29.0) the market strength line
     time_t avoidChecked = 0; bool trBoxOk = false; hl::Box trBox = { 0, 0, 0, 0 }; int trPos = 0; bool trSeen = false; bool dpBanner = false;
@@ -860,6 +876,13 @@ void HodLod::recompute(HLState& S, long n)
         B.push_back(b);
     }
     if (!B.empty()) { S.lastClosedAbs = B.back().absEnd; S.lastClose = B.back().c; }
+    {   // (2.36.0) the Now levels line's bars: this session's closed bars + the forming one (n - 1); widened live in the draw
+        const long long fEnd = absOf((int)n - 1), s0 = tsig::sessionStart(fEnd - 1);
+        S.nlBars.clear();
+        for (const hl::Bar& b : B) if (b.absEnd > s0) S.nlBars.push_back(nowl::Bar{ b.absEnd, b.o, b.h, b.l, b.c, std::isfinite(b.v) ? b.v : 0.0 });
+        nowl::Bar f; f.t = fEnd; f.o = op[(int)n - 1]; f.h = hi[(int)n - 1]; f.l = lo[(int)n - 1]; f.c = cl[(int)n - 1]; S.nlBars.push_back(f);
+        S.nlFh = f.h; S.nlFl = f.l; S.nlMs = -1;
+    }
     if (!B.empty()) { S.selfBar = sa::Bar{ B.back().absEnd, B.back().o, B.back().h, B.back().l, B.back().c }; }   // (2.9.0) self-awareness: the closed bar   // (2.4.0) the regime's price + the Market State's bar
     hl::Cfg c; c.mkt = S.mi; c.per = per; c.tick = tick; c.readOpen = hl::readOpenFor(S.mi); c.readN = hl::readNFor(S.mi);
     std::vector<hl::ReadRow> rows;
@@ -2019,6 +2042,55 @@ int HodLod::draw(void)
             rbx::applyBook(S->rbox, bk);
         }
     }
+    S->nlDrawn = false;
+    if (!S->nlBars.empty() && S->tick > 0) {   // (2.36.0) THE NOW LEVELS LINE, live once a second on the forming candle (NowLevels.h)
+        const long long nms = hlNowMs();
+        if (S->nlMs < 0 || nms < S->nlMs || nms - S->nlMs >= 1000) {
+            S->nlMs = nms;
+            try {
+                const time_t nowE = time(nullptr);
+                if (S->nlWyChecked == 0 || nowE - S->nlWyChecked >= 3 || nowE < S->nlWyChecked) {   // lsRevRead's marks for this market / bar size
+                    S->nlWyChecked = nowE;
+                    const std::string p = flexPath(std::string("RevRead") + HL_SEP + "wy-" + S->mkt + "-" + std::to_string(S->per) + ".txt"); std::string t; long long st = -1;
+                    if (p.empty()) { S->nlWy.clear(); S->nlWyStamp = -1; }
+                    else if (hlSmallRead(p, nowl::MAX_BYTES, t, st)) { if (st != S->nlWyStamp) { S->nlWyStamp = st; S->nlWy.swap(t); } }
+                    else if (st == -1) { S->nlWy.clear(); S->nlWyStamp = -1; }   // missing: no marks; too big: the last good text is kept
+                }
+                double live = S->rbox.ok ? S->rbFlow.livePx : NAN;   // the read box's once-a-second last price when it ran, else the chart's own
+                if (!std::isfinite(live)) { const long n2 = getBarCount(); if (n2 > 0) { RTARRAY cl2(barClose); if ((long)cl2.count >= n2) live = (double)cl2[(int)(n2 - 1)]; } }
+                nowl::Bar& f = S->nlBars.back();
+                if (std::isfinite(live) && live > 0) { S->nlFh = std::isfinite(S->nlFh) ? (std::max)(S->nlFh, live) : live; S->nlFl = std::isfinite(S->nlFl) ? (std::min)(S->nlFl, live) : live; f.h = S->nlFh; f.l = S->nlFl; f.c = live; }
+                const long long t0 = S->nlBars.size() > 1 ? S->nlBars.front().t - (long long)S->per : f.t;
+                const std::vector<nowl::Mark> marks = nowl::parseWy(S->nlWy, S->tick, t0, f.t);
+                std::vector<nowl::Key> keys; for (const hsw::Lv& k : S->swKeys) { size_t a = 0; const std::string& nm = k.name;   // a merged row ("PFL/PDL") gives each name
+                    while (a <= nm.size()) { const size_t e = nm.find('/', a); const std::string one = nm.substr(a, e == std::string::npos ? std::string::npos : e - a); if (!one.empty()) keys.push_back(nowl::Key{ one, k.px }); if (e == std::string::npos) break; a = e + 1; } }
+                S->nlOut = nowl::compute(S->nlBars, marks, keys, std::isfinite(live) ? live : f.c, S->tick);
+                S->nlSegs = nowl::segments(S->nlOut); S->nlMarks = (int)marks.size(); S->nlRuns++;
+                S->nlWhy = !S->nlOut.ok ? std::string("too few bars / no price")
+                         : std::string(S->nlOut.bs.state == 1 ? "live break " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "live sweep " + S->nlOut.bs.name + "; " : "")
+                           + (S->nlOut.tst.ok ? std::string(S->nlOut.tst.state == 2 ? "testing " : "test coming ") + S->nlOut.tst.lv + " " + std::to_string(S->nlOut.tst.pct) + "% back" : "no test: " + S->nlOut.tst.why);
+            } catch (...) { S->nlSegs.clear(); S->nlWhy = "fault (kept off)"; }
+        }
+        if (!S->nlSegs.empty()) {   // at the old Now box spot: centred on the table, just above it (and its Gex strip); no table = the pane's bottom centre
+            int l = pb.l + HL_RB_LEFT, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
+            const int anchorT = L.tableOk ? (L.gexOk ? (std::min)(L.table.t, L.gexRow.t) : L.table.t) : (int)pane.bottom - 22;
+            const int cx = L.tableOk ? (L.table.l + L.table.r) / 2 : (l + r) / 2;
+            auto meas = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
+            const nowl::Draw D = nowl::layout(S->nlSegs, meas, cx, anchorT - 4, l, r, 10);
+            if (D.ok && D.t > (int)pane.top + 24) {
+                for (const nowl::Item& it : D.items) {
+                    if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
+                    else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
+                    else line(it.l, it.t, it.r, it.b, (COLOR)it.col, it.col == nowl::C_SEP ? 1 : 2);
+                }
+                S->nlDrawn = true; S->nlBox = hl::Box{ D.l, D.t, D.r, D.b }; S->nlLevel = D.level; S->nlShown = D.shown;
+                if (!stripOk) { stripBox = S->nlBox; stripOk = true; }   // the confirm badges keep off it, as they did off the read box
+            }
+        }
+    }
+    S->placeLine += "NOW_LEVELS," + std::string(nowl::VERSION) + "," + (S->nlDrawn ? "box " + std::to_string(S->nlBox.l) + "," + std::to_string(S->nlBox.t) + "," + std::to_string(S->nlBox.r) + "," + std::to_string(S->nlBox.b)
+                    + (S->nlLevel ? ",Last Bk dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
+                  + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
     if (S->rbox.ok && !HL_READBOX_DRAW) S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not drawn (2.34.0: removed from the price pane; still built)," + S->rbWhy + "\n";
     else if (S->rbox.ok) {   // (2.22.0) the READ BOX left column; (2.22.1) at the pane top, as wide as its text, clear of the left-edge labels
         const int fs = 10;
@@ -2188,6 +2260,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.35.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.36.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
