@@ -224,12 +224,19 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
         const int i = kv.first; Mark m; m.code = kv.second.first; m.dir = rawDir[i];
         std::vector<Cand> cs = kv.second.second;
         if (m.code == 'S') std::stable_sort(cs.begin(), cs.end(), [&](const Cand& x, const Cand& y) { if ((x.hb == 0) != (y.hb == 0)) return x.hb == 0; return m.dir > 0 ? x.px < y.px : x.px > y.px; });   // (1.9.0) a tie in priority: a named level before a candle-hour level (GC 9:00 PhrH over the prior hour), then the deepest swept (ES 9:00 ONH over AsiaHI)
-        Cand c; if (pick(cs, c)) { m.px = c.px; m.lv = shortName(c.name, c.hb, c.high); }
-        if (!m.lv.empty()) {
-            const std::pair<char, std::string> id(m.code, m.lv); auto it = last.find(id);
-            if (it != last.end()) { bool away = false; for (int k = it->second.first + 1; k < i; ++k) if (std::fabs((double)(B[(size_t)k].c - m.px)) >= atr[(size_t)k] && atr[(size_t)k] > 0) { away = true; break; }
-                if (!away) continue; }
-            last[id] = std::make_pair(i, m.px);
+        auto isRepeat = [&](const std::string& lv, long long px) {
+            const auto it = last.find(std::make_pair(m.code, lv)); if (it == last.end()) return false;
+            for (int k = it->second.first + 1; k < i; ++k) if (std::fabs((double)(B[(size_t)k].c - px)) >= atr[(size_t)k] && atr[(size_t)k] > 0) return false;   // went 1+ ATR away and came back
+            return true; };
+        if (m.code == 'S') {   // (1.9.0) the best level that is not a repeat: a sweep is never dropped because its best level was swept earlier (it names the next one)
+            std::vector<Cand> ord; for (const Cand& z : cs) if (pri(z.name, z.hb) >= 0) ord.push_back(z);
+            std::stable_sort(ord.begin(), ord.end(), [](const Cand& x, const Cand& y) { return pri(x.name, x.hb) < pri(y.name, y.hb); });
+            bool got = false; for (const Cand& z : ord) { const std::string lv = shortName(z.name, z.hb, z.high); if (isRepeat(lv, z.px)) continue; m.px = z.px; m.lv = lv; got = true; break; }
+            if (!got) continue;
+            last[std::make_pair(m.code, m.lv)] = std::make_pair(i, m.px);
+        } else {
+            Cand c; if (pick(cs, c)) { m.px = c.px; m.lv = shortName(c.name, c.hb, c.high); }
+            if (!m.lv.empty()) { if (isRepeat(m.lv, m.px)) continue; last[std::make_pair(m.code, m.lv)] = std::make_pair(i, m.px); }
         }
         const auto ra = rawA.find(i); m.t0 = B[(size_t)(ra != rawA.end() ? ra->second : i)].t;   // (1.2.0)
         out[B[(size_t)i].t] = m;
