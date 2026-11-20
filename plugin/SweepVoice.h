@@ -21,7 +21,7 @@
 
 namespace svx {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") + Cobs: offerCob, clips cob-<MKT>-<up|down>.wav "<market>, cob, <up|down>"; every chart offers every market (lsHodLod 2.41.3)
 static const long long E1904 = 2082844800LL;
 static const int ST_MIN = 10;          // LevelMarks 1.5.0 SW_MIN: a Sw needs its attempt's BVMax or BRMax >= 10
 static const long long MAX_AGE = 300;  // s: a mark older than this when first seen is not spoken (feed catching up)
@@ -67,6 +67,10 @@ inline std::string sideWord(int dir) { return dir > 0 ? "up" : "down"; }
 inline std::string text(const std::string& m, const std::string& c, int dir) { return marketShown(m) + ", sweep, " + levelShown(c) + ", " + sideWord(dir); }
 inline std::string spoken(const std::string& m, const std::string& c, int dir) { return marketSpoken(m) + ", sweep, " + levelSpoken(c) + ", " + sideWord(dir) + "."; }
 inline std::string fileName(const std::string& m, const std::string& c, int dir) { return "sw-" + m + "-" + c + "-" + sideWord(dir) + ".wav"; }
+// (1.1.0) the Cob clips: one per market x side
+inline std::string cobText(const std::string& m, int dir) { return marketShown(m) + ", Cob, " + sideWord(dir); }
+inline std::string cobSpoken(const std::string& m, int dir) { return marketSpoken(m) + ", cob, " + sideWord(dir) + "."; }
+inline std::string cobFile(const std::string& m, int dir) { return "cob-" + m + "-" + sideWord(dir) + ".wav"; }
 
 inline bool toLL(const std::string& s, long long& v) { if (s.empty() || s.size() > 20) return false; errno = 0; char* e = nullptr; const long long x = std::strtoll(s.c_str(), &e, 10); if (errno || !e || *e) return false; v = x; return true; }
 // "V45" / "R99+" -> 45 / 99; "" or garbage -> 0
@@ -138,6 +142,17 @@ struct Hub {
         if (said.size() > 4096) said.clear();
         if (bad.size() > 4096) bad.clear();   // bounded (a session has a few dozen)
         return n;
+    }
+    // (1.1.0) one Cob (its Rev candle END t, local secs): each Cob once (market + side + candle), the same start / RTH / age rules as a sweep
+    int offerCob(const std::string& mkt, long long chartStart, long long nowLocal, long long t, int dir, int openMin, int closeMin) {
+        if (t <= chartStart || (dir != 1 && dir != -1)) return 0;
+        const std::string key = mkt + "|COB|" + std::to_string(dir) + "|" + std::to_string(t);
+        if (said.count(key)) return 0;
+        if (!inRth(t, openMin, closeMin)) { if (bad.insert(key).second) ++skippedRth; return 0; }
+        if (nowLocal - t > MAX_AGE) { if (bad.insert(key).second) ++skippedOld; return 0; }
+        said.insert(key);
+        if (q.size() >= QUEUE_MAX) { ++dropped; return 0; }
+        Clip c; c.key = key; c.mkt = mkt; c.file = cobFile(mkt, dir); c.text = cobText(mkt, dir); c.t = t; q.push_back(c); return 1;
     }
     // play the next clip when the last one is done. play(file) -> its play time in ms, or -1 = missing / failed; fallback() -> ms
     template <class P, class F> bool pump(long long nowMs, P play, F fallback) {
