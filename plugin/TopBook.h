@@ -37,7 +37,8 @@
 #include <cstdlib>
 #include "Top10Stable.h"
 namespace tbk {
-static const char* const VERSION = "1.2.1";   // 1.2.1 (2026-11-11 Rassul 11:01 CT "i want it upto 1 atr beyond , so ovh will get it if it is from the ovnh to ovnh+1atr and ovl ... ovnl to ovnl-1atr"): levelLiq takes a side per level: +1 a high (the level up to 1 ATR above it), -1 a low (down to 1 ATR below it), 0 within tol ticks
+static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-11-20, lsLimitProfile 2.67.0 the one king + L / P marks): public read-outs restingAt / cxlAt / fillAt (all resting lots, cumulative cancelled / filled lots at a price) for KingMark.h; nothing else changes
+// was "1.2.1";   // 1.2.1 (2026-11-11 Rassul 11:01 CT "i want it upto 1 atr beyond , so ovh will get it if it is from the ovnh to ovnh+1atr and ovl ... ovnl to ovnl-1atr"): levelLiq takes a side per level: +1 a high (the level up to 1 ATR above it), -1 a low (down to 1 ATR below it), 0 within tol ticks
 // was "1.2.0";   // 1.2.0 (2026-11-11 Rassul 10:10 CT "keep top 3 per side + liquidity near levels"): levelLiq() - the real resting size at / within 2 ticks of each given level price (key / volume / CR0 / PS0), at any distance, with the lower 1.5x size bar and no top-3 cap
 // was "1.1.1";   // 1.1.1 (2026-11-09): Why::small -> tooSmall ("small" is a Windows SDK macro = char; MSVC build failed)
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
@@ -190,6 +191,10 @@ public:
             const double md = medNow[L.side]; L.x = md > 0 ? (double)L.lots / md : 0; out.push_back(L); }
         return out;
     }
+    // (1.3.0) at one price and side: ALL resting lots (any age / quoting), and the cumulative lots cancelled (DEL, MOD away, size cut) / filled there
+    long long restingAt(int s, long long px) const { long long n = 0; for (const auto& kv : O) if (kv.second.side == s && kv.second.px == px && kv.second.sz > 0) n += kv.second.sz; return n; }
+    long long cxlAt(int s, long long px) const { if (s != 0 && s != 1) return 0; auto it = cxl[s].find(px); return it == cxl[s].end() ? 0 : it->second; }
+    long long fillAt(int s, long long px) const { if (s != 0 && s != 1) return 0; auto it = fills[s].find(px); return it == fills[s].end() ? 0 : it->second; }
     // ---- read-outs (status / tests) ------------------------------------------------------------------------------------------
     const std::vector<Lvl>& lastShown() const { return shown; }
     const Why& lastWhy() const { return why; }

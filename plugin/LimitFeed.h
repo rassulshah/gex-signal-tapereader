@@ -12,6 +12,7 @@
 #undef far
 #endif
 #include "TopBook.h"
+#include "KingMark.h"
 #include <ctime>
 #include <chrono>
 #include <fstream>
@@ -21,7 +22,8 @@
 #include <vector>
 #include <sys/stat.h>
 namespace lpf {
-static const char* const VERSION = "1.1.1";   // 1.1.1: each level's side (TopBook 1.2.1) and name; rowNames = the level name of each level liquidity row
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-11-20, lsLimitProfile 2.67.0, Rassul 05:05 CT "no, just 1 king.. we can have the mark as well"): ONE KING (KingMark.h) - only the biggest real level of either side is posted (code 1, state = its mark 'L' / 'P' while it lasts, else 0); ranks 2-6 are no longer posted; the level rows are de-duplicated against the king only; the king's ends go to kingEv for the nightly record
+// was "1.1.1";   // 1.1.1: each level's side (TopBook 1.2.1) and name; rowNames = the level name of each level liquidity row
 // was "1.1.0";   // 1.1.0 (2026-11-11): + the level liquidity rows (TopBook 1.2.0 levelLiq) as facts code 7, state = the level's index + 1
 // was "1.0.0";
 static const int SLICE_MAX = 5000; static const long long SLICE_MS = 8, WAIT_MS = 60000, SILENT_MS = 120000, RECONNECT_MS = 300000, GUARD_STALE_S = 2 * 3600;
@@ -38,13 +40,14 @@ struct Feed {
     long long openMs = -1, lastResubMs = -1, lastEventMs = -1, events = 0, faults = 0, capHits = 0, reconnects = 0, lastReconnectMs = -1, tradeKey = -1, lastTradeMs = -1;
     std::string ident, market, via, state = "not opened"; tbk::Engine tb; long long evalMs = -1, modelMs = -100000, modelStamp = -2; bool modelLive = false;
     std::vector<sb::Fact> facts; bool haveFacts = false; std::string tbLine;
-    std::vector<long long> levelTicks; std::vector<int> levelDirs; std::vector<std::string> levelNames; std::map<long long, std::string> rowNames; int levelRows = 0;   // (1.1.1) rowNames: price tick * 2 + side -> the level's name
+    std::vector<long long> levelTicks; std::vector<int> levelDirs; std::vector<std::string> levelNames; std::map<long long, std::string> rowNames; int levelRows = 0;
+    kgm::Tracker km; kgm::View kingView; std::vector<kgm::Event> kingEv;   // (1.2.0) the one king, its mark and its ends (the host records them)   // (1.1.1) rowNames: price tick * 2 + side -> the level's name
       // (1.1.0) the host's level prices (ticks) for the level liquidity rows; rows posted in the last pass
     Feed() {} Feed(const Feed&) = delete; Feed& operator=(const Feed&) = delete; ~Feed() { delete dbo; }
     void closeFeed() { delete dbo; dbo = nullptr; attempt = 0; flag = -1; dead = false; openMs = lastResubMs = lastEventMs = -1; via.clear(); }
     void identity(const std::string& id, const std::string& mkt) {
         if (id == ident) return;
-        closeFeed(); blocked = false; ident = id; tb.reset(); evalMs = -1; facts.clear(); haveFacts = false;
+        closeFeed(); blocked = false; ident = id; tb.reset(); km.reset(); kingView = kgm::View(); kingEv.clear(); evalMs = -1; facts.clear(); haveFacts = false;
         if (market != mkt) { market = mkt; tb.setMarket(mkt); modelStamp = -2; modelMs = -100000; }
     }
     // the chart trades (its last bar's time / volume key changes) but no order event for 2 min: close, so open() opens it again (at most every 5 min)
@@ -53,7 +56,7 @@ struct Feed {
         if (!dbo || flag != 1 || lastTradeMs < 0 || now - lastTradeMs > 30000) return;
         const long long last = lastEventMs >= 0 ? lastEventMs : openMs; if (last < 0 || now - last < SILENT_MS) return;
         if (lastReconnectMs >= 0 && now - lastReconnectMs < RECONNECT_MS) return;
-        closeFeed(); tb.reset(); facts.clear(); haveFacts = false; ++reconnects; lastReconnectMs = now;
+        closeFeed(); tb.reset(); km.reset(); kingView = kgm::View(); facts.clear(); haveFacts = false; ++reconnects; lastReconnectMs = now;
     }
     void open(const std::string& symbol, const std::string& guard, long long now) {
         if (blocked || dead || attempt >= 2) return;
@@ -101,17 +104,24 @@ struct Feed {
             if (st != modelStamp) { modelStamp = st; tbk::RealModel M; if (st >= 0) { std::ifstream in(path.c_str(), std::ios::binary); std::stringstream b; b << in.rdbuf(); if (b.str().size() < 20000) M = tbk::parseRealModel(b.str()); } tb.setModel(M); modelLive = M.live; } }
         tb.setRth(rth);
         const std::vector<tbk::Lvl> v = tb.evaluate(now); facts.clear();
-        for (const tbk::Lvl& L : v) { sb::Fact x; x.bar = (long long)L.orders; x.lo = x.hi = (double)L.px * tick; x.side = L.side == 0 ? 1 : -1; x.val = (double)L.lots; x.code = L.rank; x.state = 0;
-            x.proven = (L.single ? 2 : 0) + (L.s20 ? 4 : 0) + 8 * (L.realPct >= 0 ? L.realPct + 1 : 0); facts.push_back(x); }
-        levelRows = 0;                                                         // (1.1.0) level liquidity: not a price the top 3 already show
+        // (1.2.0) THE ONE KING of either side + its L / P mark (MBO: this feed is order-by-order, so marks are on)
+        {   std::vector<kgm::Cand> cl; for (const tbk::Lvl& L : v) { kgm::Cand c; c.side = L.side; c.px = L.px; c.lots = L.lots; cl.push_back(c); }
+            const tbk::Engine& E = tb;
+            kingView = km.step(now, cl, [&E](int sd, long long px) { kgm::Probe p; p.resting = E.restingAt(sd, px); p.cxl = E.cxlAt(sd, px); p.fill = E.fillAt(sd, px); return p; }, tb.last(), true);
+            for (const kgm::Event& e : km.take()) { if (kingEv.size() < 200) kingEv.push_back(e); }
+            if (kingView.have) { const tbk::Lvl* src = nullptr; for (const tbk::Lvl& L : v) if (L.side == kingView.side && L.px == kingView.px) src = &L;
+                sb::Fact x; x.bar = src ? (long long)src->orders : 0; x.lo = x.hi = (double)kingView.px * tick; x.side = kingView.side == 0 ? 1 : -1; x.val = (double)kingView.lots; x.code = 1;
+                x.state = kingView.mark == 'L' || kingView.mark == 'P' ? (int)kingView.mark : 0;
+                x.proven = src && !kingView.mark ? (src->single ? 2 : 0) + (src->s20 ? 4 : 0) + 8 * (src->realPct >= 0 ? src->realPct + 1 : 0) : 0; facts.push_back(x); } }
+        levelRows = 0;                                                         // (1.1.0) level liquidity; (1.2.0) not the king's price
         if (rowNames.size() > 256) rowNames.clear();
-        if (!levelTicks.empty()) for (const tbk::Lvl& L : tb.levelLiq(now, levelTicks, levelDirs)) { bool dup = false; for (const tbk::Lvl& T : v) if (T.side == L.side && T.px == L.px) dup = true;
+        if (!levelTicks.empty()) for (const tbk::Lvl& L : tb.levelLiq(now, levelTicks, levelDirs)) { const bool dup = kingView.have && kingView.side == L.side && kingView.px == L.px;
             if (dup) continue;
             sb::Fact x; x.bar = (long long)L.orders; x.lo = x.hi = (double)L.px * tick; x.side = L.side == 0 ? 1 : -1; x.val = (double)L.lots; x.code = 7; x.state = L.rank - 100 + 1;
             x.proven = (L.single ? 2 : 0) + (L.s20 ? 4 : 0); facts.push_back(x); ++levelRows;
             const size_t li = (size_t)(L.rank - 100); if (li < levelNames.size()) rowNames[L.px * 2 + L.side] = levelNames[li]; }
         { sb::Fact h; h.code = 99; h.val = (double)tb.orders(); h.state = tb.orders() > 0 ? 1 : 0; facts.push_back(h); }
-        haveFacts = true; tbLine = tb.statusLine();
+        haveFacts = true; tbLine = tb.statusLine() + "\n" + km.statusLine();
     }
     bool ready() const { return dbo && !dead && !blocked && lastEventMs >= 0 && haveFacts; }
     std::string text(long long now) const {
