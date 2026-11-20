@@ -6,6 +6,7 @@
 //  [3] narrow pane drop order: expiry -> " \xB7 Bk / BkTst" / " \xB7 Sw / Cob" -> " \xB7 Trending" / " \xB7 Range"; the +/-GAMMA word stays; never
 //      touching the Now line; never returns to a longer form as room shrinks
 //  [4] with the real centred Now line over box widths 260..1600 px: never overlaps, the Now line stays centred
+//  [4b] TESTING: <level> BkTst <arrow> (no Rev, no dot); WATCH keeps "BkTst Rev" (Rassul 22:42 CT)
 //  [5] no regime / GAMMA STALE unchanged; the host uses nowLeftTag + gammaTag; versions 2.37.1 everywhere + the build list
 #include <cstdio>
 #include <climits>
@@ -67,7 +68,7 @@ int main() {
 
     std::printf("[4] with the real Now line\n");
     {   std::vector<nowl::Seg> sg;
-        nowl::Seg b1; b1.s = "TESTING: PDL \xB7 BkTst Rev"; b1.arrow = -1; b1.badge = true; b1.bold = true; b1.fill = nowl::C_RED; b1.col = nowl::C_BLACK; sg.push_back(b1);
+        nowl::Seg b1; b1.s = "TESTING: PDL BkTst";   /* 2.37.1 wording */ b1.arrow = -1; b1.badge = true; b1.bold = true; b1.fill = nowl::C_RED; b1.col = nowl::C_BLACK; sg.push_back(b1);
         nowl::Seg sp; sp.sep = true; sg.push_back(sp);
         nowl::Seg n1; n1.s = "Next"; n1.col = nowl::C_GREY; sg.push_back(n1); nowl::Seg n2; n2.arrow = -1; n2.s2 = "2hL"; n2.col = nowl::C_GOLD; sg.push_back(n2);
         nowl::Seg n3; n3.arrow = 1; n3.s2 = "VAL"; n3.col = nowl::C_GOLD; sg.push_back(n3);
@@ -85,6 +86,17 @@ int main() {
                 full += a.keep == 2 ? 1 : 0; word += (a.keep == 1 && a.lvl == 2) ? 1 : 0; } }
         CHECK(n > 600 && bad == 0, "box widths 260..1600: the left part never reaches the Now line (" + std::to_string(n) + " layouts)");
         CHECK(full > 0 && word > 0, "both ends seen: full label + expiry on wide panes, the word only on narrow ones"); }
+
+    std::printf("[4b] TESTING wording (22:42 CT: no Rev while testing)\n");
+    for (int dir : { -1, 1 }) {
+        nowl::Out o; o.ok = true; o.tst.ok = true; o.tst.state = 2; o.tst.dir = dir; o.tst.lv = "PFL";
+        const std::vector<nowl::Seg> v = nowl::segments(o);
+        CHECK(!v.empty() && v[0].badge && v[0].s == "TESTING: PFL BkTst" && v[0].arrow == (dir < 0 ? -1 : 1), "TESTING: PFL BkTst + arrow (no Rev, no dot)");
+        CHECK(nowl::plain(v) == std::string("[TESTING: PFL BkTst ") + (dir < 0 ? "\xE2\x86\x93" : "\xE2\x86\x91") + "]", "plain: [TESTING: PFL BkTst <arrow>] " + nowl::plain(v));
+        CHECK(v[0].fill == (dir < 0 ? nowl::C_RED : nowl::C_GREEN), "TESTING stays red / green by side");
+        o.tst.state = 1; const std::vector<nowl::Seg> w = nowl::segments(o);
+        CHECK(!w.empty() && w[0].s == "WATCH: PFL BkTst Rev" && w[0].fill == nowl::C_GOLD, "WATCH stays: WATCH: PFL BkTst Rev (gold)"); }
+    CHECK(std::string(nowl::VERSION) == "1.1.0", "NowLevels 1.1.0");
 
     std::printf("[5] fallbacks, host, versions\n");
     {   const htop::Left d = htop::nowLeftTag(htop::gammaTag(""), hl::C_GREY, 0, EXP, hl::C_SLATE, m, 100, 50, 68, 1000000, 2000);

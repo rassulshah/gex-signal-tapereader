@@ -4,7 +4,10 @@
  *         proves it", shown WITHOUT "?"): the gamma pill at the far left of the Now row carries a label inside it - "-GAMMA \xB7 Trending \xB7
  *         Bk / BkTst" (red) / "+GAMMA \xB7 Range \xB7 Sw / Cob" (green); "0DTE Exp 3:00 PM" follows as before. Narrow pane: the expiry drops
  *         first, then the setups part, then " \xB7 Trending" / " \xB7 Range"; the +/-GAMMA word stays; the Now line is never covered
- *         (HodLodTop.h 1.1.0 gammaTag / nowLeftTag). NOW_ROW status line names the form drawn. No other change.
+ *         (HodLodTop.h 1.1.0 gammaTag / nowLeftTag). NOW_ROW status line names the form drawn.
+ *         + (22:42 CT, Rassul "how can you have a BkTst Rev when you are testing a level?") the Now line's TESTING badge no longer names the
+ *         Rev (it has not printed yet): "TESTING: <level> BkTst <arrow>" (no Rev, no middle dot); WATCH stays "WATCH: <level> BkTst Rev
+ *         <arrow>" (NowLevels.h 1.1.0). No other change.
  *  2.37.0 (2026-11-19 19:29 CT, Rassul "ok.. do it" on mockup hodlod-new-box-mockup.html; 19:33 "switch positions of sweeps and Cobs"):
  *         THE BOX TOP: line 1 = the SIGNAL line (Cob left | Sw centre | BkTst right, newest first; 11 pt -> 10 pt -> tighter spacing ->
  *         the oldest of the most crowded group drops; HodLodTop.h 1.0.0), line 2 = "ES  Close 4:00 PM | LTD ... | NQ -9%  ES -3% ... Norm?

@@ -143,7 +143,7 @@ int main() { (void)&fnv; (void)&itemsText;
         CHECK(e.keep == 1 && e.items.size() == 2 && e.items[1].col == hl::C_GREEN, "no expiry: the pill alone, green for +GAMMA"); }
     {   // with the real Now line (2.36.0 11:33 AM): centred over a 1,130 px box at x 0..1130, the pill + expiry fit left of it
         nowl::Out o; std::vector<nowl::Seg> sg;
-        nowl::Seg b1; b1.s = "TESTING: PDL \xB7 BkTst Rev"; b1.arrow = -1; b1.badge = true; b1.bold = true; b1.fill = nowl::C_RED; b1.col = nowl::C_BLACK; sg.push_back(b1);
+        nowl::Seg b1; b1.s = "TESTING: PDL BkTst";   /* 2.37.1 wording */ b1.arrow = -1; b1.badge = true; b1.bold = true; b1.fill = nowl::C_RED; b1.col = nowl::C_BLACK; sg.push_back(b1);
         nowl::Seg sp; sp.sep = true; sg.push_back(sp);
         nowl::Seg n1; n1.s = "Next"; n1.col = nowl::C_GREY; sg.push_back(n1); nowl::Seg n2; n2.arrow = -1; n2.s2 = "2hL"; n2.col = nowl::C_GOLD; sg.push_back(n2);
         auto mn = [](const std::string& s, bool b) { return MS(s, 10, b); };

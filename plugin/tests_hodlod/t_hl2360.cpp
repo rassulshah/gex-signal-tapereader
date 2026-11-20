@@ -74,7 +74,7 @@ int main() {
         const Out o = compute(B, M1, {}, 96, 0.25);
         CHECK(o.tst.ok && o.tst.lv == "PDL" && o.tst.dir == -1 && o.tst.pct == 41, "testing PDL 41%: " + o.tst.why + " " + std::to_string(o.tst.pct));
         const std::string p = plain(segments(o));
-        CHECK(p.rfind("[TESTING: PDL \xC2\xB7 BkTst Rev \xE2\x86\x93]", 0) == 0, "starts with the TESTING badge: " + p);
+        CHECK(p.rfind("[TESTING: PDL BkTst \xE2\x86\x93]", 0) == 0, "starts with the TESTING badge: " + p);
         CHECK(p.find("Bk / Sw") == std::string::npos, "one WATCH badge at a time (18:47): " + p);
     }
     {   const Out o = compute(bear(94.8, 96.5, 94.5, 96), { bk(kT, 1, "PDL", 97), bk(kT, -1, "PDL", 97) }, {}, 96, 0.25);   // same candle both ways: the last is the dir
@@ -116,11 +116,11 @@ int main() {
     }
     {   const Out o = compute(mirror(bear(94.8, 96.5, 94.5, 96)), { bk(kT, 1, "PDH", 103) }, {}, 104, 0.25);
         CHECK(o.tst.ok && o.tst.dir == 1 && o.tst.pct == 41, "bullish mirror: testing 41%");
-        CHECK(plain(segments(o)).rfind("[TESTING: PDH \xC2\xB7 BkTst Rev \xE2\x86\x91]", 0) == 0, "bullish badge: " + plain(segments(o)));
+        CHECK(plain(segments(o)).rfind("[TESTING: PDH BkTst \xE2\x86\x91]", 0) == 0, "bullish badge: " + plain(segments(o)));
         int green = 0, gold = 0; for (const Item& it : layout(segments(o), MS, 600, 300, 0, 1400, 10).items) if (it.k == 0) { green += it.fill == C_GREEN; gold += it.fill == C_GOLD; }
         CHECK(green == 1 && gold == 0, "a bullish TESTING = green (18:55)");
         const Out o2 = compute(mirror(bear(94.8, 96.5, 94.5, 96)), { bk(kT, 1, "PHH", 103) }, std::vector<Key>{ { "PFH", 115 }, { "PWL", 60 } }, 104, 0.25);
-        CHECK(plain(segments(o2)) == "[TESTING: PHH \xC2\xB7 BkTst Rev \xE2\x86\x91] \xE2\x94\x82 Next \xE2\x86\x93 PWL \xC2\xB7 \xE2\x86\x91 PFH", "a bullish pullback testing a broken PHH: " + plain(segments(o2)));
+        CHECK(plain(segments(o2)) == "[TESTING: PHH BkTst \xE2\x86\x91] \xE2\x94\x82 Next \xE2\x86\x93 PWL \xC2\xB7 \xE2\x86\x91 PFH", "a bullish pullback testing a broken PHH: " + plain(segments(o2)));
     }
     {   std::vector<Bar> B = bear(94.8, 96.5, 94.5, 96); B[4].h = 98.5; B[4].l = 95; B[4].v = 5;   // Bk candle range 3.5 < the prior 4: not a Bk (the marks' BO candle rule)
         const Out o = compute(B, M1, {}, 96, 0.25);
@@ -134,7 +134,7 @@ int main() {
         CHECK(plain(segments(o)) == "[WATCH: PDL \xE2\x86\x93 \xC2\xB7 VAL \xE2\x86\x91 \xC2\xB7 Bk / Sw]", "no test: the gold badge carries the next levels, no Next part (18:50): " + plain(segments(o)));
         const Out o2 = compute(bear(94.8, 96.5, 94.5, 96), M1, std::vector<Key>{ { "PDL", 97 }, { "PFL", 97 }, { "VAL", 99 }, { "PWL", 90 } }, 96, 0.25);
         CHECK(o2.tst.ok && o2.up.name == "VAL", "the level being tested is not a next level (nor its twin PFL)");
-        CHECK(plain(segments(o2)) == "[TESTING: PDL \xC2\xB7 BkTst Rev \xE2\x86\x93] \xE2\x94\x82 Next \xE2\x86\x93 PWL \xC2\xB7 \xE2\x86\x91 VAL", "the whole line - the Last Bk PDL is already named (18:50): " + plain(segments(o2)));
+        CHECK(plain(segments(o2)) == "[TESTING: PDL BkTst \xE2\x86\x93] \xE2\x94\x82 Next \xE2\x86\x93 PWL \xC2\xB7 \xE2\x86\x91 VAL", "the whole line - the Last Bk PDL is already named (18:50): " + plain(segments(o2)));
     }
     {   std::vector<Bar> B; const long long t0 = L(2026, 11, 19, 7, 0);
         for (int i = 0; i < 80; i++) { Bar b; b.t = t0 + 180LL * (i + 1); b.o = b.c = 100 + (i / 20) * 10; b.h = b.o + 1 + (i % 20 == 5 ? 2 : 0); b.l = b.o - 1 - (i % 20 == 7 ? 2 : 0); B.push_back(b); }
@@ -157,7 +157,7 @@ int main() {
     auto at = [&](int hh, int mm, Out& o) { return atW(wy, hh, mm, o); };
     {   Out o; const std::string p = at(11, 33, o);
         CHECK(o.tst.ok && o.tst.lv == "PDL" && o.tst.dir == -1, "11:33 AM: testing the PDL break: " + p);
-        CHECK(p == "[TESTING: PDL \xC2\xB7 BkTst Rev \xE2\x86\x93] \xE2\x94\x82 Next \xE2\x86\x93 2hL \xC2\xB7 \xE2\x86\x91 VAL \xE2\x94\x82 Last Bk \xE2\x86\x93 PHL", "11:33 line (the 11:03 PHL break is not named yet): " + p);
+        CHECK(p == "[TESTING: PDL BkTst \xE2\x86\x93] \xE2\x94\x82 Next \xE2\x86\x93 2hL \xC2\xB7 \xE2\x86\x91 VAL \xE2\x94\x82 Last Bk \xE2\x86\x93 PHL", "11:33 line (the 11:03 PHL break is not named yet): " + p);
         CHECK(p.find("Bk / Sw") == std::string::npos && noNumbers(p), "11:33: one badge, no numbers");
     }
     {   Out o; const std::string p = at(10, 45, o);
@@ -173,7 +173,7 @@ int main() {
         Out o; std::string p = atW(wyPdl, 11, 12, o);
         CHECK(o.tst.state == 1 && p.rfind("[WATCH: PDL BkTst Rev \xE2\x86\x93]", 0) == 0, "PDL marks: 11:12 AM WATCH: PDL BkTst Rev down (gold): " + p);
         p = atW(wyPdl, 11, 21, o); CHECK(o.tst.state == 1 && o.tst.lv == "PDL", "11:21 AM still WATCH PDL: " + p);
-        p = atW(wyPdl, 11, 24, o); CHECK(o.tst.state == 2 && p.rfind("[TESTING: PDL \xC2\xB7 BkTst Rev \xE2\x86\x93]", 0) == 0, "11:24 AM TESTING: PDL: " + p);
+        p = atW(wyPdl, 11, 24, o); CHECK(o.tst.state == 2 && p.rfind("[TESTING: PDL BkTst \xE2\x86\x93]", 0) == 0, "11:24 AM TESTING: PDL: " + p);
         p = atW(wyPdl, 11, 39, o); CHECK(!o.tst.ok && p.rfind("[WATCH: ", 0) == 0, "11:39 AM the pullback turned: on to the next WATCH: " + p);
         // with the 11:03 PHL break too: the nearest break ahead is watched first, then each is tested in turn
         p = at(11, 12, o); CHECK(o.tst.state == 1 && o.tst.lv == "PHL", "all marks: 11:12 AM WATCH: PHL (the nearest break ahead): " + p);
@@ -245,8 +245,8 @@ int main() {
         CHECK(D3.ok && g2 == 1, "10:45: ONE gold badge across both levels");
     }
     std::printf("[6] versions\n");
-    CHECK(std::string(hl::HL_VERSION) == "2.36.0" && std::string(hlset::PLUGIN_VERSION) == "2.36.0", "2.36.0");
-    {   const std::string s = rd("../HodLod.cpp"); CHECK(s.find("p->setVersion(\"2.36.0\")") != std::string::npos && s.find("#include \"NowLevels.h\"") != std::string::npos, "setVersion 2.36.0 + NowLevels.h included"); }
+    CHECK(std::string(hl::HL_VERSION) == "2.37.1" && std::string(hlset::PLUGIN_VERSION) == "2.37.1", "2.37.1 (version strings updated in 2.37.1)");
+    {   const std::string s = rd("../HodLod.cpp"); CHECK(s.find("p->setVersion(\"2.37.1\")") != std::string::npos && s.find("#include \"NowLevels.h\"") != std::string::npos, "setVersion 2.37.1 + NowLevels.h included"); }
     {   const std::string s = rd("../../tools/gex-build.bat"); const size_t a = s.find("call :one HodLod "); CHECK(a != std::string::npos && s.find("NowLevels.h", a) < s.find('\n', a), "NowLevels.h on the HodLod build line"); }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

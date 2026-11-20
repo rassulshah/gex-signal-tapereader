@@ -5,6 +5,7 @@
 // reversal trade. the next level will tell me where to look for a break or sweep trade", "I dont have that much vertical space, use
 // horizonal", "empasize watch so i know what kind of trade and where", "remove now, the order should be in what is most important to find
 // a trade"; mockup now-box-levels-mockup.html): ONE line, left to right, most important first:
+//   (1.1.0, 22:42 CT) TESTING reads "TESTING: <level> BkTst <arrow>" (no Rev while testing); WATCH keeps "WATCH: <level> BkTst Rev <arrow>"
 //   a Tst coming / in progress:  [WATCH / TESTING: <level> · BkTst Rev <arrow>] │ Next ↓ <level> · ↑ <level> │ Last Bk <arrow> <level>
 //   (18:52 "as price is going to PDL it would say Watch: PDL BkTstRev": WATCH once the move topped and the pullback heads back toward the
 //   broken level; TESTING once it trades into the Bk candle (<= 100% back, never past its extreme); 18:53 every WATCH badge is gold, only
@@ -33,7 +34,7 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
 static const long long E1904 = 2082844800LL;
 static const size_t MAX_BYTES = 512 * 1024;
 
@@ -237,7 +238,7 @@ inline std::vector<Seg> segments(const Out& o) {
         const Next& nx = o.bs.dir < 0 ? dn : up;
         if (nx.ok && !has(nx.name)) { sep(2); add("Next", 0, "", C_GREY, false, 2); add("", o.bs.dir, nx.name, C_GOLD, true, 2); named.push_back(nx.name); }
     } else if (o.tst.ok) {   // 1. a BkTst coming / in progress: "WATCH: <level> · BkTst Rev <arrow>" (18:52, gold) / "TESTING: ..." (18:48, red / green by side)
-        badge(o.tst.state == 2 ? "TESTING: " + o.tst.lv + " " + dot + " BkTst Rev" : "WATCH: " + o.tst.lv + " BkTst Rev", o.tst.dir < 0 ? -1 : 1, "", o.tst.state != 2 ? C_GOLD : o.tst.dir < 0 ? C_RED : C_GREEN, 1);   // (18:53) every WATCH is gold; only TESTING is red / green
+        badge(o.tst.state == 2 ? "TESTING: " + o.tst.lv + " BkTst" : "WATCH: " + o.tst.lv + " BkTst Rev", o.tst.dir < 0 ? -1 : 1, "", o.tst.state != 2 ? C_GOLD : o.tst.dir < 0 ? C_RED : C_GREEN, 1);   // (18:53) every WATCH is gold; only TESTING is red / green
         named.push_back(o.tst.lv);
         const bool d = dn.ok && !has(dn.name), u = up.ok && !has(up.name) && !(d && up.name == dn.name);
         if (d || u) {   // then the next levels, plainly (not in a badge: one badge at a time, 18:47)
