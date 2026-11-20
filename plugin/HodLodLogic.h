@@ -57,7 +57,9 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.40.0";   // (2.40.0, Rassul 2026-11-20 09:43 CT "this looks good. build", mockup hodlod-box-plan-mockup.html) the LOD / HOD SWEEPS sections replaced by BUY AT � 3-HOUR SUPPORT (left) / SELL AT � 3-HOUR RESISTANCE (right) = the MQ Reader TODAY PLAN for this market (TodayPlan.h 1.0.0: CobSignal HTFNOW + the Reader state.json, the Reader's own rules); the sweep rows are still built and written to the status file (SWROW) for the bridge, not drawn
+static const char* const HL_VERSION = "2.41.0";   // (2.41.0, Rassul 2026-11-20 10:47 CT "get rid of the left and right buy and sell sections and use the horizontal space for hod values", 10:53 "lets go with A", mockup hodlod-box-wide-mockup.html A; 10:32 "it should be aligned to the left") the BUY AT / SELL AT sections are gone (the Today Plan stays in the MQ Reader): ONE SESSION section across the whole box - Exp / Act with the 1st and 2nd extreme as before, the "1st extreme by / % of days" table moved to the RIGHT of those two rows (the box is 2 rows shorter); the box starts at the pane's left edge (no left keep-out, host)
+static const bool HL_WIDE_SESSION = true;   // (2.41.0) false = the 2.40.0 three-section box
+// was HL_VERSION = "2.40.0";   // (2.40.0, Rassul 2026-11-20 09:43 CT "this looks good. build", mockup hodlod-box-plan-mockup.html) the LOD / HOD SWEEPS sections replaced by BUY AT � 3-HOUR SUPPORT (left) / SELL AT � 3-HOUR RESISTANCE (right) = the MQ Reader TODAY PLAN for this market (TodayPlan.h 1.0.0: CobSignal HTFNOW + the Reader state.json, the Reader's own rules); the sweep rows are still built and written to the status file (SWROW) for the bridge, not drawn
 // was HL_VERSION = "2.39.1";   // (2.39.1, Rassul 2026-11-20 09:32 CT "the gamma badge should be more aligned to the left so you will have more space for the options line and fix the arrows because they are overlapping") the regime pill + "0DTE Exp" at the FAR LEFT of the gamma row (the box's left edge), the centred gamma line gets the space; every arrow (Now + gamma lines) in its own slot, text drawn in its measured box (GammaLine 1.1.0, NowLevels 1.3.1)
 // was HL_VERSION = "2.39.0";   // (2.39.0, Rassul 2026-11-20 07:45 CT "build", mockups gamma-line-mockup.html + hodlod-new-box-mockup.html) the GAMMA line between the Now line and the box: regime pill | GAMMA WATCH / TESTING / BREAK / SWEEP at the significant MenthorQ strikes | G V C pressure | Next (GammaLine.h 1.0.0); 0DTE text at the row's far left; each closed candle decided once and recorded (lsFlexLevels\HodLod\GammaLine-<MKT>-<spb>s-<session>.csv)
 // was HL_VERSION = "2.38.0";   // (2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) the Now line adds ONE short liquidity phrase for the level its badge names, from lsLimitProfile 2.68.0's level liquidity file (only states that passed its scoring; "Bids holding", "Offers pulled" ...; grey label, the word green / red by who it helps; stale > 2 min / missing = none; drops first on a narrow pane) - NowLevels.h 1.3.0
@@ -1957,7 +1959,9 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         // (2.13.0) the HOD / LOD sweep sections right of the session section: name | price | %; dropped when the pane is too narrow
         const int Wsess = W; int swW = 0, swNameW = 0, swPxW = 0, swPctW = 0; size_t swRows = 0;
         const char* swTitle[2] = { "HOD sweeps (1st = HOD)", "LOD sweeps (1st = LOD)" };
-        bool useSw = tier >= 0 && (v.planOn || (v.swOn && (!v.swHi.empty() || !v.swLo.empty())));   // (2.17.9) tier -1 = the 2.12.0 box; (2.40.0) the plan sections always count
+        const bool wide = HL_WIDE_SESSION && tier == 0;   // (2.41.0) one session section across the box (the 9 pt step 1 also has tier 0)
+        bool useSw = !wide && !HL_WIDE_SESSION && tier >= 0 && (v.planOn || (v.swOn && (!v.swHi.empty() || !v.swLo.empty())));   // (2.17.9) tier -1 = the 2.12.0 box; (2.40.0) the plan sections always count; (2.41.0) never with the wide session
+        if (HL_WIDE_SESSION && tier > 0) continue;   // (2.41.0) no compact side-section forms: 10 / 9 pt wide, then the 2.12.0 box
         // (2.40.0) the plan's narrow forms (tiers 1-3, as the sweep sections had): 1 = no time in the strips, tighter gaps; 2 = only the first
         // tag of a level + "+n"; 3 = no tags. The level, its chip and T1 are always the Reader's.
         const int plGap = tier >= 1 ? 8 : PLAN_GAP;
@@ -1998,6 +2002,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int tmLabW = (std::max)(M(tmLab[0], fs - 1, false), M(tmLab[1], fs - 1, false)) + 10;
         int WsessF = W;
         if (useSw && v.tmOk) WsessF = (std::max)(WsessF, 16 + tmLabW + 4 * tmColW);
+        const int tmW = wide && v.tmOk ? 16 + tmLabW + 4 * tmColW : 0;   // (2.41.0) the 1st-extreme table right of the Exp / Act rows
         if (useSw && area.l + WsessF + 2 * swW > pane.r - pad) continue;   // (2.17.9) the time table widened the session section past the pane: the next form
         if (useSw) {   // (2.14.1) the header / ladder never widen the session panel: any spare width goes to the two sweep panels
             int need = (std::max)(headW, sW); const int have = WsessF + 2 * swW;
@@ -2005,8 +2010,12 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             if (need > have) swW += (need - have + 1) / 2;
             W = WsessF + 2 * swW;
             if (growW > 0 && area.l + W + growW <= (std::min)(freeR, (int)pane.r)) { swW += growW / 2; W = WsessF + 2 * swW; }   // (2.15.0) the box spreads left over the old column gap: the sweep panels get the width
+        } else if (wide) {   // (2.41.0) cells | time table; the header / ladder never shrink it; any spare width goes to the cells (the 2nd column stays right-aligned before the table)
+            W = (std::max)((std::max)(WsessF + tmW, headW), sW); WsessF = W - tmW;
+            if (area.l + W > pane.r - pad) continue;
         } else { W = (std::max)((std::max)(W, headW - exW), sW); if (area.l + W + exW <= pane.r - pad) W = (std::max)(W, headW); WsessF = W; }   // (2.14.1) narrow pane: the extras go before the box does
         bool fillOn = false;
+        if (fillW > 0 && wide && fillW > W) { WsessF += fillW - W; W = fillW; fillOn = true; }   // (2.41.0) the box runs to the price axis: the cells take the width
         if (fillW > 0 && useSw && fillW > W) {   // (2.17.7, Rassul "go" hodlod_wide.png) the extra width spread over the 3 sections by their widths
             const int extra = fillW - W, es = (int)((long long)extra * WsessF / (W > 0 ? W : 1)), rest = extra - es;
             WsessF += es + (rest % 2); swW += rest / 2; W = WsessF + 2 * swW; fillOn = W == fillW;
@@ -2019,7 +2028,8 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int mktH = rowH + 3;   // (2.37.0) the signal line, always there (the box keeps one height) - was (2.29.0) the market strength line, only when it had something   // (2.29.0) the market strength line above the header band
         const int H0 = mktH + callH + htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
         const int sessRows = 1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size() + (v.tmOk ? 3 : 0);   // (2.14.2) + 1 spacer row above the time table   // (2.14.0) strip + Exp / Act (+ Pre / notes) + the time table
-        const int H = useSw ? mktH + callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
+        const int H = wide ? mktH + callH + htfH + 1 + hdrH + 1 + rowH * (1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size()) + 3 + 2   // (2.41.0) strip + Exp / Act (+ Pre / notes)
+                    : useSw ? mktH + callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
         const int Htot = H + (lad.ok ? stripH + STRIP_GAP : 0);
         if (fillW > 0 && !fillOn) return;                    // (2.17.7) pass 2 that cannot reach the width: the caller keeps pass 1
         if (fillOn) area.r = area.l + W;                     // (2.17.7) laid out at the area's left; the host moves it onto pass 1's final spot
@@ -2027,11 +2037,13 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         if (!fillOn && area.l + W > pane.r - pad) continue;
         if (Htot + 40 > pane.b - pane.t) continue;   // (2.17.9) too short for this form: the next one (the 2.12.0 box is shorter; was break)
         if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);
-        L.tableWant = offsetIn(area, placeIn(area, W, Htot, pos), dx, dy);
-        const Box B = fillOn ? placeIn(area, W, Htot, pos) : placeAvoid(area, W, Htot, pos, L.avoid, &L.tableMoved, &L.tableClear, dx, dy);
+        // (2.41.0, Rassul 10:32 CT "it should be aligned to the left") the wide box sits at the LEFT of its row (top / middle / bottom kept)
+        const int posT = wide ? ((pos >= 0 && pos <= 8 ? pos : POS_DEFAULT) / 3) * 3 : pos;
+        L.tableWant = offsetIn(area, placeIn(area, W, Htot, posT), dx, dy);
+        const Box B = fillOn ? placeIn(area, W, Htot, posT) : placeAvoid(area, W, Htot, posT, L.avoid, &L.tableMoved, &L.tableClear, dx, dy);
         L.tableFs = fs;
         const Box T = { B.l, B.b - H, B.r, B.b };
-        L.table = T; L.tableOk = true; L.trendCompact = true; L.swTier = useSw ? tier : -1;
+        L.table = T; L.tableOk = true; L.trendCompact = true; L.swTier = (useSw || wide) ? tier : -1;
         if (lad.ok) {   // (2.5.0) the Gex S/R ladder: the card's top band, the table's width
             const Box Sb = { B.l, B.t, B.r, B.t + stripH };
             layoutLadder(L, lad, geo, Sb, M, fs);
@@ -2100,13 +2112,20 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int SR = SL + WsessF;   // (2.13.0) the session section's right edge; (2.33.0) the HOD section starts here
         L.sessR = SR;
         auto colStart = [&](int k, int w) { return k == ncol - 1 ? SR - 8 - w : colX(k); };
-        const int panelTop = y + (useSw ? 2 : 0);   // (2.14.0) the three panels start here (a 2 px gap under the header band)
+        const int panelTop = y + ((useSw || wide) ? 2 : 0);   // (2.14.0) the three panels start here (a 2 px gap under the header band)
         auto strip = [&](int l, int r, int yy, unsigned edge, const std::string& title, const std::string& cap) {   // (2.14.0) a panel's header strip
             addFill(L, l, yy + 1, r, yy + rowH - 1, C_STRIP, R_TABLE); addFill(L, l, yy + 1, l + 3, yy + rowH - 1, edge, R_TABLE);
             addText(L, l + 9, yy, yy + rowH, title, C_SLATE, fs - 1, true, M(title, fs - 1, true), R_TABLE, -1);
             if (!cap.empty()) { const int cw2 = M(cap, fs - 1, false); addText(L, r - 6 - cw2, yy, yy + rowH, cap, C_GREY, fs - 1, false, cw2, R_TABLE, -1); }
         };
         if (useSw) { strip(SL + 6, SR - 6, panelTop, C_BLUE, "SESSION", ""); y = panelTop + rowH; }
+        if (wide) {   // (2.41.0) one strip across; swOk = the box may run to the axis. (10:56 CT "isnt it supposed to be 1st and 2nd instead of HOD and LOD")
+            // the strip names the two columns: "1st extreme" over the 1st column, "2nd extreme" right-aligned over the 2nd (which side is HOD / LOD stays in the cells)
+            addFill(L, T.l + 6, panelTop + 1, T.r - 6, panelTop + rowH - 1, C_STRIP, R_TABLE); addFill(L, T.l + 6, panelTop + 1, T.l + 9, panelTop + rowH - 1, C_BLUE, R_TABLE);
+            const char* h1 = "1st extreme"; const char* h2 = "2nd extreme"; const int w1 = M(h1, fs - 1, true), w2 = M(h2, fs - 1, true);
+            addText(L, x0, panelTop, panelTop + rowH, h1, C_SLATE, fs - 1, true, w1, R_TABLE, -1);
+            addText(L, SR - 8 - w2, panelTop, panelTop + rowH, h2, C_SLATE, fs - 1, true, w2, R_TABLE, -1);
+            y = panelTop + rowH; L.swOk = true; L.swCols.clear(); }
         const int rowsTop = y;   // (2.12.0) no 1ST / 2ND heading row: the Exp row follows the header band
         const Cell* rows[2] = { eRow, aRow }; const char* lab[2] = { "Exp", "Act" };
         for (int r = 0; r < 2; r++) {
@@ -2157,6 +2176,17 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 const int w = M(t, fs, true); addText(L, x0t + (q + 1) * tmColW - 6 - w, y, y + rowH, t, C_SLATE, fs, true, w, R_TABLE, -1); }
             y += rowH;
             L.tmRow = Box{ x0t, y - rowH, x0t + 4 * tmColW, y };
+        }
+        if (wide && v.tmOk) {   // (2.41.0, mockup A) the 1st-extreme table right of the Exp / Act rows: times on the Exp row, % of days on the Act row
+            const int tl = SR, x0t = tl + 8 + tmLabW, yE = rowsTop, yA = rowsTop + rowH;
+            addLine(L, tl, rowsTop + 2, tl, yA + rowH - 2, C_BORDER, 1, R_TABLE);
+            addText(L, tl + 8, yE, yE + rowH, tmLab[0], C_BLUE, fs - 1, false, M(tmLab[0], fs - 1, false), R_TABLE, -1);
+            for (int q = 0; q < 4; q++) { const int w = M(tmHead[q], fs - 1, false); addText(L, x0t + (q + 1) * tmColW - 6 - w, yE, yE + rowH, tmHead[q], C_GREY, fs - 1, false, w, R_TABLE, -1); }
+            addText(L, tl + 8, yA, yA + rowH, tmLab[1], C_GREY, fs - 1, false, M(tmLab[1], fs - 1, false), R_TABLE, -1);
+            addFill(L, x0t, yA + 1, x0t + 4 * tmColW, yA + rowH - 1, C_ROWALT, R_TABLE);
+            for (int q = 0; q < 4; q++) { const std::string t = v.tmCum[q] < 0 ? std::string("?") : std::to_string(v.tmCum[q]) + "%" + (v.tmQ ? "?" : "");
+                const int w = M(t, fs, true); addText(L, x0t + (q + 1) * tmColW - 6 - w, yA, yA + rowH, t, C_SLATE, fs, true, w, R_TABLE, -1); }
+            L.tmRow = Box{ x0t, yA, x0t + 4 * tmColW, yA + rowH };
         }
         if (useSw && v.planOn) {   // (2.40.0, Rassul 09:43 CT "this looks good. build") BUY AT � 3-HOUR SUPPORT | SESSION | SELL AT � 3-HOUR RESISTANCE
             L.swOk = true; L.swCols.clear(); L.planOk = true; L.planRows.clear();

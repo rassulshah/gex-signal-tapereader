@@ -1,5 +1,8 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.41.0 (2026-11-20 10:53 CT, Rassul "lets go with A", mockup hodlod-box-wide-mockup.html A): no BUY AT / SELL AT sections in the box
+ *         (the Today Plan stays in the MQ Reader); one SESSION section across - Exp / Act, the 1st-extreme table right of them (2 rows shorter);
+ *         the box starts at the pane's left edge (10:32 "it should be aligned to the left": the ColumnBoard left keep-out is not applied).
  *  2.40.0 (2026-11-20 09:43 CT, Rassul "this looks good. build"; mockup hodlod-box-plan-mockup.html): inside the HOD / LOD box the LOD SWEEPS
  *         section (left) is now BUY AT \xB7 3-HOUR SUPPORT and HOD SWEEPS (right) SELL AT \xB7 3-HOUR RESISTANCE = the MQ Reader's TODAY PLAN
  *         for this market (his Reader 09:33: ES "S1 7,105  PS0+PS  NEAR  T1 7,150.00", sell "-"). Same sources as the Reader: lsCobSignal's
@@ -1831,7 +1834,7 @@ int HodLod::draw(void)
         const long long nowMs = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
         const int keep = cb::leftKeep(sy ? sy : "", getSecondsPerBar(), cl ? cl : "", (int)pane.left, nowMs);   // (2.11.0) the Key Levels column IS a keep-out again: the table docks RIGHT of it (was 2.10.0: inside it)
         int kw = 0; S->dockKeys = cb::keysFresh(sy ? sy : "", getSecondsPerBar(), cl ? cl : "", nowMs, kw); S->keysW = kw;   // (2.10.0) lsDealerProfile 2.33.0's Key Levels column on this chart
-        if (keep > pb.l && pb.r - keep > 260) pb.l = keep;
+        if (!hl::HL_WIDE_SESSION && keep > pb.l && pb.r - keep > 260) pb.l = keep;   // (2.41.0, Rassul 10:32 CT "it should be aligned to the left") no left keep-out: the box starts at the pane's left edge (keep still logged)
         S->leftKeepX = keep;
     }
     if (!S->have || !S->T) {
@@ -2562,6 +2565,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.40.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.41.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
