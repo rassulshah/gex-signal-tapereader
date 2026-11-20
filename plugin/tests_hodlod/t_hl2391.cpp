@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
         CHECK(D.ok && D.pill && D.l == D.leftR + gml::EXP_GAP && D.level == 1, "centre too far left: line shifted right to pill + 10 px, nothing dropped"); }
     std::printf("[4] host + versions\n");
     {   const std::string h = rd("../HodLod.cpp"), lg = rd("../HodLodLogic.h"), st = rd("../HodLodSettings.h");
-        CHECK(std::string(hl::HL_VERSION) == "2.39.1" && std::string(hlset::PLUGIN_VERSION) == "2.39.1" && h.find("p->setVersion(\"2.39.1\")") != std::string::npos && lg.find("was HL_VERSION = \"2.39.0\"") != std::string::npos, "versions 2.39.1 everywhere (2.39.0 kept in the history)");
+        CHECK(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && h.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos && lg.find("was HL_VERSION = \"2.39.0\"") != std::string::npos, "versions match everywhere (2.40.0: version-agnostic; 2.39.0 kept in the history)");
         CHECK(h.find(" *  2.39.1 (2026-11-20 09:32 CT") != std::string::npos, "header comment 2.39.1");
         CHECK(std::string(nowl::VERSION) == "1.3.1" && std::string(gml::VERSION) == "1.1.0", "NowLevels 1.3.1, GammaLine 1.1.0");
         CHECK(h.find("void textIn(int l, int r, int yc") != std::string::npos && h.find("rc.drawText(s.c_str(), true, false)") != std::string::npos, "textIn: IRT centres the text in its measured box");

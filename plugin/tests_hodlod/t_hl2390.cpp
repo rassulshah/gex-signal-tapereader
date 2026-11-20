@@ -185,7 +185,7 @@ int main() {
         CHECK(closedStep(ce, B, a.line, "ES", 60, 2, "2.39.0").append, "the 1-min chart decides its own candles"); }
     std::printf("[10] host + versions\n");
     {   const std::string h = rd("../HodLod.cpp"), lg = rd("../HodLodLogic.h"), st = rd("../HodLodSettings.h");
-        CHECK(std::string(hl::HL_VERSION).rfind("2.39.", 0) == 0 && lg.find(std::string("HL_VERSION = \"") + hl::HL_VERSION + "\"") != std::string::npos && h.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos && st.find(std::string("PLUGIN_VERSION = \"") + hl::HL_VERSION + "\"") != std::string::npos, "versions 2.39.x everywhere (2.39.1: version-agnostic)");
+        CHECK(lg.find(std::string("HL_VERSION = \"") + hl::HL_VERSION + "\"") != std::string::npos && h.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos && st.find(std::string("PLUGIN_VERSION = \"") + hl::HL_VERSION + "\"") != std::string::npos, "versions 2.39.x everywhere (2.39.1: version-agnostic)");
         CHECK(h.find(" *  2.39.0 (2026-11-20") != std::string::npos, "header comment 2.39.0");
         CHECK(h.find("#include \"GammaLine.h\"") != std::string::npos, "host includes GammaLine.h");
         CHECK(h.find("gml::closedStep(") != std::string::npos && h.find("hlAppend(") != std::string::npos && h.find("gml::recHeader()") != std::string::npos, "host records each closed candle once (append after decide)");

@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.39.1";   // (2.39.1, Rassul 2026-11-20 09:32 CT "the gamma badge should be more aligned to the left so you will have more space for the options line and fix the arrows because they are overlapping") the regime pill + "0DTE Exp" at the FAR LEFT of the gamma row (the box's left edge), the centred gamma line gets the space; every arrow (Now + gamma lines) in its own slot, text drawn in its measured box (GammaLine 1.1.0, NowLevels 1.3.1)
+static const char* const HL_VERSION = "2.40.0";   // (2.40.0, Rassul 2026-11-20 09:43 CT "this looks good. build", mockup hodlod-box-plan-mockup.html) the LOD / HOD SWEEPS sections replaced by BUY AT � 3-HOUR SUPPORT (left) / SELL AT � 3-HOUR RESISTANCE (right) = the MQ Reader TODAY PLAN for this market (TodayPlan.h 1.0.0: CobSignal HTFNOW + the Reader state.json, the Reader's own rules); the sweep rows are still built and written to the status file (SWROW) for the bridge, not drawn
+// was HL_VERSION = "2.39.1";   // (2.39.1, Rassul 2026-11-20 09:32 CT "the gamma badge should be more aligned to the left so you will have more space for the options line and fix the arrows because they are overlapping") the regime pill + "0DTE Exp" at the FAR LEFT of the gamma row (the box's left edge), the centred gamma line gets the space; every arrow (Now + gamma lines) in its own slot, text drawn in its measured box (GammaLine 1.1.0, NowLevels 1.3.1)
 // was HL_VERSION = "2.39.0";   // (2.39.0, Rassul 2026-11-20 07:45 CT "build", mockups gamma-line-mockup.html + hodlod-new-box-mockup.html) the GAMMA line between the Now line and the box: regime pill | GAMMA WATCH / TESTING / BREAK / SWEEP at the significant MenthorQ strikes | G V C pressure | Next (GammaLine.h 1.0.0); 0DTE text at the row's far left; each closed candle decided once and recorded (lsFlexLevels\HodLod\GammaLine-<MKT>-<spb>s-<session>.csv)
 // was HL_VERSION = "2.38.0";   // (2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) the Now line adds ONE short liquidity phrase for the level its badge names, from lsLimitProfile 2.68.0's level liquidity file (only states that passed its scoring; "Bids holding", "Offers pulled" ...; grey label, the word green / red by who it helps; stale > 2 min / missing = none; drops first on a narrow pane) - NowLevels.h 1.3.0
 // was HL_VERSION = "2.37.2";   // (2.37.2, Rassul 2026-11-19 22:53 CT "remove signals after an hour"): the signal line shows a tag for 60 min after its candle, aged on the chart's bar clock (TopSignals.h 1.1.0)
@@ -747,6 +748,10 @@ struct View {
         std::vector<bool> f(R.size(), false); if (best > 0) for (size_t i = 0; i < R.size(); i++) f[i] = favPriced(R[i]) && favPct(R[i]) == best;
         return f; }
     bool swOn = false; std::vector<SwRow> swHi, swLo;
+    // (2.40.0) the TODAY PLAN sections (TodayPlan.h fills them): planOn = they replace the sweep sections (the sweep rows are still built for
+    // the status file); rows as the MQ Reader shows them: level ("S1 7,105"), tags ("PS0+PS", grey), chip (NEAR / SPRING / UPTHRUST), T1 price
+    struct PlanRow { std::string level, tags, chip, target; };
+    bool planOn = false; std::vector<PlanRow> planBuy, planSell; std::string planTime;
     // (2.14.0) the header extras ("Day ON range mid -> Trend 22% . Chop 16%" | "RTH 83% done" | "Bar 2:13 left") and the 1st-extreme time
     // table (cumulative 0-15 / 0-30 / 0-60 / 60m+ %); the ADR (trimmed ATR10) and tonight's overnight high / low for the day forecast
     std::vector<Seg> hdrExtra, hdrLeft;
@@ -1479,6 +1484,7 @@ struct Layout {
     bool swOk = false; std::vector<Box> swCols;                 // (2.13.0) the HOD / LOD sweep sections (tests / status)
     Box tmRow = { 0, 0, 0, 0 };                                 // (2.14.0) the 1st-extreme time table's % row
     int tableFs = 0;                                            // (2.17.7) the font size the table was laid out with (pass 2 keeps it)
+    bool planOk = false; std::vector<Box> planRows;               // (2.40.0) the TODAY PLAN sections were drawn (tests / status)
     int swTier = -1;                                            // (2.17.9) the sweep sections' form: 0 full, 1 no caption, 2 half bars, 3 no bars (-1 = no sections)
     int sessR = 0;                                              // (2.17.7) the SESSION section's right edge (= the HOD section's left)
     bool stretched = false; int stretchFrom = 0;                // (2.17.7) the table was widened to the price axis (from this width)
@@ -1618,6 +1624,11 @@ inline std::string trendFull(int lvl)
     switch (lvl) { case 2: return "Strong Uptrend"; case 1: return "Uptrend"; case -1: return "Downtrend"; case -2: return "Strong Downtrend"; default: return "Range"; }
 }
 // (2.5.0) the card's shades: the header band, the spot cell, the row dividers, the regime pill's fills (tints of his green / red - no new colour)
+// (2.40.0) the TODAY PLAN sections: strip titles and the Reader's state chips (mockup hodlod-box-plan-mockup.html: NEAR #9a3412 / #fde68a)
+static const char* const PLAN_T[2] = { "BUY AT \xB7 3-HOUR SUPPORT", "SELL AT \xB7 3-HOUR RESISTANCE" };
+static const char* const PLAN_T3[2] = { "BUY AT \xB7 3H SUPPORT", "SELL AT \xB7 3H RESISTANCE" };   // (2.40.0) the tightest form only
+static const int PLAN_GAP = 12;
+static const unsigned C_NEAR_F = 0x009A3412, C_NEAR_T = 0x00FDE68A, C_SPRING_F = 0x0014532D, C_SPRING_T = 0x00BBF7D0, C_UPTH_F = 0x007F1D1D, C_UPTH_T = 0x00FECACA;
 static const unsigned C_STRIP = 0x0016233A, C_ROWALT = 0x00101D2C, C_BAR_R = 0x00992B2B, C_BAR_G = 0x00166534, C_BAR_RD = 0x003A1F1F, C_BAR_GD = 0x00173322;   // (2.14.0) panel strips, alternate rows, % bars (0x00RRGGBB as C_GREEN)
 static const unsigned C_COLSEP = 0x00555555;
 static const int SW_BAR = 64;   // (2.14.0) the % bar's full width (px); a bar = pct x 1.6 of it, capped   // (2.12.0) the thin grey column separator
@@ -1946,11 +1957,28 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         // (2.13.0) the HOD / LOD sweep sections right of the session section: name | price | %; dropped when the pane is too narrow
         const int Wsess = W; int swW = 0, swNameW = 0, swPxW = 0, swPctW = 0; size_t swRows = 0;
         const char* swTitle[2] = { "HOD sweeps (1st = HOD)", "LOD sweeps (1st = LOD)" };
-        bool useSw = tier >= 0 && v.swOn && (!v.swHi.empty() || !v.swLo.empty());   // (2.17.9) tier -1 = the 2.12.0 box
+        bool useSw = tier >= 0 && (v.planOn || (v.swOn && (!v.swHi.empty() || !v.swLo.empty())));   // (2.17.9) tier -1 = the 2.12.0 box; (2.40.0) the plan sections always count
+        // (2.40.0) the plan's narrow forms (tiers 1-3, as the sweep sections had): 1 = no time in the strips, tighter gaps; 2 = only the first
+        // tag of a level + "+n"; 3 = no tags. The level, its chip and T1 are always the Reader's.
+        const int plGap = tier >= 1 ? 8 : PLAN_GAP;
+        auto plTags = [tier](const std::string& t) -> std::string { if (tier < 2 || t.empty()) return t; if (tier >= 3) return std::string();
+            const size_t k = t.find(" \xB7 "); if (k == std::string::npos) return t; int n = 0; for (size_t q = k; q != std::string::npos; q = t.find(" \xB7 ", q + 3)) ++n;
+            return t.substr(0, k) + " +" + std::to_string(n); };
         if (tier >= 0 && !useSw) { if (tier > 0) continue; }  // no sweep rows: tier 0 lays out the 2.12.0 box as before, tiers 1-3 add nothing
         const int swBar = tier >= 3 ? 0 : (tier >= 2 ? SW_BAR / 2 : SW_BAR), swGap = tier >= 3 ? 6 : (tier >= 2 ? 8 : 12), swPad = tier >= 3 ? 18 : 22;   // (2.17.9) compact tiers 2 / 3
         auto swPx = [tier](const std::string& px) { if (tier < 3) return px; std::string o; for (size_t k = 0; k < px.size(); k++) { if (px.compare(k, 3, " - ") == 0) { o += '-'; k += 2; } else o += px[k]; } return o; };   // (2.17.9) tier 3: a range as "a-b"
-        if (useSw) {
+        int plLvW = 0, plAtW = 0, plChW = 0, plTgW = 0, plT1W = 0;   // (2.40.0) the plan columns
+        if (useSw && v.planOn) {   // (2.40.0) Level | At | chip | Target; one row at least ("-")
+            const char* const* PT = tier >= 3 ? PLAN_T3 : PLAN_T; const int tW = (std::max)(M(PT[0], fs - 1, true), M(PT[1], fs - 1, true)), capW = tier >= 1 ? 0 : M(v.planTime.empty() ? std::string("12:00 PM") : v.planTime, fs - 1, false) + 6;
+            plLvW = M("Level", fs - 1, false); plAtW = M("At", fs - 1, false); plChW = M("NEAR", fs - 2, true) + 10; plT1W = M("T1 ", fs, false); plTgW = M("Target", fs - 1, false);
+            for (int q = 0; q < 2; q++) { const std::vector<View::PlanRow>& R = q ? v.planSell : v.planBuy; swRows = (std::max)(swRows, (std::max)((size_t)1, R.size()));
+                for (const View::PlanRow& r : R) { plLvW = (std::max)(plLvW, M(r.level, fs, true)); plAtW = (std::max)(plAtW, M(plTags(r.tags), fs, false));
+                    if (!r.chip.empty()) plChW = (std::max)(plChW, M(r.chip, fs - 2, true) + 10);
+                    if (!r.target.empty()) plTgW = (std::max)(plTgW, plT1W + M(r.target, fs, true)); } }
+            if (tier >= 3) plAtW = -plGap;   // the tightest form: no At column
+            swW = (std::max)(tW + 16 + capW, plLvW + plGap + plAtW + plGap + plChW + plGap + plTgW) + 22;
+            if (area.l + Wsess + 2 * swW > pane.r - pad) continue;
+        } else if (useSw) {
             const std::vector<View::SwRow>* SR2[2] = { &v.swHi, &v.swLo }; int tW = 0;
             for (int q = 0; q < 2; q++) { tW = (std::max)(tW, tier >= 1 ? M(q ? "LOD SWEEPS \xB7 1st = LOD" : "HOD SWEEPS \xB7 1st = HOD", fs - 1, true) : M(swTitle[q], fs, true)); /* (2.17.9) compact: the strip title as drawn */ swRows = (std::max)(swRows, SR2[q]->size());
                 const std::vector<bool> fv = View::favOf(*SR2[q]); size_t ri = 0;   // (2.18.0) a FAV row's name + gap + tag
@@ -2130,7 +2158,40 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             y += rowH;
             L.tmRow = Box{ x0t, y - rowH, x0t + 4 * tmColW, y };
         }
-        if (useSw) {   // (2.13.0 / 2.14.0; 2.18.0 order swapped) 2 LOD sweeps | 3 HOD sweeps: a header strip, the column heads, the rows with a % bar
+        if (useSw && v.planOn) {   // (2.40.0, Rassul 09:43 CT "this looks good. build") BUY AT � 3-HOUR SUPPORT | SESSION | SELL AT � 3-HOUR RESISTANCE
+            L.swOk = true; L.swCols.clear(); L.planOk = true; L.planRows.clear();
+            for (int pos = 0; pos < 2; pos++) {   // pos 0 = BUY (left, green), 1 = SELL (right, red)
+                const std::vector<View::PlanRow>& RR = pos ? v.planSell : v.planBuy; const int cx = pos == 0 ? T.l : SR; const unsigned sc = pos ? C_RED : C_GREEN;
+                { const int lx = pos == 0 ? cx + swW : cx; addLine(L, lx, panelTop, lx, T.b - 3, C_BORDER, 2, R_TABLE); }   // the divider on the session's side
+                int yy = panelTop;
+                addFill(L, cx + 6, yy + 1, cx + swW - 6, yy + rowH - 1, C_STRIP, R_TABLE); addFill(L, cx + 6, yy + 1, cx + 9, yy + rowH - 1, sc, R_TABLE);
+                { const char* tt = tier >= 3 ? PLAN_T3[pos] : PLAN_T[pos]; addText(L, cx + 15, yy, yy + rowH, tt, sc, fs - 1, true, M(tt, fs - 1, true), R_TABLE, -1); }
+                if (!v.planTime.empty() && tier < 1) { const int cw2 = M(v.planTime, fs - 1, false); addText(L, cx + swW - 12 - cw2, yy, yy + rowH, v.planTime, C_GREY, fs - 1, false, cw2, R_TABLE, -1); }
+                yy += rowH;
+                const int xLv = cx + 9, xAt = xLv + plLvW + plGap, xCh = xAt + plAtW + plGap, xTgR = cx + swW - 9;
+                { const int wT = M("Target", fs - 1, false);
+                  addText(L, xLv, yy, yy + rowH, "Level", C_GREY, fs - 1, false, M("Level", fs - 1, false), R_TABLE, -1);
+                  if (tier < 3) addText(L, xAt, yy, yy + rowH, "At", C_GREY, fs - 1, false, M("At", fs - 1, false), R_TABLE, -1);
+                  addText(L, xTgR - wT, yy, yy + rowH, "Target", C_GREY, fs - 1, false, wT, R_TABLE, -1);
+                  addLine(L, cx + 6, yy + rowH - 1, cx + swW - 6, yy + rowH - 1, C_BORDER, 1, R_TABLE); }
+                yy += rowH;
+                if (RR.empty()) { addText(L, xLv, yy, yy + rowH, "-", C_GREY, fs, false, M("-", fs, false), R_TABLE, -1); L.planRows.push_back(Box{ cx + 6, yy, cx + swW - 6, yy + rowH }); yy += rowH; }
+                for (size_t i = 0; i < RR.size(); i++) {
+                    const View::PlanRow& r = RR[i];
+                    if (i % 2 == 1) addFill(L, cx + 6, yy + 1, cx + swW - 6, yy + rowH - 1, C_ROWALT, R_TABLE);
+                    addText(L, xLv, yy, yy + rowH, r.level, sc, fs, true, M(r.level, fs, true), R_TABLE, -1);
+                    { const std::string tg = plTags(r.tags); if (!tg.empty()) addText(L, xAt, yy, yy + rowH, tg, C_GREY, fs, false, M(tg, fs, false), R_TABLE, -1); }   // his colour rule: tags grey
+                    if (!r.chip.empty()) { const int w = M(r.chip, fs - 2, true); unsigned f = C_NEAR_F, t = C_NEAR_T;
+                        if (r.chip == "SPRING") { f = C_SPRING_F; t = C_SPRING_T; } else if (r.chip == "UPTHRUST") { f = C_UPTH_F; t = C_UPTH_T; }
+                        addFill(L, xCh, yy + 3, xCh + w + 10, yy + rowH - 3, f, R_TABLE); addText(L, xCh + 5, yy + 3, yy + rowH - 3, r.chip, t, fs - 2, true, w, R_TABLE, -1); }
+                    if (!r.target.empty()) { const int w2 = M(r.target, fs, true); addText(L, xTgR - w2, yy, yy + rowH, r.target, C_SLATE, fs, true, w2, R_TABLE, -1);
+                        addText(L, xTgR - w2 - plT1W, yy, yy + rowH, "T1 ", C_GREY, fs, false, plT1W, R_TABLE, -1); }
+                    L.planRows.push_back(Box{ cx + 6, yy, cx + swW - 6, yy + rowH });
+                    yy += rowH;
+                }
+                L.swCols.push_back(Box{ cx, panelTop, cx + swW, T.b });
+            }
+        } else if (useSw) {   // (2.13.0 / 2.14.0; 2.18.0 order swapped) 2 LOD sweeps | 3 HOD sweeps: a header strip, the column heads, the rows with a % bar
             L.swOk = true; L.swCols.clear();
             const std::string cap = tier >= 1 ? std::string() : std::string("\xBC ADR \xB7 1 yr");   // (2.17.9) tier 1+: no caption
             const char* stripT[2] = { "HOD SWEEPS \xB7 1st = HOD", "LOD SWEEPS \xB7 1st = LOD" };

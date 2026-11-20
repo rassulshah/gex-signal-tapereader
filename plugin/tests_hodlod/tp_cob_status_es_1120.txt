@@ -1,0 +1,34 @@
+VERSION,1.11.0
+MARKET,ES
+SYMBOL,ESZ6
+BAR_SECONDS,180
+RTH,510-900
+BARS,6753
+LEGS,2173
+RULES,completed 3-bar ZigZag wave; sweep of the 3-hour S1/S2 (bull) or R1/R2 (bear) OR of a named key level (RTH; 1.9.0); dratio >= 1.9 (20 waves); >= 3 bars; room 0.1 ADR; from the 5:00 PM session start to 11:00 AM CT; drawn with ZZO count >= 10
+RECORD,loaded 18 CoBs, 10 LVPs
+COBS,5
+ZZO_FILTER,1.4.0 drawn only when the CoB's ZZO Combo wave count reaches 10,passed 2,failed 3,waiting 0
+LAST,COB,1794910680,BULL,Cob+R,PWL,4.79,7308,178.675,1794909420,1794910320,100,0,SHOW
+LAST,COB,1794993120,BULL,Cob,S1/ONL/LonLO/PWL/AsiaLO/PHL,5.06,7323.25,175.955,1794991860,1794992580,0,0,SHOW
+LAST,COB,1795079160,BEAR,Cob,AsiaHI/PHH,2.98,7431.25,172.083,1795078260,1795078800,0,0,SHOW
+LAST,COB,1795082400,BEAR,Cob,PDH,7.98,7412.25,172.083,1795079160,1795081320,0,0,SHOW
+LAST,COB,1795083120,BULL,Cob,S1/PDL/PFL,2.78,7293,172.083,1795081320,1795082760,0,0,SHOW
+LVP_RULES,3-bar High/Low ZigZag (zzd COMBO_REV_BARS 3); CoB wave = the wave its way holding the CoB leg's extreme; first 3 pullback waves inside the CoB wave's range; LVP = pullback volume <= CoB wave volume / 3; decided when the pullback wave is confirmed
+LVPS,1
+LASTLVP,1795083120,BULL,1795083120,1795082940,1795084200,27451,171176,16.0,1,SHOW
+FIB_RULES,1.6.5 targets 1.272/1.618/2.0, entry 38.2%, stop 0 - 1 tick; end: close through 0, session end, next drawn CoB; entry+stop: stop touched, T1 before fill, 3 h; a hit target ends at its hit
+FIB,1795083120,BULL,0=7293,1=7337.75,closed through 0,Stop ended,38.2% ended,BE hit,1.272 hit,1.618 ended,2.0 ended
+FIB,1795082400,BEAR,0=7412.25,1=7293,next CoB,Stop ended,38.2% ended,BE ended,1.272 ended,1.618 ended,2.0 ended
+HTF_RULES,1.7.1 3-hour bars from 17:00 CT (forming bar counts); 1-bar High/Low ZigZag; R1 = last pivot high, R2 = higher of the last 2; S1 = last pivot low, S2 = lower of the last 2; standing = no completed 3-hour bar closed beyond; the CoB origin = the 3-hour swing's extreme beyond a standing level, the wave back through it; window = the 5:00 PM session start to 11:00 AM CT
+HTF,R1=7440.5,R2=7440.5,S1=7105,S2=7105,swing up
+HTFNOW,7440.5,1,7440.5,1,7105,1,7105,1,1,7174.5
+HTFX,2026-11-20,HOD,7174.5,
+HTFX,2026-11-20,LOD,7149,S1 7305.25
+REV_RULES,1.8.0 CoB pullback Rev: after a drawn CoB, pullback inside the CoB range (no close through the origin, no new extreme); the first bar closing beyond the prior bar (and its own open) is a Rev when the pullback volume before it <= 0.5x the CoB wave volume; a new extreme starts the next pullback; up to 3 Revs per CoB, until a close through the origin
+REVS,4
+LVPLOOK,1794993120,BULL,110461,1,0,pullback 2 left the CoB wave's range
+LVPLOOK,1795079160,BEAR,57708,1,0,pullback 2 left the CoB wave's range
+LVPLOOK,1795082400,BEAR,295385,2,0,pullback 3 left the CoB wave's range
+LVPLOOK,1795083120,BULL,171176,1,1,pullback 2 left the CoB wave's range
+DRAWN,0

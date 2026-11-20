@@ -1,5 +1,13 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.40.0 (2026-11-20 09:43 CT, Rassul "this looks good. build"; mockup hodlod-box-plan-mockup.html): inside the HOD / LOD box the LOD SWEEPS
+ *         section (left) is now BUY AT \xB7 3-HOUR SUPPORT and HOD SWEEPS (right) SELL AT \xB7 3-HOUR RESISTANCE = the MQ Reader's TODAY PLAN
+ *         for this market (his Reader 09:33: ES "S1 7,105  PS0+PS  NEAR  T1 7,150.00", sell "-"). Same sources as the Reader: lsCobSignal's
+ *         CobSignal.status-<MKT>-180.txt HTFNOW (3-hour R1 / R2 / S1 / S2, standing, swing) + the Reader's state.json (price, expected move,
+ *         ladder, time); same rules (TodayPlan.h 1.0.0). Header strip (green / red title, the plan time right), Level | At (grey tags) |
+ *         NEAR / SPRING / UPTHRUST chip | Target "T1 7,150.00"; empty side "-". SESSION section, signal / info / Level / Options lines
+ *         unchanged; the box is shorter (bottom edge docked as before). The sweep rows are still built and written (SWROW lines) for the
+ *         bridge's sweep odds, not drawn. Status: TODAY_PLAN line. No settings change.
  *  2.39.1 (2026-11-20 09:32 CT, Rassul "the gamma badge should be more aligned to the left so you will have more space for the options line and fix the arrows because they are overlapping"):
  *         the regime pill + "0DTE Exp 3:00 PM" at the FAR LEFT of the gamma row (the box's left edge); the gamma line (badge | G V C | Next)
  *         stays centred and moves right only as far as needed to stay clear of the pill; narrow: 0DTE, setups, Next, G V C, regime word,
@@ -205,6 +213,7 @@
 #include "HodLodSettings.h"         // (2.4.2) the ONE settings table (SettingsSpec.h)
 #include "DealerProfileSettings.h"   // (2.4.3) the Dealer Profile banner key (its keyed per-market file)
 #include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
+#include "TodayPlan.h"              // (2.40.0) the TODAY PLAN sections (SDK-free, tests_hodlod/t_hl2400.cpp)
 #include "GammaLine.h"              // (2.39.0) the GAMMA line (SDK-free, tests_hodlod/t_hl2390.cpp)
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodRange.h"          // (2.19.0) the Range Day pill (SDK-free)
@@ -386,6 +395,8 @@ struct HLState {
     long long swStamp = -2, swKeyStamp = -2; time_t swChecked = 0; hsw::File sw; std::vector<hsw::Lv> swKeys; std::string swWhy, swKeyWhy;
     bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
     // (2.4.0) the regime's ONE source: GammaProfile-MQ-<MKT>.csv HVL0 (stamp, at most every 5 s) and its verdict (Fresh.h)
+    // (2.40.0) the TODAY PLAN: lsCobSignal's CobSignal.status-<MKT>-180.txt HTFNOW + the MQ Reader's state.json (stamps, last good copies)
+    long long tpHtfStamp = -2, tpStStamp = -2; time_t tpChecked = 0, tpHtfMtime = 0; tpl::Htf tpHtf; tpl::St tpSt; std::string tpStPath, tpHtfWhy = "not read", tpStWhy = "not read"; tpl::Plan tpPlan;
     long long hvlStamp = -2; time_t hvlChecked = 0; hlg::HvlBook hvl; std::string hvlWhy; int regSign = 0; bool regFromGex = false; double regGexHvl = 0;   /* (2.5.0) the regime from the Gex S/R file HVL0 */ fr::Verdict regV; fr::Verdict qV; bool qJudged = false;
     long long lastClosedAbs = 0; double lastClose = NAN;     // the last closed bar (CT wall-clock seconds of its END stamp, its close)
     // (2.4.0) the Market State posts: this chart's identity, the facts decided for the last closed bar, when they were last posted
@@ -483,6 +494,7 @@ public:
     void refresh(HLState& S);
     bool loadMq(HLState& S);
     void loadSession(HLState& S);
+    void loadPlan(HLState& S);                                       // (2.40.0) the TODAY PLAN sections
     void loadHvl(HLState& S);                                        // (2.4.0) the regime's HVL0 book
     void postMst(HLState& S);                                        // (2.4.0) the Market State
     void recompute(HLState& S, long n);
@@ -795,6 +807,68 @@ void HodLod::loadSession(HLState& S)
         else if (c.size() >= 2 && c[0] == "EXP" && c[1].size() == 5 && c[1][2] == ':') S.sessExp = c[1];
         else if (c.size() >= 3 && c[0] == "DAGE") { char* e = nullptr; long v = strtol(c[1].c_str(), &e, 10); if (e && *e == 0) S.sessAge = (int)v; S.sessRec = c[2].empty() || c[2] == "OK"; }
     }
+}
+
+// (2.40.0) THE TODAY PLAN (TodayPlan.h): the 3-hour levels from lsCobSignal's status file (HTFNOW, <= 64 KiB) and the MQ Reader's own
+// state.json (C:\Dev\level-reversal-analytics\data\menthorq\reader\<session>\state.json, <= 16 MiB, only the plan fields parsed).
+// Each re-read only when its stamp changes, checked at most every 20 s; a torn read (stamp moved while reading) or a garbled file keeps
+// the last good copy. Never the network.
+static std::string hlReaderStatePath(const std::string& session)
+{
+#ifdef _WIN32
+    return "C:\\Dev\\level-reversal-analytics\\data\\menthorq\\reader\\" + session + "\\state.json";
+#else
+    const char* up = getenv("USERPROFILE"); return std::string(up ? up : ".") + "/reader-" + session + "-state.json";   // mock tests
+#endif
+}
+static bool hlStampOf(const std::string& p, long long& stamp, time_t& mt, long long& size)
+{
+#ifdef _WIN32
+    struct _stat64 st; const bool ok = _stat64(p.c_str(), &st) == 0;
+#else
+    struct stat st; const bool ok = stat(p.c_str(), &st) == 0;
+#endif
+    stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1; mt = ok ? (time_t)st.st_mtime : 0; size = ok ? (long long)st.st_size : -1;
+    return ok;
+}
+static bool hlReadAll(const std::string& p, size_t cap, std::string& text)
+{
+    std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) return false;
+    text.resize(cap + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount());
+    return text.size() <= cap;
+}
+void HodLod::loadPlan(HLState& S)
+{
+    const time_t now = time(nullptr);
+    if (S.tpChecked != 0 && now - S.tpChecked < 20 && S.tpStPath == hlReaderStatePath(S.view.session)) { S.tpPlan = tpl::build(S.tpHtf, S.tpHtfMtime > 0 && (long long)(now - S.tpHtfMtime) > tpl::HTF_STALE_S, S.tpSt, S.mkt); return; }
+    S.tpChecked = now;
+    {   const std::string p = flexPath("CobSignal.status-" + S.mkt + "-180.txt"); long long st = -1, sz = -1; time_t mt = 0;
+        if (p.empty() || !hlStampOf(p, st, mt, sz)) { S.tpHtf = tpl::Htf(); S.tpHtfStamp = -1; S.tpHtfMtime = 0; S.tpHtfWhy = "CobSignal.status-" + S.mkt + "-180.txt missing"; }
+        else if (st != S.tpHtfStamp) {
+            std::string text;
+            if (sz > (long long)tpl::MAX_STATUS || !hlReadAll(p, tpl::MAX_STATUS, text)) S.tpHtfWhy = "status over 64 KiB / unreadable (kept the last copy)";
+            else { long long st2 = -1, sz2 = -1; time_t mt2 = 0; hlStampOf(p, st2, mt2, sz2);
+                const tpl::Htf H = tpl::parseHtf(text);
+                if (st2 != st) S.tpHtfWhy = "torn read (kept the last copy)";
+                else if (!H.have && S.tpHtf.have) { S.tpHtfStamp = st; S.tpHtfWhy = "no HTFNOW line (kept the last copy)"; }
+                else { S.tpHtf = H; S.tpHtfStamp = st; S.tpHtfMtime = mt; S.tpHtfWhy = H.have ? "ok" : "no HTFNOW line"; } }
+        }
+    }
+    {   const std::string p = hlReaderStatePath(S.view.session); long long st = -1, sz = -1; time_t mt = 0;
+        if (p != S.tpStPath) { S.tpStPath = p; S.tpSt = tpl::St(); S.tpStStamp = -2; }   // another session: start clean
+        if (S.view.session.empty() || !hlStampOf(p, st, mt, sz)) { S.tpSt = tpl::St(); S.tpSt.why = "missing"; S.tpStStamp = -1; S.tpStWhy = "state.json missing for " + (S.view.session.empty() ? std::string("-") : S.view.session); }
+        else if (st != S.tpStStamp) {
+            std::string text;
+            if (sz > (long long)tpl::MAX_STATE || !hlReadAll(p, tpl::MAX_STATE, text)) S.tpStWhy = "state.json over 16 MiB / unreadable (kept the last copy)";
+            else { long long st2 = -1, sz2 = -1; time_t mt2 = 0; hlStampOf(p, st2, mt2, sz2);
+                tpl::St T = tpl::parseState(text, S.mkt);
+                if (st2 != st) S.tpStWhy = "torn read (kept the last copy)";
+                else if (!T.ok && S.tpSt.ok) S.tpStWhy = "state.json " + T.why + " (kept the last copy)";
+                else if (T.ok && !T.session.empty() && T.session != S.view.session) { S.tpSt = tpl::St(); S.tpSt.why = "for session " + T.session; S.tpStStamp = st; S.tpStWhy = S.tpSt.why; }
+                else { S.tpSt = T; S.tpStStamp = st; S.tpStWhy = T.ok ? T.why + " " + T.nowCt : T.why; } }
+        }
+    }
+    S.tpPlan = tpl::build(S.tpHtf, S.tpHtfMtime > 0 && (long long)(now - S.tpHtfMtime) > tpl::HTF_STALE_S, S.tpSt, S.mkt);
 }
 
 // (2.4.0, audit C finding 8) the regime's ONE MenthorQ source: GammaProfile-MQ-<MKT>.csv (the bridge writes it with every grid; the
@@ -1809,6 +1883,11 @@ int HodLod::draw(void)
         for (const hsw::Row& r : hi) S->view.swHi.push_back(hl::View::SwRow{ r.name, r.px, r.pct, r.elig });
         for (const hsw::Row& r : lo) S->view.swLo.push_back(hl::View::SwRow{ r.name, r.px, r.pct, r.elig });
     }
+    loadPlan(*S);                            // (2.40.0) the TODAY PLAN replaces the drawn sweep sections (the sweep rows above still go to the status file)
+    {   S->view.planOn = true; S->view.planBuy.clear(); S->view.planSell.clear(); S->view.planTime = S->tpPlan.time12;
+        for (const tpl::Row& r : S->tpPlan.buy) S->view.planBuy.push_back(hl::View::PlanRow{ r.level, r.tags, r.chip, r.target });
+        for (const tpl::Row& r : S->tpPlan.sell) S->view.planSell.push_back(hl::View::PlanRow{ r.level, r.tags, r.chip, r.target });
+    }
     S->qV = hlq::fresh(S->qf, hlNowCt()); S->qJudged = S->qf.ok;   // (2.4.0) their age: stale -> "Q: STALE"
     hlq::toView(S->view, S->qf, S->view.trendReady ? hl::trendWord(S->view.trendLvl) : std::string(), S->view.trendLvl, &S->qV);
     const int pe = priceEdge();
@@ -2032,7 +2111,9 @@ int HodLod::draw(void)
             S->placeLine += rb;
             // (2.19.0) the sweep rows as drawn, for the MQ Reader's 1st-extreme sweep table (bridge /api/reader "hodlod_box")
             for (int sd = 0; sd < 2; sd++) for (const hl::View::SwRow& r : sd ? S->view.swLo : S->view.swHi)
-                S->placeLine += std::string("SWROW|") + (sd ? "LOD" : "HOD") + "|" + r.name + "|" + r.px + "|" + r.pct + "|" + (r.elig ? "1" : "0") + "\n"; }   // '|': prices carry commas
+                S->placeLine += std::string("SWROW|") + (sd ? "LOD" : "HOD") + "|" + r.name + "|" + r.px + "|" + r.pct + "|" + (r.elig ? "1" : "0") + "\n";   // '|': prices carry commas
+            // (2.40.0) the TODAY PLAN as drawn (the sweep sections above are no longer drawn; their SWROW lines stay for the bridge's sweep odds)
+            S->placeLine += tpl::statusLine(S->tpPlan, "htf " + S->tpHtfWhy + " ; reader " + S->tpStWhy + (L.planOk ? " ; drawn" : " ; not drawn (pane too narrow: the header-only box)")); }
     }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
@@ -2481,6 +2562,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.39.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.40.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
