@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.2.0";   // (1.2.0 = lsHodLod 2.37.2, 23:02 CT) live = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP only at the close, from the chart's Bk / Sw marks   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
+static const char* const VERSION = "1.3.0";   // (1.3.0 = lsHodLod 2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) ONE short liquidity phrase for the level the badge names, from lsLimitProfile 2.68.0's DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that PASSED its scoring (shown = 1); "Bids building" / "Offers leaving" / "Bids holding" / "Bids pulled", the label grey, the word in the defender's colour when it helps the defence (bids green, offers red) and the attacker's when it fails; a file older than 2 min or no state = no phrase; on a narrow pane the phrase drops FIRST (before Next / Last Bk)
+// was "1.2.0";   // (1.2.0 = lsHodLod 2.37.2, 23:02 CT) live = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP only at the close, from the chart's Bk / Sw marks   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
 static const long long E1904 = 2082844800LL;
 static const int SW_MIN = 10;          // (1.2.0) a Sw mark counts with strength 10+ (BVMax or BRMax, "V12" / "R58" / "V99+"), as the spoken alerts
 static const double TST_MIN = 0.382;   // (1.1.0, Rassul 22:46 CT "after it breaks, and continues, you can then have the test of the level after it has the minimum required retracement") = LevelMarks.h's Tst minimum
@@ -62,7 +63,11 @@ static const unsigned C_GREY = 0x0094A3B8, C_GOLD = 0x00F0C040, C_GREEN = 0x0022
 
 // one piece of the line: s, then an arrow (+1 up / -1 down, drawn with pen strokes - IRT's drawText is cp1252, no arrow glyphs), then s2;
 // sep = the thin vertical separator between parts; badge = a filled box (fill) with black bold text
-struct Seg { std::string s, s2; int arrow = 0; unsigned col = C_WHITE; bool bold = false; bool badge = false; bool sep = false; unsigned fill = 0; int part = 0; int drop = 0; };   // drop: 0 keep, 2 the Last Bk part
+struct Seg { std::string s, s2; int arrow = 0; unsigned col = C_WHITE; bool bold = false; bool badge = false; bool sep = false; unsigned fill = 0; int part = 0; int drop = 0; };   // drop: 0 keep, 2 the Last Bk part, 3 (1.3.0) the liquidity phrase (dropped first)
+// (1.3.0) one row of lsLimitProfile's level liquidity file: "L|name|level_tick|B or O|state|shown|since_ct_s|conf"
+struct LiqRow { std::string name; bool bid = true; std::string st; bool shown = false; long long since = 0; };
+struct Liq { bool ok = false; std::vector<LiqRow> rows; std::string why = "no file"; };
+static const long long LIQ_STALE_S = 120;   // a file older than 2 min = no phrase (the Limit Profile rewrites it at least every 60 s)
 
 inline bool toLL(const std::string& s, long long& v) { if (s.empty() || s.size() > 20) return false; errno = 0; char* e = nullptr; const long long x = std::strtoll(s.c_str(), &e, 10); if (errno || !e || *e) return false; v = x; return true; }
 inline bool toD(const std::string& s, double& v) { if (s.empty() || s.size() > 30) return false; errno = 0; char* e = nullptr; const double x = std::strtod(s.c_str(), &e); if (errno || !e || *e || !std::isfinite(x)) return false; v = x; return true; }
@@ -270,10 +275,52 @@ inline std::string fmtPx(double v, int dec) { char b[40]; std::snprintf(b, sizeo
     bool neg = !ip.empty() && ip[0] == '-'; if (neg) ip = ip.substr(1); std::string r; for (size_t i = 0; i < ip.size(); i++) { if (i && (ip.size() - i) % 3 == 0) r += ','; r += ip[i]; } return (neg ? "-" : "") + r + fp; }
 inline std::string clock12(long long t) { const long long s = ((t % 86400) + 86400) % 86400; int h = (int)(s / 3600), m = (int)(s % 3600 / 60); const int h12 = h % 12 == 0 ? 12 : h % 12; char b[16]; std::snprintf(b, sizeof b, "%d:%02d", h12, m); return b; }
 
+// (1.3.0) the level liquidity file: header "LEVELLIQ,1,<ver>", MARKET|<mkt>, SPB|<spb>, STAMP|<CT s>, then rows. Wrong market / bar size,
+// garbled, too big or older than LIQ_STALE_S = nothing.
+inline Liq parseLiq(const std::string& text, const std::string& mkt, long long spb, long long nowCt) {
+    Liq q; if (text.empty()) return q; if (text.size() > 64 * 1024) { q.why = "too big"; return q; }
+    const std::vector<std::string> L = split(text, '\n');
+    if (L.empty() || L[0].compare(0, 11, "LEVELLIQ,1,") != 0) { q.why = "bad header"; return q; }
+    std::string m; long long sp = -1, st = -1;
+    for (const std::string& ln : L) { const std::vector<std::string> f = split(ln, '|');
+        if (f.size() == 2 && f[0] == "MARKET") m = f[1];
+        else if (f.size() == 2 && f[0] == "SPB") { if (!toLL(f[1], sp)) sp = -1; }
+        else if (f.size() == 2 && f[0] == "STAMP") { if (!toLL(f[1], st)) st = -1; }
+        else if (f.size() >= 7 && f[0] == "L" && (f[3] == "B" || f[3] == "O") && (f[5] == "0" || f[5] == "1") && q.rows.size() < 200) {
+            LiqRow r; r.name = f[1]; r.bid = f[3] == "B"; r.st = f[4]; r.shown = f[5] == "1"; long long s0 = 0; if (toLL(f[6], s0)) r.since = s0; q.rows.push_back(r); } }
+    if (m != mkt) { q.rows.clear(); q.why = "other market"; return q; }
+    if (sp != spb) { q.rows.clear(); q.why = "other bar size"; return q; }
+    if (st < 0 || nowCt - st > LIQ_STALE_S || st - nowCt > LIQ_STALE_S) { q.rows.clear(); q.why = "stale"; return q; }
+    q.ok = true; q.why = "ok"; return q;
+}
+// does a file row name this (short) level? (a merged row "PFL\xB7PDL" / "PFL/PDL" names each)
+inline bool liqNames(const std::string& row, const std::string& lv) {
+    std::string cur; for (size_t i = 0; i <= row.size(); ++i) { const char c = i < row.size() ? row[i] : '/';
+        if (c == '/' || c == '\xB7') { if (!cur.empty() && shortName(cur) == shortName(lv)) return true; cur.clear(); } else cur += c; }
+    return false;
+}
+// the phrase word for a SHOWN state: building / leaving / holding (X or H) / pulled (P); colour: helps the defence = the defender's colour
+// (bids green, offers red), fails = the attacker's (bids red, offers green)
+inline bool liqWord(const LiqRow& r, std::string& w, unsigned& col) {
+    if (!r.shown) return false;
+    bool helps = true;
+    if (r.st == "building") w = "building"; else if (r.st == "leaving") { w = "leaving"; helps = false; } else if (r.st == "X" || r.st == "H") w = "holding";
+    else if (r.st == "P") { w = "pulled"; helps = false; } else return false;
+    col = (helps == r.bid) ? C_GREEN : C_RED; return true;
+}
+// the row for the badge's level(s): the newest shown row of the first level (in badge order) that has one
+inline bool liqPick(const Liq& q, const std::vector<std::string>& lvs, LiqRow& out, std::string& lvName) {
+    if (!q.ok) return false;
+    for (const std::string& lv : lvs) { const LiqRow* best = nullptr; std::string w; unsigned c = 0;
+        for (const LiqRow& r : q.rows) if (liqNames(r.name, lv) && liqWord(r, w, c) && (!best || r.since > best->since)) best = &r;
+        if (best) { out = *best; lvName = lv; return true; } }
+    return false;
+}
+
 // the segments, most important first; named levels only (Rassul 18:42 "get rid of the values, just keep the named levels"): no prices, no
 // distances, no strength, no %, no time (18:43) - no numbers at all. drop = 2: the Last Bk part, dropped first when the line does not fit.
 // Consecutive badge pieces of one part are ONE filled badge.
-inline std::vector<Seg> segments(const Out& o) {
+inline std::vector<Seg> segments(const Out& o, const Liq& lq = Liq()) {
     std::vector<Seg> v; if (!o.ok) return v;
     std::vector<std::string> named;   // (18:50) no level named twice
     auto has = [&](const std::string& n) { return std::find(named.begin(), named.end(), n) != named.end(); };
@@ -281,14 +328,19 @@ inline std::vector<Seg> segments(const Out& o) {
     auto badge = [&](const std::string& s, int arrow, const std::string& s2, unsigned fill, int part) { Seg g; g.s = s; g.arrow = arrow; g.s2 = s2; g.col = C_BLACK; g.bold = true; g.badge = true; g.fill = fill; g.part = part; v.push_back(g); };
     auto sep = [&](int part, int drop = 0) { if (v.empty()) return; Seg g; g.sep = true; g.col = C_SEP; g.part = part; g.drop = drop; v.push_back(g); };
     const std::string dot = "\xB7";   // cp1252 middle dot
+    // (1.3.0) the liquidity phrase for the badge's level(s), right after the badge (part 4, dropped first); one level named: "Bids building",
+    // several (the WATCH badge): "<level> bids leaving"
+    auto phrase = [&](const std::vector<std::string>& lvs) { LiqRow r; std::string lvN; if (!liqPick(lq, lvs, r, lvN)) return; std::string w; unsigned c = 0; if (!liqWord(r, w, c)) return;
+        Seg g; g.sep = true; g.col = C_SEP; g.part = 4; g.drop = 3; v.push_back(g);
+        add(lvs.size() > 1 ? lvN + (r.bid ? " bids" : " offers") : std::string(r.bid ? "Bids" : "Offers"), 0, "", C_GREY, false, 4, 3); add(w, 0, "", c, true, 4, 3); };
     const Next dn = o.dn, up = o.up;
     const bool testing = o.tst.ok && o.tst.state == 2;
     if (!testing && (o.bs.state == 1 || o.bs.state == 2)) {   // 0. BREAK / SWEEP of the closed candle (1.2.0: from its mark), red / green by side; then the next level that way only
-        badge(std::string(o.bs.state == 1 ? "BREAK: " : "SWEEP: ") + o.bs.name, o.bs.dir, "", o.bs.dir < 0 ? C_RED : C_GREEN, 1); named.push_back(o.bs.name);
+        badge(std::string(o.bs.state == 1 ? "BREAK: " : "SWEEP: ") + o.bs.name, o.bs.dir, "", o.bs.dir < 0 ? C_RED : C_GREEN, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
         const Next& nx = o.bs.dir < 0 ? dn : up;
         if (nx.ok && !has(nx.name)) { sep(2); add("Next", 0, "", C_GREY, false, 2); add("", o.bs.dir, nx.name, C_GOLD, true, 2); named.push_back(nx.name); }
     } else if (!testing && o.bs.state == 3) {   // (1.2.0, 23:02 CT) the forming candle at / through a watched level: gold, no side yet; then the next levels
-        badge("TESTING: " + o.bs.name + " Bk / Sw", 0, "", C_GOLD, 1); named.push_back(o.bs.name);
+        badge("TESTING: " + o.bs.name + " Bk / Sw", 0, "", C_GOLD, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
         const bool d = dn.ok && !has(dn.name), u = up.ok && !has(up.name) && !(d && up.name == dn.name);
         if (d || u) {
             sep(2); add("Next", 0, "", C_GREY, false, 2);
@@ -298,7 +350,7 @@ inline std::vector<Seg> segments(const Out& o) {
         }
     } else if (o.tst.ok) {   // 1. a BkTst coming / in progress: "WATCH: <level> · BkTst Rev <arrow>" (18:52, gold) / "TESTING: ..." (18:48, red / green by side)
         badge(o.tst.state == 2 ? "TESTING: " + o.tst.lv + " BkTst" : "WATCH: " + o.tst.lv + " BkTst Rev", o.tst.dir < 0 ? -1 : 1, "", o.tst.state != 2 ? C_GOLD : o.tst.dir < 0 ? C_RED : C_GREEN, 1);   // (18:53) every WATCH is gold; only TESTING is red / green
-        named.push_back(o.tst.lv);
+        named.push_back(o.tst.lv); phrase({ o.tst.lv });
         const bool d = dn.ok && !has(dn.name), u = up.ok && !has(up.name) && !(d && up.name == dn.name);
         if (d || u) {   // then the next levels, plainly (not in a badge: one badge at a time, 18:47)
             sep(2); add("Next", 0, "", C_GREY, false, 2);
@@ -312,6 +364,7 @@ inline std::vector<Seg> segments(const Out& o) {
         if (dn.ok) { badge("WATCH: " + dn.name, -1, "", C_GOLD, 2); named.push_back(dn.name); }
         if (up.ok) { badge((dn.ok ? dot + " " : std::string("WATCH: ")) + up.name, 1, "", C_GOLD, 2); named.push_back(up.name); }
         badge(dot + " Bk / Sw", 0, "", C_GOLD, 2);
+        { std::vector<std::string> lvs; if (dn.ok) lvs.push_back(dn.name); if (up.ok) lvs.push_back(up.name); phrase(lvs); }
     }
     if (o.haveBk && !has(o.bk.lv)) {   // 3. the last Bk (context, dropped first) - only when its level is not on the line already (18:50)
         sep(3, 2); add("Last Bk", 0, "", C_GREY, false, 3, 2);
@@ -319,8 +372,8 @@ inline std::vector<Seg> segments(const Out& o) {
     }
     return v;
 }
-// what fits: level 0 = all, 1 = without the Last Bk part
-inline std::vector<Seg> fit(const std::vector<Seg>& all, int level) { std::vector<Seg> v; for (const Seg& s : all) { if (level >= 1 && s.drop == 2) continue; v.push_back(s); } return v; }
+// what fits: level 0 = all, 3 = without the liquidity phrase (1.3.0, dropped first), 1 = also without the Last Bk part
+inline std::vector<Seg> fit(const std::vector<Seg>& all, int level) { std::vector<Seg> v; for (const Seg& s : all) { if (level >= 1 && s.drop == 3) continue; if (level == 1 && s.drop == 2) continue; v.push_back(s); } return v; }   // (1.3.0) level 3 = without the liquidity phrase only; level 1 (as before) = without the Last Bk part (and the phrase)
 // is piece q the first / last of its badge (consecutive badge pieces of one part = one badge)
 inline bool badgeFirst(const std::vector<Seg>& v, size_t q) { return v[q].badge && (q == 0 || !v[q - 1].badge || v[q - 1].part != v[q].part); }
 inline bool badgeLast(const std::vector<Seg>& v, size_t q) { return v[q].badge && (q + 1 == v.size() || !v[q + 1].badge || v[q + 1].part != v[q].part); }
@@ -357,6 +410,7 @@ template <class M> inline Draw layout(const std::vector<Seg>& all, M meas, int c
     const int h = fs + 8, padL = 6;
     auto width = [&](const std::vector<Seg>& v) { int w = 2 * padL; for (size_t q = 0; q < v.size(); q++) w += segW(v, q, meas) + (q ? GAP : 0); return w; };
     std::vector<Seg> v = fit(all, 0); int level = 0;
+    if (width(v) > xMax - xMin && fit(all, 3).size() < v.size()) { v = fit(all, 3); level = 3; }
     if (width(v) > xMax - xMin) { v = fit(all, 1); level = 1;
         while (!v.empty() && width(v) > xMax - xMin) { v.pop_back(); while (!v.empty() && v.back().sep) v.pop_back(); } }
     if (v.empty()) return D;

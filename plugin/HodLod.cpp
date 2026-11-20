@@ -1,5 +1,10 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.38.0 (2026-11-20 06:04 CT, Rassul "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows): the Now line adds ONE
+ *         short liquidity phrase for the level its badge names ("Bids holding", "ALO bids leaving"), from lsLimitProfile 2.68.0's
+ *         lsFlexLevels\DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that passed the Limit Profile's scoring (shown = 1; on
+ *         2026-11-20 that is H = "holding" only); grey label, the word green / red by who it helps; a file older than 2 min / missing / other
+ *         market = no phrase; on a narrow pane the phrase drops first (NowLevels.h 1.3.0).
  *  2.37.2 (2026-11-19 22:53 CT, Rassul, screenshot of NQ at 10:51 PM still showing "NQ Sw PFL 5:39": "remove signals after an hour"):
  *         the SIGNAL line (Cob | Sw | BkTst) shows a tag only for 60 minutes after its candle (59 min shows, 60 min is gone), aged on
  *         the chart's newest bar time (the last closed bar's end), the PC clock only when no bar time is known (TopSignals.h 1.1.0).
@@ -342,6 +347,7 @@ struct HLState {
     long long svStart = 0; int svOffered = 0; std::string svWhy = "not run yet";   // (2.37.0) the spoken sweep alerts: when this chart started (CT wall s; marks up to then are never spoken), clips this chart queued
     int nrKeep = -1;   // (2.37.0) the Now row's left part: 2 gamma pill + expiry, 1 pill, 0 none (it would touch the Now line), -1 not drawn
     int nrLvl = -1; std::string nrTag;   // (2.37.1) which gamma label form was drawn (0 full, 1 no setups, 2 the word only), its text
+    std::string nlLiqText; long long nlLiqStamp = -1; time_t nlLiqChecked = 0; std::string nlLiqWhy = "not read"; int nlLiqRows = 0; bool nlLiqPhrase = false;   // (2.38.0) lsLimitProfile's level liquidity file
     nowl::Out nlOut; std::vector<nowl::Seg> nlSegs; int nlRuns = 0, nlMarks = 0; bool nlDrawn = false; hl::Box nlBox = { 0, 0, 0, 0 }; int nlLevel = 0, nlShown = 0;
     mkm::Cob mkCob; int mkCobN = 0;   // (2.30.0) this market's live Cob (lsCobSignal's live file) / Cobs read
     mkm::Stat mk; time_t mkChecked = 0, mkWritten = 0; std::string mkBody; std::vector<mkm::Item> mkItems; int mkWrites = 0, mkRead = 0;   // (2.29.0) the market strength line
@@ -2121,7 +2127,19 @@ int HodLod::draw(void)
                 std::vector<nowl::Key> keys; for (const hsw::Lv& k : S->swKeys) { size_t a = 0; const std::string& nm = k.name;   // a merged row ("PFL/PDL") gives each name
                     while (a <= nm.size()) { const size_t e = nm.find('/', a); const std::string one = nm.substr(a, e == std::string::npos ? std::string::npos : e - a); if (!one.empty()) keys.push_back(nowl::Key{ one, k.px }); if (e == std::string::npos) break; a = e + 1; } }
                 S->nlOut = nowl::compute(S->nlBars, marks, keys, std::isfinite(live) ? live : f.c, S->tick);
-                S->nlSegs = nowl::segments(S->nlOut); S->nlMarks = (int)marks.size(); S->nlRuns++;
+                {   // (2.38.0) lsLimitProfile 2.68.0's level liquidity (DealerProfile\levelliq-<MKT>-<spb>.txt): read at most every 3 s, judged fresh every run
+                    if (S->nlLiqChecked == 0 || nowE - S->nlLiqChecked >= 3 || nowE < S->nlLiqChecked) {
+                        S->nlLiqChecked = nowE;
+                        const std::string p = flexPath(std::string("DealerProfile") + HL_SEP + "levelliq-" + S->mkt + "-" + std::to_string(S->per) + ".txt"); std::string t; long long st = -1;
+                        if (p.empty()) { S->nlLiqText.clear(); S->nlLiqStamp = -1; }
+                        else if (hlSmallRead(p, 64 * 1024, t, st)) { if (st != S->nlLiqStamp) { S->nlLiqStamp = st; S->nlLiqText.swap(t); } }
+                        else if (st == -1) { S->nlLiqText.clear(); S->nlLiqStamp = -1; }   // missing: no phrase; too big: the last good text is kept (and goes stale)
+                    }
+                }
+                const nowl::Liq lq = nowl::parseLiq(S->nlLiqText, S->mkt, (long long)S->per, hlNowCt());
+                S->nlLiqWhy = S->nlLiqText.empty() ? std::string("no file") : lq.why; S->nlLiqRows = (int)lq.rows.size();
+                S->nlSegs = nowl::segments(S->nlOut, lq); S->nlLiqPhrase = false; for (const nowl::Seg& g : S->nlSegs) if (g.drop == 3) S->nlLiqPhrase = true;
+                S->nlMarks = (int)marks.size(); S->nlRuns++;
                 S->nlWhy = !S->nlOut.ok ? std::string("too few bars / no price")
                          : std::string(S->nlOut.bs.state == 1 ? "closed Bk " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "closed Sw " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 3 ? "testing Bk / Sw " + S->nlOut.bs.name + "; " : S->nlOut.bs.why.empty() ? "" : S->nlOut.bs.why + "; ")   // (2.37.2) BREAK / SWEEP only at the close, from the marks
                            + (S->nlOut.tst.ok ? std::string(S->nlOut.tst.state == 2 ? "testing " : "test coming ") + S->nlOut.tst.lv + " " + std::to_string(S->nlOut.tst.pct) + "% back" : "no test: " + S->nlOut.tst.why);
@@ -2187,8 +2205,8 @@ int HodLod::draw(void)
         }
     }
     S->placeLine += "NOW_LEVELS," + std::string(nowl::VERSION) + "," + (S->nlDrawn ? "box " + std::to_string(S->nlBox.l) + "," + std::to_string(S->nlBox.t) + "," + std::to_string(S->nlBox.r) + "," + std::to_string(S->nlBox.b)
-                    + (S->nlLevel ? ",Last Bk dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
-                  + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
+                    + (S->nlLevel == 1 ? ",Last Bk dropped" : S->nlLevel == 3 ? ",liquidity phrase dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
+                  + ",liq " + S->nlLiqWhy + " rows " + std::to_string(S->nlLiqRows) + " phrase " + (S->nlLiqPhrase ? "1" : "0") + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
     S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
                   + ",tag " + (S->nrTag.empty() ? std::string("-") : S->nrTag) + "\n";   // (2.37.1)
     S->placeLine += "SIGNAL_LINE," + std::string(htop::VERSION) + "," + (L.tableOk ? "font " + std::to_string(L.sigFs) + " pt" + (L.sigTight ? " tight" : "") + ",shown " + std::to_string(L.sigShown) + ",dropped " + std::to_string(L.sigDropped) : std::string("no table")) + " (Cob left | Sw centre | BkTst right)\n";
@@ -2361,6 +2379,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.37.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.38.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
