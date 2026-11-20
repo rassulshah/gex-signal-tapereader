@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
         CHECK(badge, "(1.10.0) every Rev is a badge posted with flag 7 (one Rev per candle with lsRevReadMarks)");
         { int cb = 0; bool ok = true; for (const cobs::Prim& p : cobs::layout(E, v)) if (p.text.rfind("Cob", 0) == 0) { ++cb; ok = ok && p.badge && !p.text2.empty() && std::isdigit((unsigned char)p.text2[0]); } CHECK(cb > 0 && ok, "(1.10.0) every Cob is a badge with its ZZO count on line 2 (" << cb << ")"); }
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nREV_RULES,1.8.0") != std::string::npos && st.find("\nREVS," + std::to_string(n) + "\n") != std::string::npos, "status: Rev rule + count"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.10.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.11.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     {   // (1.8.1, independent review) every drawn CoB starts its pullback look exactly once (revOn); finished looks are pruned without a second
         // walk: no (bar, CoB) has two Rev marks; the 3-hour lines never draw a broken level
         std::map<std::pair<long long, long long>, int> seen; int dup = 0; for (const cobs::RevMark& r : E.revs) if (++seen[std::make_pair(r.t, r.cobT)] > 1) ++dup;

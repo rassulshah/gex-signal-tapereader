@@ -44,12 +44,12 @@ int main(int argc, char** argv) {
         E.addBar(bar(t, 104, 104.5, 103, 104, 90), t); t += 180;             // 9
         E.addBar(bar(t, 104, 107, 104, 106, 600), t); t += 180;              // 10: closes over 105 within the cooldown = no mark
         E.markLevels();
-        CHECK(E.markOf(8).code == vrr::MK_SW && E.markOf(8).dir == -1, "sweep of a high that closes back = Sw, red");
+        CHECK(E.markOf(8).code != vrr::MK_SW && E.markOf(8).code != vrr::MK_BK, "(1.8.0) levels alone give no Sw / Bk: they come from the price chart's marks file (t_vr180)");
         CHECK(E.markOf(10).code != vrr::MK_BK, "the same level again within 10 bars: no second mark");
         for (int i = 0; i < 12; ++i) { E.addBar(bar(t, 106, 107, 105.5, 106, 50 - i), t); t += 180; }
         E.addBar(bar(t, 106, 106, 103, 103.5, 700), t); t += 180;            // closes under 105 = Bk down
         E.markLevels(); const int k = (int)E.V.size() - 1;
-        CHECK(E.markOf(k).code == vrr::MK_BK && E.markOf(k).dir == -1, "close beyond the level = Bk, red");
+        CHECK(E.markOf(k).code != vrr::MK_BK, "(1.8.0) levels alone give no Bk (t_vr180 covers the marks file)");
         vrr::Engine F = eng(); F.lvDay[20000] = { 105.0 }; t = D0 + 9 * 3600;
         for (int i = 0; i < 8; ++i) { F.addBar(bar(t, 100, 101, 99, 100, 100 + i * 50), t); t += 180; }
         F.addBar(bar(t, 100, 106, 100, 106, 120), t); F.markLevels();
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
         vrr::Engine H = eng(); H.lvDay[20000] = { 105.0, 105.5 }; t = D0 + 9 * 3600; v = 100;
         for (int i = 0; i < 8; ++i) { H.addBar(bar(t, 100, 101, 99, 100, v), t); t += 180; v -= 1; }
         H.addBar(bar(t, 100, 106, 100, 105.25, 500), t); H.markLevels();
-        CHECK(H.markOf(8).code == vrr::MK_BK && H.markOf(8).dir == 1, "two levels on one bar: the break wins over the sweep");
+        { std::map<long long, vrr::Mk> w; vrr::Mk m1; m1.code = vrr::MK_BK; m1.dir = 1; w[H.T[8]] = m1; H.wy.swap(w); H.wyLines = 1; } CHECK(H.markOf(8).code == vrr::MK_BK && H.markOf(8).dir == 1, "(1.8.0) a Bk in the marks file = Bk on the same bar");
         vrr::Engine N = eng(); N.lvDay[19990] = { 105.0 }; t = D0 + 9 * 3600; v = 100;
         for (int i = 0; i < 8; ++i) { N.addBar(bar(t, 100, 101, 99, 100, v), t); t += 180; v -= 1; }
         N.addBar(bar(t, 100, 106, 100, 106, 500), t); N.markLevels();

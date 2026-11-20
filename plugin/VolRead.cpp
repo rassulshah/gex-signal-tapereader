@@ -58,7 +58,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.7.0";   // (1.7.0) Bk / Sw on the price chart's rules (VolRangeLogic 1.7.0)   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.8.0";   // (1.8.0) Bk / Sw read from the price chart's marks (lsRevRead wy file); Bk / Sw count from 10   // was "1.7.0"   // (1.7.0) Bk / Sw on the price chart's rules (VolRangeLogic 1.7.0)   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -172,8 +172,9 @@ static void vrMarks(VRState& S, long long now) {
     const std::string d = vrFlex(); if (d.empty() || S.E.LT.empty()) return;
     const std::string mk = mkey::norm(S.mkt);
     const std::string fh = d + VR_SEP "LRA-KeyLevels-" + mk + "-hist.csv", fl = d + VR_SEP "LRA-KeyLevels-" + mk + ".csv", fc = d + VR_SEP "ZzoCombo.status-" + S.mkt + "-" + std::to_string(S.spb) + ".txt";
+    const std::string fw = d + VR_SEP "RevRead" VR_SEP "wy-" + mk + "-" + std::to_string(S.spb) + ".txt";   // (1.8.0) the price chart's Bk / Sw (lsRevRead writes it once per closed candle)
     const long long day = vrr::sessionDay(S.E.LT.back());
-    std::string sig = std::to_string(day) + ";"; for (const std::string* p : { &fh, &fl, &fc }) { struct stat st; if (stat(p->c_str(), &st) == 0) sig += std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime) + ";"; else sig += "-;"; }
+    std::string sig = std::to_string(day) + ";"; for (const std::string* p : { &fh, &fl, &fc, &fw }) { struct stat st; if (stat(p->c_str(), &st) == 0) sig += std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime) + ";"; else sig += "-;"; }
     if (sig == S.lvSig) return;
     S.lvSig = sig;
     std::string txt; std::map<long long, std::vector<double>> days;
@@ -184,6 +185,10 @@ static void vrMarks(VRState& S, long long now) {
     S.E.lvDay.swap(days);
     std::vector<vrr::CobIt> cobs; if (vrSlurp(fc, 256 * 1024, txt)) vrr::parseCk(txt, cobs);
     if (!cobs.empty()) S.E.setCobs(cobs);
+    {   // (1.8.0) torn-safe: the file is replaced whole by lsRevRead (tmp + rename); a read that does not parse keeps the last good marks; no file = no Bk / Sw
+        struct stat st; if (stat(fw.c_str(), &st) != 0) { S.E.wy.clear(); S.E.wyLines = -1; }
+        else if (st.st_size <= 512 * 1024 && vrSlurp(fw, 512 * 1024, txt)) { std::map<long long, vrr::Mk> w; const int k = vrr::parseWy(txt, w); if (k >= 0) { S.E.wy.swap(w); S.E.wyLines = k; } }
+    }
 }
 
 bool VolRead::identify(VRState& S) {
@@ -315,6 +320,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA Volume Read v1.4.0 - (1.4.0: the read right of the last candle - verdict, candle, two behaviour lines and the numbers, for the candle under the mouse; it looks inside the candle through the Book Flow record) its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.7.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.8.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

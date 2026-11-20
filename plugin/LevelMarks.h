@@ -26,7 +26,7 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
+static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20)   // was "1.3.0"   // (1.3.0, Rassul 2026-11-19 15:35-16:58 CT, mockup price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Bk needs the BO candle rule (range >= the prior candle's and range or volume up); a bullish Sw is a GREEN candle, a bearish Sw a RED one; DPoc / WPoc / Open are not levels any more; + seq(): FT / Tst / Rev after a Bk (the BO indicator's FT, Pb and PB Rev rules on the Bk)
 // was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 11:22-11:30 CT "sweeps of key levels on big volume or range are very meaningfull", "maybe consider sw and a second line like v50 or r50, same with breaks", "use the max numbers that we have ... biggest in green bars, red bars, consecutive", "ok.. good build it"): Bk / Sw carry a STRENGTH = his BVMax / BRMax (the Volume / Range panes' Max number) - "V<N>" / "R<N>" from 20 up, "99+" from 99; a Sw takes the max over its attempt's candles
 // was VERSION = "1.1.0";   // (1.1.0, Rassul 10:50 CT "ok build": the BO indicator's Rly gets its level too - levelNear(); same priority / short names)
 
@@ -245,7 +245,7 @@ inline std::map<long long, std::vector<SMark> > seq(const std::vector<wyr::Bar>&
 // (1.2.0) the strength line: his BVMax / BRMax, exactly as the Volume / Range panes count it (VolRangeLogic.h Engine::statFor): for candle i,
 // BV = how many candles in a row before it were SMALLER (stops at the first as big or bigger), BVG / BVR = the same over the candles of its own
 // colour only; Max = the larger; counts stop at 99 ("99+"), look back at most 1,500 candles. V = volume, R = range in whole ticks.
-static const int ST_LOOK = 1500, ST_CAP = 99, ST_MIN = 20;
+static const int ST_LOOK = 1500, ST_CAP = 99, ST_MIN = 10;   // (1.4.0) (Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20)
 inline int stCount(const std::vector<double>& V, const std::vector<char>& G, int i) {
     if (i < 0 || i >= (int)V.size() || !(V[(size_t)i] > 0)) return 0;
     const double x = V[(size_t)i]; const bool g = G[(size_t)i] != 0; int all = 0, same = 0; bool da = false, ds = false;

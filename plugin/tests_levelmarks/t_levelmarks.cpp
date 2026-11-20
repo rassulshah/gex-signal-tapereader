@@ -99,7 +99,8 @@ int main(int argc, char** argv) {
         C(lvm::stCount(V2, G2, 29) == 10, "same colour: the bigger red candle before does not stop the green count (10 green candles before) (got " + std::to_string(lvm::stCount(V2, G2, 29)) + ")");
         std::vector<double> V3(400, 5.0); std::vector<char> G3(400, 1); V3[399] = 9; C(lvm::stCount(V3, G3, 399) == 99, "capped at 99");
         std::vector<double> R3(400, 5.0); R3[399] = 9; C(lvm::strength(V3, R3, G3, 399, 399) == "V99+", "a tie: volume wins");
-        std::vector<double> V4(30, 10.0); V4[29] = 11; V4[10] = 20; C(lvm::strength(V4, std::vector<double>(30, 0.0), std::vector<char>(30, 1), 29, 29).empty(), "under 20 = no line");
+        std::vector<double> V4(30, 10.0); V4[29] = 11; V4[10] = 20; C(lvm::strength(V4, std::vector<double>(30, 0.0), std::vector<char>(30, 1), 29, 29) == "V18", "(1.4.0, Rassul 18:19 \"switch to 10\") 18 = shown (from 10 up)");
+        { std::vector<double> V5(30, 10.0); V5[29] = 11; V5[20] = 20; C(lvm::strength(V5, std::vector<double>(30, 0.0), std::vector<char>(30, 1), 29, 29).empty(), "(1.4.0) under 10 = no line"); }
         std::vector<double> V5(60, 10.0); V5[58] = 30; V5[59] = 5; std::vector<char> G5(60, 1); C(lvm::strength(V5, std::vector<double>(60, 0.0), G5, 57, 59) == "V58", "a Sw: the max over its attempt's candles (got " + lvm::strength(V5, std::vector<double>(60, 0.0), G5, 57, 59) + ")"); }
 
     // ---- (1.3.0) Bk -> FT -> Tst -> Rev: parity with the agreed mockup (price-pane-cleanup-mockup.html, mk10.py) on 11-19 ES / NQ 8:33 AM - 12:33 PM
