@@ -1,0 +1,24 @@
+# LRA GEX nodes - gex_nodes 3.0.0 (2026-10-17); the BAND rule: from the RTH open up to open + 1.38 x (1D Max - open) and down to open - 1.38 x (open - 1D Min), the 3 biggest abs-GEX strikes each side (A above the open, B below), never two neighbouring strikes; names = MenthorQ's levels; model gamma, '?' until proven; W / F / M = vendor-model net long / short / mixed gamma
+VERSION|2
+MARKET|ES
+SESSION|2026-11-20
+ASOF|1795182343|7:45 AM|07:43
+STATE|LIVE|
+PX|7122.25
+VWAP|7149.91|down
+BASIS|VERIFIED|0|-2.75|6|2026-11-20 07:40|MenthorQ levels drawn exactly as MenthorQ shows them (same as the Levels column); measured gap -2.75
+WIDTH|15|30|4.46325|148.775|20d|5
+NAMES|intraday 7:35 AM recv 7:38 AM CT
+BAND|7181.75|ON*|7403.41|6962.16|7342.37|7022.63|1.38|21:51|eod 2026-11-19 16:00 ET
+LOC|1|A|7200|7200|F|0|1
+STR|1|7200|7200|17.0|17.85|F|-|-|G1|1
+LOC|2|A|7300|7300|F|0|1
+STR|2|7300|7300|11.6|12.20|F|-|-|G2|2
+LOC|3|A|7350|7350|F|0|1
+STR|3|7350|7350|10.0|10.49|F|-|-|G7|3
+LOC|4|B|7150|7150|F|0|1
+STR|4|7150|7150|10.2|13.78|F|-|-|G4|3
+LOC|5|B|7100|7100|F|0|1
+STR|5|7100|7100|16.8|22.70|F|-|-|PS/PS0|2
+LOC|6|B|7000|7000|F|0|1
+STR|6|7000|7000|17.9|24.19|F|-|-|G6|1

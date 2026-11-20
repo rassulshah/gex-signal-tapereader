@@ -1,5 +1,15 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.39.0 (2026-11-20 07:45 CT, Rassul approved "build"; mockups gamma-line-mockup.html + hodlod-new-box-mockup.html): the GAMMA line
+ *         between the Now line (unchanged, now one row up) and the HOD / LOD box, both centred over the box: the regime pill (moved from the
+ *         Now row: "-GAMMA \xB7 Trending \xB7 Bk / BkTst" / "+GAMMA \xB7 Range \xB7 Sw / Cob") | GAMMA WATCH / TESTING (gold) / BREAK / SWEEP
+ *         (red / green, decided at the 3-min close) at the significant MenthorQ intraday strikes (|% of the biggest| >= 50 from
+ *         GammaProfile-MQ-<MKT>.csv, names PS / CR / HVL / GW / CW / PW from the book + LRA-GexNodes, else the price) | G V C (gamma pressure
+ *         from the book's strike-weighted gamma x the move vs its 20-candle normal; V / C dashes until OptFlow-<MKT>.csv exists) | Next.
+ *         "0DTE Exp 3:00 PM" at the row's far left. Narrow pane: 0DTE, Next, G V C, the pill's setups, its regime word drop in that order;
+ *         the badge stays. Stale / missing book = no gamma line (the pill + 0DTE stay on the Now row as 2.37.x). Each closed candle is decided
+ *         once and appended to lsFlexLevels\HodLod\GammaLine-<MKT>-<spb>s-<session>.csv (WATCH / TESTING / BREAK / SWEEP, strike, pressure
+ *         ratio) for the nightly scoring; redrawn from that file after a restart (no repaint). GammaLine.h 1.0.0.
  *  2.38.0 (2026-11-20 06:04 CT, Rassul "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows): the Now line adds ONE
  *         short liquidity phrase for the level its badge names ("Bids holding", "ALO bids leaving"), from lsLimitProfile 2.68.0's
  *         lsFlexLevels\DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that passed the Limit Profile's scoring (shown = 1; on
@@ -189,6 +199,7 @@
 #include "HodLodSettings.h"         // (2.4.2) the ONE settings table (SettingsSpec.h)
 #include "DealerProfileSettings.h"   // (2.4.3) the Dealer Profile banner key (its keyed per-market file)
 #include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
+#include "GammaLine.h"              // (2.39.0) the GAMMA line (SDK-free, tests_hodlod/t_hl2390.cpp)
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodRange.h"          // (2.19.0) the Range Day pill (SDK-free)
 #include "HodLodSweeps.h"         // (2.13.0) the HOD / LOD sweep sections (SDK-free)
@@ -348,6 +359,11 @@ struct HLState {
     int nrKeep = -1;   // (2.37.0) the Now row's left part: 2 gamma pill + expiry, 1 pill, 0 none (it would touch the Now line), -1 not drawn
     int nrLvl = -1; std::string nrTag;   // (2.37.1) which gamma label form was drawn (0 full, 1 no setups, 2 the word only), its text
     std::string nlLiqText; long long nlLiqStamp = -1; time_t nlLiqChecked = 0; std::string nlLiqWhy = "not read"; int nlLiqRows = 0; bool nlLiqPhrase = false;   // (2.38.0) lsLimitProfile's level liquidity file
+    // (2.39.0) the GAMMA line: the MenthorQ intraday book (parsed with the regime's HVL book, same bounded read), its verdict, the record,
+    // the V / C hook file, the segments and what was drawn
+    gml::Book gmBook; std::string gmBookWhy = "not read"; fr::Verdict gmV; std::string gmWhy = "not run yet"; long long gmDecidedT = -1; gml::Ev gmLast; int gmRecN = 0, gmAppendFails = 0; std::string gmRecFile;
+    std::string gmFlowText; long long gmFlowStamp = -1; time_t gmFlowChecked = 0; std::string gmFlowWhy = "no file";
+    gml::Out gmOut; std::vector<gml::Seg> gmBadge, gmGvc, gmNext; bool gmReady = false; bool gmDrawnF = false; int gmLevel = -1; std::string gmText;
     nowl::Out nlOut; std::vector<nowl::Seg> nlSegs; int nlRuns = 0, nlMarks = 0; bool nlDrawn = false; hl::Box nlBox = { 0, 0, 0, 0 }; int nlLevel = 0, nlShown = 0;
     mkm::Cob mkCob; int mkCobN = 0;   // (2.30.0) this market's live Cob (lsCobSignal's live file) / Cobs read
     mkm::Stat mk; time_t mkChecked = 0, mkWritten = 0; std::string mkBody; std::vector<mkm::Item> mkItems; int mkWrites = 0, mkRead = 0;   // (2.29.0) the market strength line
@@ -787,11 +803,16 @@ void HodLod::loadHvl(HLState& S)
     long long stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
     if (stamp == S.hvlStamp) return;
     S.hvlStamp = stamp;
-    if (!ok) { S.hvl = hlg::HvlBook(); S.hvlWhy = "GammaProfile-MQ-" + S.mkt + ".csv missing: no regime"; return; }
-    if ((long long)st.st_size > (long long)hlg::MAX_BYTES) { S.hvl = hlg::HvlBook(); S.hvlWhy = "over 64 KiB: ignored"; return; }
+    if (!ok) { S.hvl = hlg::HvlBook(); S.hvlWhy = "GammaProfile-MQ-" + S.mkt + ".csv missing: no regime"; S.gmBook = gml::Book(); S.gmBookWhy = "missing"; return; }
+    if ((long long)st.st_size > (long long)hlg::MAX_BYTES) { S.hvl = hlg::HvlBook(); S.hvlWhy = "over 64 KiB: ignored"; S.gmBook = gml::Book(); S.gmBookWhy = "over 64 KiB"; return; }
     std::string text;
     {   std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.hvlStamp = -2; S.hvlWhy = "unreadable (kept the last copy)"; return; }
         text.resize(hlg::MAX_BYTES + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
+    {   // (2.39.0) the gamma line's book from the same text: a garbled read keeps the last good book (another market / no strikes clear it)
+        gml::Book G = gml::parseBook(text, S.mkt); G.arrivedCt = hlLocalAbs((time_t)st.st_mtime);
+        if (G.ok || !S.gmBook.ok || G.why == "book is for another market") { S.gmBook = G; S.gmBookWhy = G.ok ? (G.why.empty() ? std::string("ok") : G.why) : G.why; }
+        else S.gmBookWhy = "garbled (" + G.why + "): kept the last good book";
+    }
     hlg::HvlBook B = hlg::parseHvl(text, S.mkt);
     B.arrivedCt = hlLocalAbs((time_t)st.st_mtime);   // (2.9.2) when the set arrived here (CT wall s)
     if (!B.ok && S.hvl.ok && B.why != "no HVL0 strike in the book" && B.why != "book is for another market") { S.hvlWhy = "garbled (" + B.why + "): kept the last good book"; S.hvlStamp = -2; return; }
@@ -2144,6 +2165,49 @@ int HodLod::draw(void)
                          : std::string(S->nlOut.bs.state == 1 ? "closed Bk " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 2 ? "closed Sw " + S->nlOut.bs.name + "; " : S->nlOut.bs.state == 3 ? "testing Bk / Sw " + S->nlOut.bs.name + "; " : S->nlOut.bs.why.empty() ? "" : S->nlOut.bs.why + "; ")   // (2.37.2) BREAK / SWEEP only at the close, from the marks
                            + (S->nlOut.tst.ok ? std::string(S->nlOut.tst.state == 2 ? "testing " : "test coming ") + S->nlOut.tst.lv + " " + std::to_string(S->nlOut.tst.pct) + "% back" : "no test: " + S->nlOut.tst.why);
             } catch (...) { S->nlSegs.clear(); S->nlWhy = "fault (kept off)"; }
+            try {   // (2.39.0) THE GAMMA LINE (GammaLine.h): the MenthorQ intraday book, the last closed candle decided once + recorded, the live state
+                S->gmReady = false; S->gmBadge.clear(); S->gmGvc.clear(); S->gmNext.clear();
+                const long long nowCt = hlNowCt();
+                S->gmV = S->gmBook.ok ? fr::judgeArrived(fr::K_MQ_LEVELS, S->gmBook.asofCt, S->gmBook.arrivedCt, nowCt) : fr::Verdict();
+                if (S->mi < 0) S->gmWhy = "market not known";
+                else if (!S->gmBook.ok) S->gmWhy = "gamma line: book " + S->gmBookWhy;
+                else if (S->gmV.stale()) S->gmWhy = "gamma line: book " + S->gmV.tag + " (no line)";
+                else {
+                    const int dec = hl::MKTS[S->mi].dec;
+                    std::vector<gml::NameAt> names;   // LRA-GexNodes STR names at their chart prices (MenthorQ's level names)
+                    if (S->gex.ok) for (const hlg::Loc& L2 : S->gex.locs) for (const hlg::Mem& m : L2.mem) { double px = 0; if (gml::fullD(m.chartTxt, px) && !m.name.empty()) names.push_back(gml::NameAt{ px, m.name }); }
+                    const gml::Ctx gc = gml::makeCtx(S->gmBook, names, S->tick, dec);
+                    if (S->nlBars.size() >= 3) {   // the last CLOSED candle: decided once (found in the record or decided now and appended)
+                        const long long tk = S->nlBars[S->nlBars.size() - 2].t;
+                        if (tk != S->gmDecidedT) {
+                            const std::string rp = flexPath(std::string("HodLod") + HL_SEP + gml::recPath(S->mkt, (long long)S->per, tk));
+                            std::string rt; long long rst = -1;
+                            if (!rp.empty() && !hlSmallRead(rp, gml::REC_MAX, rt, rst)) rt.clear();
+                            const gml::StepR r = gml::closedStep(gc, S->nlBars, rt, S->mkt, (long long)S->per, dec, hl::HL_VERSION);
+                            if (r.have && !r.append) { S->gmLast = r.ev; S->gmDecidedT = tk; }
+                            else if (r.have && !rp.empty() && hlAppend(rp, gml::recHeader(), r.line)) { S->gmLast = r.ev; S->gmDecidedT = tk; S->gmRecN++; S->gmRecFile = rp; }
+                            else if (r.have) { S->gmAppendFails++; S->gmLast = gml::Ev(); }   // retried on the next run; nothing shown as decided until it is written
+                        }
+                    }
+                    double gLive = S->nlBars.empty() ? NAN : S->nlBars.back().c;
+                    S->gmOut = gml::live(gc, S->nlBars, gLive, S->gmDecidedT == (S->nlBars.size() >= 2 ? S->nlBars[S->nlBars.size() - 2].t : -2) ? &S->gmLast : nullptr);
+                    {   // the V / C hook (the MenthorQ integration writes it): read at most every 5 s
+                        const time_t nowE = time(nullptr);
+                        if (S->gmFlowChecked == 0 || nowE - S->gmFlowChecked >= 5 || nowE < S->gmFlowChecked) {
+                            S->gmFlowChecked = nowE; const std::string fp = flexPath("OptFlow-" + S->mkt + ".csv"); std::string t; long long st = -1;
+                            if (fp.empty()) { S->gmFlowText.clear(); S->gmFlowStamp = -1; }
+                            else if (hlSmallRead(fp, gml::FLOW_MAX, t, st)) { if (st != S->gmFlowStamp) { S->gmFlowStamp = st; S->gmFlowText.swap(t); } }
+                            else if (st == -1) { S->gmFlowText.clear(); S->gmFlowStamp = -1; }
+                        }
+                        S->gmOut.f = gml::parseFlow(S->gmFlowText, S->mkt, nowCt); S->gmFlowWhy = S->gmOut.f.why;
+                    }
+                    S->gmBadge = gml::badgeSegs(S->gmOut); gml::addWatchWord(S->gmBadge, S->gmOut, gLive);
+                    S->gmGvc = gml::gvcSegs(S->gmOut); S->gmNext = gml::nextSegs(S->gmOut);
+                    S->gmReady = !S->gmBadge.empty();
+                    S->gmWhy = S->gmReady ? std::string(gml::stateWord(S->gmOut.state)) + (S->gmOut.g.dir ? (S->gmOut.g.dir > 0 ? ",G buy" : ",G sell") : ",G -") + ",g " + std::to_string(S->gmOut.g.g).substr(0, 6)
+                                            + ",book " + std::string(fr::word(S->gmV.st)) + " asof " + nowl::clock12(S->gmBook.asofCt) : "gamma line: " + S->gmOut.why;
+                }
+            } catch (...) { S->gmReady = false; S->gmWhy = "fault (kept off)"; }
             try {   // (2.37.0) THE SPOKEN SWEEP ALERTS (SweepVoice.h): this chart's drawn Sw marks newer than its start, once per market + level + side
                 const long long nowL = hlNowCt(); if (S->svStart == 0) S->svStart = nowL;
                 if (S->mi < 0) S->svWhy = "market not known";
@@ -2176,8 +2240,30 @@ int HodLod::draw(void)
         const int anchorT = L.tableOk ? (L.gexOk ? (std::min)(L.table.t, L.gexRow.t) : L.table.t) : (int)pane.bottom - 22;
         const int cx = L.tableOk ? (L.table.l + L.table.r) / 2 : (l + r) / 2;
         auto meas = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
-        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, cx, anchorT - 4, l, r, 10);
-        const int yB = anchorT - 4, yT = D.ok ? D.t : yB - 18;
+        const hl::Seg pill = hl::gammaPill(S->view); std::string ex; unsigned exC = hl::C_SLATE;
+        for (size_t q = 0; q < S->view.sessSegs.size(); q++) if (S->view.sessSegs[q].s.compare(0, 6, "Expiry") == 0) { ex = hl::hlShortExpiry(S->view.sessSegs[q].s); exC = S->view.sessSegs[q].col == hl::C_AMBER ? hl::C_AMBER : hl::C_SLATE; }
+        const unsigned pf = pill.col == hl::C_GREEN ? hl::C_PILL_G : (pill.col == hl::C_RED ? hl::C_PILL_R : hl::C_PILL_N);
+        const int xL = L.tableOk ? L.table.l : l;
+        // (2.39.0, mockups gamma-line-mockup.html / hodlod-new-box-mockup.html) THE GAMMA LINE at the old Now spot (just above the box), centred
+        // on the box: regime pill | badge | G V C | Next, "0DTE Exp 3:00 PM" at the box's left edge; the Now line moves one row up (3 px gap)
+        gml::Draw G; S->gmDrawnF = false; S->gmLevel = -1; S->gmText.clear();
+        if (S->gmReady && r - l >= 40) {
+            G = gml::layout(htop::gammaTag(pill.s), pill.col, pf, S->gmBadge, S->gmGvc, S->gmNext, htop::zeroDte(ex), exC, meas, cx, anchorT - 4, l, r, xL, 10);
+            if (G.ok && G.t <= (int)pane.top + 24) G = gml::Draw();   // no room under the title row: no gamma line (the pill stays on the Now row)
+        }
+        const bool gmDrawn = G.ok;
+        if (gmDrawn) {
+            for (const gml::Item& it : G.items) {
+                if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
+                else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
+                else line(it.l, it.t, it.r, it.b, (COLOR)it.col, it.col == gml::C_SEP ? 1 : 2);
+            }
+            S->gmDrawnF = true; S->gmLevel = G.level; S->gmText = G.text;
+        }
+        const int nowB = gml::nowBottom(G, anchorT - 4);
+        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, cx, nowB, l, r, 10);
+        const int yB = nowB, yT = D.ok ? D.t : yB - 18;
+        if (gmDrawn && !(yT > (int)pane.top + 24) && !stripOk) { stripBox = hl::Box{ (std::min)(G.l, G.exp ? G.expL : G.l), G.t, G.r, G.b }; stripOk = true; }
         if (yT > (int)pane.top + 24) {
             if (D.ok) {
                 for (const nowl::Item& it : D.items) {
@@ -2187,27 +2273,30 @@ int HodLod::draw(void)
                 }
                 S->nlDrawn = true; S->nlBox = hl::Box{ D.l, D.t, D.r, D.b }; S->nlLevel = D.level; S->nlShown = D.shown;
             }
-            const hl::Seg pill = hl::gammaPill(S->view); std::string ex; unsigned exC = hl::C_SLATE;
-            for (size_t q = 0; q < S->view.sessSegs.size(); q++) if (S->view.sessSegs[q].s.compare(0, 6, "Expiry") == 0) { ex = hl::hlShortExpiry(S->view.sessSegs[q].s); exC = S->view.sessSegs[q].col == hl::C_AMBER ? hl::C_AMBER : hl::C_SLATE; }
-            const unsigned pf = pill.col == hl::C_GREEN ? hl::C_PILL_G : (pill.col == hl::C_RED ? hl::C_PILL_R : hl::C_PILL_N);
-            auto meas3 = [&](const std::string& s2, int f, bool bold) { return textW(s2, f, bold); };
-            const int xL = L.tableOk ? L.table.l : l;
-            const htop::Left Lf = htop::nowLeftTag(htop::gammaTag(pill.s), pill.col, pf, htop::zeroDte(ex), exC, meas3, xL, yT, yB, D.ok ? D.l : 1000000, r, 10);   // (2.37.1) the labelled pill
-            for (const htop::It& it : Lf.items) {
-                if (it.k == 3) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
-                else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, it.fs, it.bold);
+            htop::Left Lf;
+            if (!gmDrawn) {   // (2.39.0) no gamma line (book stale / missing, no room): the pill + 0DTE stay at the left of the Now row (2.37.x)
+                auto meas3 = [&](const std::string& s2, int f, bool bold) { return textW(s2, f, bold); };
+                Lf = htop::nowLeftTag(htop::gammaTag(pill.s), pill.col, pf, htop::zeroDte(ex), exC, meas3, xL, yT, yB, D.ok ? D.l : 1000000, r, 10);   // (2.37.1) the labelled pill
+                for (const htop::It& it : Lf.items) {
+                    if (it.k == 3) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
+                    else if (it.k == 1) text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.col, it.fs, it.bold);
+                }
+                S->nrKeep = Lf.keep; S->nrLvl = Lf.lvl; S->nrTag = Lf.tag;
             }
-            S->nrKeep = Lf.keep; S->nrLvl = Lf.lvl; S->nrTag = Lf.tag;
-            if (!stripOk && (D.ok || Lf.keep > 0)) {   // the confirm badges keep off the row, as they did off the read box
-                stripBox = D.ok ? S->nlBox : hl::Box{ xL, yT, Lf.r, yB };
+            if (!stripOk && (D.ok || Lf.keep > 0 || gmDrawn)) {   // the confirm badges keep off the rows, as they did off the read box
+                stripBox = D.ok ? S->nlBox : (gmDrawn ? hl::Box{ G.l, G.t, G.r, G.b } : hl::Box{ xL, yT, Lf.r, yB });
                 if (D.ok && Lf.keep > 0) stripBox.l = (std::min)(stripBox.l, xL);
+                if (gmDrawn) { stripBox.l = (std::min)(stripBox.l, (std::min)(G.l, G.exp ? G.expL : G.l)); stripBox.r = (std::max)(stripBox.r, G.r); stripBox.t = (std::min)(stripBox.t, G.t); stripBox.b = (std::max)(stripBox.b, G.b); }
                 stripOk = true; }
         }
     }
     S->placeLine += "NOW_LEVELS," + std::string(nowl::VERSION) + "," + (S->nlDrawn ? "box " + std::to_string(S->nlBox.l) + "," + std::to_string(S->nlBox.t) + "," + std::to_string(S->nlBox.r) + "," + std::to_string(S->nlBox.b)
                     + (S->nlLevel == 1 ? ",Last Bk dropped" : S->nlLevel == 3 ? ",liquidity phrase dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
                   + ",liq " + S->nlLiqWhy + " rows " + std::to_string(S->nlLiqRows) + " phrase " + (S->nlLiqPhrase ? "1" : "0") + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
-    S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
+    S->placeLine += "GAMMA_LINE," + std::string(gml::VERSION) + "," + (S->gmDrawnF ? "drawn level " + std::to_string(S->gmLevel) + (S->gmLevel >= 1 ? " (narrow: 0DTE" + std::string(S->gmLevel >= 2 ? ", Next" : "") + (S->gmLevel >= 3 ? ", G V C" : "") + (S->gmLevel >= 4 ? ", setups" : "") + (S->gmLevel >= 5 ? ", regime word" : "") + (S->gmLevel >= 6 ? ", pill" : "") + " dropped)" : "") : std::string(S->gmReady ? "not drawn (no room)" : "not drawn"))
+                  + "," + S->gmWhy + ",book " + S->gmBookWhy + ",strikes " + std::to_string((int)S->gmBook.s.size()) + ",V/C hook " + S->gmFlowWhy
+                  + ",record " + (S->gmRecFile.empty() ? std::string("-") : S->gmRecFile) + " +" + std::to_string(S->gmRecN) + (S->gmAppendFails ? " append fails " + std::to_string(S->gmAppendFails) : "") + ",line " + S->gmText + "\n";
+    S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->gmDrawnF ? std::string("pill + 0DTE moved to the gamma line (2.39.0)") : std::string()) + (S->gmDrawnF ? std::string() : S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
                   + ",tag " + (S->nrTag.empty() ? std::string("-") : S->nrTag) + "\n";   // (2.37.1)
     S->placeLine += "SIGNAL_LINE," + std::string(htop::VERSION) + "," + (L.tableOk ? "font " + std::to_string(L.sigFs) + " pt" + (L.sigTight ? " tight" : "") + ",shown " + std::to_string(L.sigShown) + ",dropped " + std::to_string(L.sigDropped) : std::string("no table")) + " (Cob left | Sw centre | BkTst right)\n";
     if (S->rbox.ok && !HL_READBOX_DRAW) S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not drawn (2.34.0: removed from the price pane; still built)," + S->rbWhy + "\n";
@@ -2379,6 +2468,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.38.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.39.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
