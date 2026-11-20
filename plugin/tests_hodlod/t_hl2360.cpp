@@ -89,16 +89,22 @@ int main() {
         CHECK(plain(segments(o)).rfind("[WATCH: PDL BkTst Rev \xE2\x86\x93]", 0) == 0, "WATCH: PDL BkTst Rev down: " + plain(segments(o)));
         int gold = 0; for (const Item& it : layout(segments(o), MS, 500, 300, 0, 1200, 10).items) if (it.k == 0 && it.fill == C_GOLD) gold++;
         CHECK(gold == 1, "a WATCH badge is gold (18:53)");
-        B.back().h = 95.25; B.back().c = 95.25; const Out o2 = compute(B, M1, {}, 95.25, 0.25);   // the forming candle trades into the Bk candle: TESTING
-        CHECK(o2.tst.ok && o2.tst.state == 2 && plain(segments(o2)).rfind("[TESTING: PDL", 0) == 0, "WATCH -> TESTING once it trades into the Bk candle");
+        B.back().h = 95.25; B.back().c = 95.25; const Out o1 = compute(B, M1, {}, 95.25, 0.25);   // (2.37.1, 22:46 CT) into the Bk candle but ~20% back: still WATCH
+        CHECK(o1.tst.ok && o1.tst.state == 1 && o1.tst.pct < 38 && plain(segments(o1)).rfind("[WATCH: PDL BkTst Rev", 0) == 0, "2.37.1: into the Bk candle under 38.2% back: still the gold WATCH: " + plain(segments(o1)));
+        B.back().h = 98.5; B.back().c = 98.5; const Out o2 = compute(B, M1, {}, 98.5, 0.25);   // 38.2%+ back and in the Bk candle: TESTING
+        CHECK(o2.tst.ok && o2.tst.state == 2 && o2.tst.pct >= 38 && plain(segments(o2)).rfind("[TESTING: PDL BkTst", 0) == 0, "WATCH -> TESTING once 38.2%+ back with the Bk candle overlapped: pct " + std::to_string(o2.tst.pct));
         int red = 0; for (const Item& it : layout(segments(o2), MS, 500, 300, 0, 1200, 10).items) if (it.k == 0 && it.fill == C_RED) red++;
         CHECK(red == 1, "TESTING bearish = red");
     }
     {   std::vector<Bar> B = bear(91.2, 91.8, 91.1, 91.6); B[7].o = 92.5; B[7].l = 91; B[7].c = 91.2; B[7].h = 92.6;   // the extreme on the last closed candle
         CHECK(why(B, M1, 91.6) == "just topped", "a candle after the extreme must close first: " + why(B, M1, 91.6));
     }
-    {   const Out o = compute(bear(94.8, 96.5, 94.5, 96, 110), M1, {}, 96, 0.25);   // 25% back but into the Bk candle: TESTING (18:52: in the Bk candle, <= 100%)
-        CHECK(o.tst.ok && o.tst.state == 2 && o.tst.pct == 25, "25% back, into the Bk candle: TESTING");
+    {   const Out o = compute(bear(94.8, 96.5, 94.5, 96, 110), M1, {}, 96, 0.25);   // (2.37.1, 22:46 CT) 25% back into the Bk candle: under 38.2% = WATCH (2.36.0 said TESTING)
+        CHECK(o.tst.ok && o.tst.state == 1 && o.tst.pct == 25, "2.37.1: 25% back, into the Bk candle: WATCH, not TESTING");
+        for (double h : { 97.5, 98.0, 98.25, 98.75 }) { const Out w = compute(bear(94.8, h, 94.5, h, 110), M1, {}, h, 0.25);
+            CHECK(w.tst.ok && w.tst.state == 1 && w.tst.pct <= 38, "under 38.2% (rounded " + std::to_string(w.tst.pct) + "%) in the Bk candle: WATCH"); }
+        for (double h : { 98.9, 99.0 }) { const Out w = compute(bear(94.8, h, 94.5, h, 110), M1, {}, h, 0.25);
+            CHECK(w.tst.ok && w.tst.state == 2 && w.tst.pct >= 38 && w.tst.pct <= 100, "38.2%+ (" + std::to_string(w.tst.pct) + "%) in the Bk candle, not past its high: TESTING"); }
     }
     {   std::vector<Bar> B = bear(94.8, 96.5, 94.5, 96); B[5].o = 93; B[5].c = 95.8;   // the candle after the Bk is green: no FT within 3
         B[6].o = 95.8; B[6].c = 95.5; B[7].o = 95.5; B[7].c = 95.6;
@@ -177,7 +183,7 @@ int main() {
         p = atW(wyPdl, 11, 39, o); CHECK(!o.tst.ok && p.rfind("[WATCH: ", 0) == 0, "11:39 AM the pullback turned: on to the next WATCH: " + p);
         // with the 11:03 PHL break too: the nearest break ahead is watched first, then each is tested in turn
         p = at(11, 12, o); CHECK(o.tst.state == 1 && o.tst.lv == "PHL", "all marks: 11:12 AM WATCH: PHL (the nearest break ahead): " + p);
-        p = at(11, 21, o); CHECK(o.tst.state == 2 && o.tst.lv == "PHL", "11:21 AM TESTING: PHL: " + p);
+        p = at(11, 21, o); CHECK(o.tst.state == 1 && o.tst.lv == "PHL" && o.tst.pct < 38, "2.37.1: 11:21 AM into the PHL Bk candle but " + std::to_string(o.tst.pct) + "% back (< 38.2%): WATCH: PHL (2.36.0 said TESTING): " + p);
         p = at(11, 24, o); CHECK(o.tst.state == 2 && o.tst.lv == "PDL", "11:24 AM TESTING: PDL (the furthest-back break reached): " + p);
     }
     {   // (18:54) the live BREAK / SWEEP of a watched level by the forming candle (the hh:mm candle forming, at its close values)

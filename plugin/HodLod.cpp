@@ -7,7 +7,10 @@
  *         (HodLodTop.h 1.1.0 gammaTag / nowLeftTag). NOW_ROW status line names the form drawn.
  *         + (22:42 CT, Rassul "how can you have a BkTst Rev when you are testing a level?") the Now line's TESTING badge no longer names the
  *         Rev (it has not printed yet): "TESTING: <level> BkTst <arrow>" (no Rev, no middle dot); WATCH stays "WATCH: <level> BkTst Rev
- *         <arrow>" (NowLevels.h 1.1.0). No other change.
+ *         <arrow>" (NowLevels.h 1.1.0). + (22:46 CT "after it breaks, and continues, you can then have the test of the level after it has the
+ *         minimum required retracement") TESTING follows the chart's Tst rules: after a Bk with its FT, overlapping the Bk candle AND 38.2%..100%
+ *         back, not past the Bk candle's extreme, max 2 Tsts per move, void on a close beyond the origin / an opposite Bk; under 38.2% = the
+ *         gold WATCH (2.36.0 had dropped the 38.2% minimum). No other change.
  *  2.37.0 (2026-11-19 19:29 CT, Rassul "ok.. do it" on mockup hodlod-new-box-mockup.html; 19:33 "switch positions of sweeps and Cobs"):
  *         THE BOX TOP: line 1 = the SIGNAL line (Cob left | Sw centre | BkTst right, newest first; 11 pt -> 10 pt -> tighter spacing ->
  *         the oldest of the most crowded group drops; HodLodTop.h 1.0.0), line 2 = "ES  Close 4:00 PM | LTD ... | NQ -9%  ES -3% ... Norm?

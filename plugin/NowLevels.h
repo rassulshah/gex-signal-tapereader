@@ -5,6 +5,9 @@
 // reversal trade. the next level will tell me where to look for a break or sweep trade", "I dont have that much vertical space, use
 // horizonal", "empasize watch so i know what kind of trade and where", "remove now, the order should be in what is most important to find
 // a trade"; mockup now-box-levels-mockup.html): ONE line, left to right, most important first:
+//   (1.1.0, 22:46 CT) TESTING follows the chart's Tst rules (LevelMarks.h): after a Bk with its FT, the pullback overlaps the Bk candle AND is
+//   38.2%..100% back (origin -> the move's extreme), not past the Bk candle's extreme, at most 2 Tsts per move, void on a close beyond the
+//   origin or an opposite Bk. Under 38.2% it stays the gold WATCH (2.36.0 had dropped the 38.2% minimum).
 //   (1.1.0, 22:42 CT) TESTING reads "TESTING: <level> BkTst <arrow>" (no Rev while testing); WATCH keeps "WATCH: <level> BkTst Rev <arrow>"
 //   a Tst coming / in progress:  [WATCH / TESTING: <level> · BkTst Rev <arrow>] │ Next ↓ <level> · ↑ <level> │ Last Bk <arrow> <level>
 //   (18:52 "as price is going to PDL it would say Watch: PDL BkTstRev": WATCH once the move topped and the pullback heads back toward the
@@ -36,6 +39,7 @@ namespace nowl {
 
 static const char* const VERSION = "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
 static const long long E1904 = 2082844800LL;
+static const double TST_MIN = 0.382;   // (1.1.0, Rassul 22:46 CT "after it breaks, and continues, you can then have the test of the level after it has the minimum required retracement") = LevelMarks.h's Tst minimum
 static const size_t MAX_BYTES = 512 * 1024;
 
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; };       // t = candle END, local secs (unix-naive local)
@@ -174,11 +178,33 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
             const double top = dr < 0 ? B[(size_t)e].l : B[(size_t)e].h, span = std::fabs(origin - top); if (!(span > 0)) continue;
             const double ret = std::fabs(pb - top) / span;
             const Bar& bk = B[(size_t)k];
+            {   // (1.1.0, Rassul 22:46 CT) the chart's Tst rules (LevelMarks.h seq): at most 2 Tsts per move - count the finished pullbacks of this
+                // move that already made a Tst (first turn after the Bk = the top; each later pullback pivot: overlaps the Bk candle, 38.2%..100%
+                // back, not past the Bk candle's extreme, the 2nd further back than the 1st; none after a close beyond the origin)
+                int ti = -1; for (const Piv& p : P) if (p.first >= k && p.second == -dr) { ti = p.first; break; }
+                int done = 0; double firstExt = 0;
+                if (ti >= 0 && ti < e) {
+                    const double top0 = dr < 0 ? B[(size_t)ti].l : B[(size_t)ti].h;
+                    for (const Piv& p : P) {
+                        if (p.first <= ti || p.first >= e || p.second != dr || done >= 2) continue;
+                        const Bar& q = B[(size_t)p.first];
+                        const bool overl = q.l <= bk.h && q.h >= bk.l; const double ext = dr > 0 ? q.l : q.h;
+                        const double r0 = top0 != origin ? (top0 - ext) / (top0 - origin) : 0.0;
+                        if (!overl || r0 < TST_MIN || r0 > 1.0) continue;
+                        if (dr < 0 ? q.h > bk.h : q.l < bk.l) break;
+                        if (done == 1 && !(dr < 0 ? ext > firstExt : ext < firstExt)) continue;
+                        if (done == 0) firstExt = ext;
+                        ++done;
+                    }
+                }
+                if (done >= 2) { why = "2 Tsts already in this move"; continue; }
+            }
             if (dr < 0 ? pb > bk.h : pb < bk.l) { why = std::string("took out the Bk candle ") + (dr < 0 ? "high" : "low"); continue; }
             if (ret > 1.0) { why = "past the move origin"; continue; }
             Test t; t.ok = true; t.dir = dr; t.lv = bm.lv; t.px = bm.px; t.pct = (int)std::lround(ret * 100);
             if (dr < 0 ? pb < bk.l : pb > bk.h) { if (e <= n - 3) { t.state = 1; watching = t; } else why = "just topped"; continue; }   // heading back (a closed candle since the extreme did not extend it), not in the Bk candle yet: the latest such Bk is the next one ahead
-            t.state = 2; if (!testing.ok) testing = t;   // in the Bk candle: the furthest-back one reached
+            if (ret < TST_MIN) { t.state = 1; watching = t; continue; }   // (1.1.0, 22:46 CT) in the Bk candle but under 38.2% back: not a Tst yet - the gold WATCH, as the chart's Tst marks
+            t.state = 2; if (!testing.ok) testing = t;   // in the Bk candle and 38.2%+ back: the furthest-back one reached
         }
         if (testing.ok) o.tst = testing; else if (watching.ok && !pending) o.tst = watching; else o.tst.why = pending ? "waiting for the FT" : why;
     } else o.tst.why = "no break yet";
