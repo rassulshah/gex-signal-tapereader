@@ -57,7 +57,7 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.41.3";   // (2.41.3, Rassul 2026-11-20 12:22 CT) the right pill = "Range N%" (range so far / ADR, host) + every market's sweep and Cob spoken (SweepVoice 1.1.0)
+static const char* const HL_VERSION = "2.41.4";   // (2.41.4) SweepVoice 1.1.1   // was "2.41.3";   // (2.41.3, Rassul 2026-11-20 12:22 CT) the right pill = "Range N%" (range so far / ADR, host) + every market's sweep and Cob spoken (SweepVoice 1.1.0)
 // was HL_VERSION = "2.41.2";   // (2.41.2, Rassul 2026-11-20 12:04 CT "lets only keep cob and sweeps because of the limited room") the signal line shows Cob (left) and Sw (centre) only - no BkTst
 // was HL_VERSION = "2.41.1";   // (2.41.1, Rassul 11:58 CT) the box ends at the last candle (host axisR = priceEdge), not the price axis
 // was HL_VERSION = "2.41.0";   // (2.41.0, Rassul 2026-11-20 10:47 CT "get rid of the left and right buy and sell sections and use the horizontal space for hod values", 10:53 "lets go with A", mockup hodlod-box-wide-mockup.html A; 10:32 "it should be aligned to the left") the BUY AT / SELL AT sections are gone (the Today Plan stays in the MQ Reader): ONE SESSION section across the whole box - Exp / Act with the 1st and 2nd extreme as before, the "1st extreme by / % of days" table moved to the RIGHT of those two rows (the box is 2 rows shorter); the box starts at the pane's left edge (no left keep-out, host)

@@ -21,10 +21,10 @@
 
 namespace svx {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") + Cobs: offerCob, clips cob-<MKT>-<up|down>.wav "<market>, cob, <up|down>"; every chart offers every market (lsHodLod 2.41.3)
+static const char* const VERSION = "1.1.1";   // (1.1.1, Rassul 2026-11-20 13:36 CT "how come i cant hear signals": the NQ 1:00 PM PHH sweep was dropped as too old - a Sw is stamped on its deepest candle but decided up to 3 candles later and the file can lag, so 5 min was too short; now 15 min)   // was "1.1.0";   // (1.1.0, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") + Cobs: offerCob, clips cob-<MKT>-<up|down>.wav "<market>, cob, <up|down>"; every chart offers every market (lsHodLod 2.41.3)
 static const long long E1904 = 2082844800LL;
 static const int ST_MIN = 10;          // LevelMarks 1.5.0 SW_MIN: a Sw needs its attempt's BVMax or BRMax >= 10
-static const long long MAX_AGE = 300;  // s: a mark older than this when first seen is not spoken (feed catching up)
+static const long long MAX_AGE = 900;   // (1.1.1) was 300: a Sw is decided up to 3 candles (9 min on 3-min) after the candle it is stamped on, plus the file write delay  // s: a mark older than this when first seen is not spoken (feed catching up)
 static const size_t QUEUE_MAX = 16;
 static const long long GAP_MS = 350;   // between two clips
 static const long long FALLBACK_MS = 1200;

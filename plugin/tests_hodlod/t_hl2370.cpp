@@ -197,7 +197,7 @@ int main() { (void)&fnv; (void)&itemsText;
         CHECK(H.offer("CL", at(5, 0), at(5, 34), std::vector<svx::Sw>(1, mk(at(5, 33), -1, "PHH")), 480, 810, ok) == 0 && H.skippedRth == 1, "RTH only: 5:33 AM quiet");
         CHECK(H.offer("ES", at(14, 0), at(15, 0) + 3, std::vector<svx::Sw>(1, mk(at(15, 0), 1, "PHL")), 510, 900, ok) == 1, "the last RTH candle (ends 3:00 PM) speaks");
         CHECK(H.offer("ES", at(14, 0), at(15, 3) + 3, std::vector<svx::Sw>(1, mk(at(15, 3), -1, "PHH")), 510, 900, ok) == 0, "3:03 PM: after RTH, quiet");
-        CHECK(H.offer("ES", at(8, 0), at(9, 40), std::vector<svx::Sw>(1, mk(at(9, 30), 1, "VAL")), 510, 900, ok) == 0 && H.skippedOld == 1, "a mark first seen 10 min late stays quiet");
+        CHECK(H.offer("ES", at(8, 0), at(9, 40), std::vector<svx::Sw>(1, mk(at(9, 20), 1, "VAL")), 510, 900, ok) == 0 && H.skippedOld == 1, "a mark first seen 20 min late stays quiet (1.1.1: 15 min limit)");
         auto wrong = [](long long, int) { return 0; }; auto right = [](long long, int) { return 1; };
         CHECK(H.offer("GC", at(8, 0), at(9, 42) + 5, std::vector<svx::Sw>(1, mk(at(9, 42), 1, "ONL")), 440, 750, wrong) == 0 && H.skippedColour == 1, "Sw colour rule: a red candle is not a bullish Sw");
         CHECK(H.offer("GC", at(8, 0), at(9, 45) + 5, std::vector<svx::Sw>(1, mk(at(9, 45), 1, "ONL")), 440, 750, right) == 1, "a later right-coloured Sw of that level still speaks");
