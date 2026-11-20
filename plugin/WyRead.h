@@ -28,7 +28,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.7.1";   // (1.7.1, Rassul 2026-11-19 16:58 CT "ok" to the read wording: the I is set aside (lsRevRead 0.19.5), so the E / A reads say "Watch: ... (Sw / Tst)" instead of "(I)"; no rule change)
+static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 05:52 CT "ok.. you decide and add it. you can also add for example b for break and c for climax etc."): + more() = T trapped / P defenders pulled while hit / X exhaustion without pulling (each candle decided at its close, measured per market before it is drawn), + Bar.pull, + the strip priority (stripPick: at most 2 letters per candle, Sp / Ut > I > T > P > A > X > E > B > C); run() is unchanged
+// was VERSION = "1.7.1";   // (1.7.1, Rassul 2026-11-19 16:58 CT "ok" to the read wording: the I is set aside (lsRevRead 0.19.5), so the E / A reads say "Watch: ... (Sw / Tst)" instead of "(I)"; no rule change)
 // was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-19 10:37 CT "yes, put level under I too", 10:40 "go"): the level each I reclaimed is kept in Out.ilv (candle stamp -> level) so the candle tag can name it (I / PHL); hour levels carry how many hours back they are (Lvl.hb) and their side (Lvl.high). No rule change
 // was VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-19 09:19-09:22 CT "there needs to be a break that tries to trade above a high or below a low that fails, just like the concept of a spring or upthrust ... all of these are springs and upthrusts because they attempt to break a level and are met by a reversal instead", "yes"): Sp / Ut use the SAME levels and rules as the I - a prior hour high / low or a key / volume level, broken 1+ tick by the leg into the pivot (the leg started on the other side), its first break, closed back within 3 candles, no follow-through, order flow confirms; the old 15-candle local floor / ceiling is gone. The rejection I closes back through that same level
 // was VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-19 09:14 CT "it needs to be the first break, otherwise the level was already traded before right"): the pivot's leg must be the FIRST break of the level - since the level formed (the end of its hour; the session start for key / volume levels) no candle before that leg traded through it
@@ -65,12 +66,13 @@ struct Params {
 struct Bar {
     long long t = 0; long long o = 0, h = 0, l = 0, c = 0; long long buy = 0, sell = 0;
     bool book = false; long long addNet[2] = {0, 0}, aggrMax[2] = {0, 0}, sweepLv[2] = {0, 0}, ice[2] = {0, 0};
+    long long pull[2] = {0, 0};   // (1.8.0) lots PULLED near price this candle per resting side ([0] bids, [1] offers) - the Book Flow record's pullC; more() P / X
     std::string when;   // "1:39 AM" (the host's clock)
     long long delta() const { return buy - sell; }
     long long range() const { return h - l; }
 };
 struct Mark { char k = 0; int dir = 0; };   // k: 'E' 'A' 'S' (Sp) 'U' (Ut) 'I'; dir: +1 green (buyers / a low), -1 red (sellers / a top)
-inline std::string label(const Mark& m) { return m.k == 'S' ? "Sp" : m.k == 'U' ? "Ut" : std::string(1, m.k); }
+inline std::string label(const Mark& m) { return m.k == 'S' ? "Sp" : m.k == 'U' ? "Ut" : std::string(1, m.k); }   // (1.8.0) also T / P / X (more()) and B / C (the host, from the Bk / Cx candle marks)
 struct Read { std::string head; int dir = 0; std::vector<std::string> lines; };
 struct Lvl;
 struct Out { std::map<long long, std::vector<Mark> > marks; std::map<long long, Read> reads; std::map<long long, std::pair<long long, std::string> > ilv; std::map<long long, int> ilvHb; };   // (1.7.0) ilv: the I candle stamp -> the level it reclaimed (px in ticks, name); ilvHb: its hours back (0 = not an hour level)
@@ -342,5 +344,108 @@ inline Out run(const std::vector<Bar>& B, double tick, int dec, const Params& P 
 
 // the strip record line (the nightly scorer reads lsFlexLevels\RevRead\wy-<MKT>-<spb>-<session>.csv): candle end|letters|dirs
 inline std::string recLine(long long t, const std::vector<Mark>& v) { std::string a, d; for (const Mark& m : v) { a += (a.empty() ? "" : ",") + label(m); d += (d.empty() ? "" : ",") + std::to_string(m.dir); } return std::to_string(t) + "|" + a + "|" + d; }
+
+
+// ======================================================================================================================================
+// (1.8.0, Rassul 2026-11-20 05:52 CT) three more strip letters, each decided on CLOSED candles only (a letter at candle j uses candles <= j:
+// the same candles give the same letters, no repaint). Measured per market on the MBO store's 3-minute bars before any is drawn (the host's
+// showMore table; the study: plugin\NOTES-RR0210.md). Lows below; highs are the mirror.
+//   T  trapped: candle k makes a new low (under the 10 candles before), its sellers hit 1.5x+ their 10-candle mean and its delta is negative;
+//      then within 3 candles, with no lower low first, a candle closes ABOVE k's high with positive delta - everyone who sold in k is under
+//      water. T on that candle, green (trapped sellers = bullish fuel). Needs only buy / sell volume (works on history too).
+//   P  defenders pulled while hit: candle k tests the low (at or under the 10 candles' low), sellers hit 1.2x+ their mean AND the bids near
+//      price were PULLED 2x+ their 20-candle mean - support leaving while it is attacked (broke 78% vs 54% in the liquidity study). P on k,
+//      red at a low (a break warning), green at a high. Needs the Book Flow record (the MBO feed on that candle).
+//   X  exhaustion without pulling: candle k makes a new low, the sellers' lots fell to 0.7x or less of the biggest of the 3 candles before
+//      (which was 1.2x+ their mean - a real attack to fade from) and the bids were NOT pulled above normal (1.0x or less). X on k, green.
+struct MoreParams {
+    int look = 10;            // the new low / high = beyond the 10 candles before; the attackers' mean = the 10 candles before
+    int normN = 20;           // the pull mean = the 20 candles before (10+ with a Book Flow record)
+    double trapX = 1.5;       // T: the trap candle's attackers vs their mean
+    int trapWin = 3;          // T: the reclaim within 3 candles
+    double hitX = 1.2;        // P: the attackers vs their mean
+    double pullX = 2.0;       // P: the defenders' pulls vs their mean
+    double exPeak = 1.2;      // X: the attack faded from (the biggest of the 3 candles before) vs the mean
+    double exFade = 0.7;      // X: the extreme candle's attackers vs that peak
+    double exPullMax = 1.0;   // X: the defenders' pulls at most this x their mean
+};
+struct MoreCtx {   // per candle: the attackers' 10-candle means and the defenders' 20-candle pull means (0 = not enough Book Flow records)
+    std::vector<double> mBuy, mSell, mPull[2]; std::vector<long long> loPrior, hiPrior; std::vector<char> okPrior;
+    MoreCtx(const std::vector<Bar>& B, const MoreParams& Q) {
+        const size_t n = B.size(); mBuy.assign(n, 0); mSell.assign(n, 0); mPull[0].assign(n, 0); mPull[1].assign(n, 0); loPrior.assign(n, 0); hiPrior.assign(n, 0); okPrior.assign(n, 0);
+        for (size_t i = 0; i < n; ++i) {
+            if ((int)i >= Q.look) { double sb = 0, ss = 0; long long lo = B[i - 1].l, hi = B[i - 1].h;
+                for (size_t j = i - (size_t)Q.look; j < i; ++j) { sb += (double)B[j].buy; ss += (double)B[j].sell; lo = std::min(lo, B[j].l); hi = std::max(hi, B[j].h); }
+                mBuy[i] = sb / Q.look; mSell[i] = ss / Q.look; loPrior[i] = lo; hiPrior[i] = hi; okPrior[i] = 1; }
+            double p0 = 0, p1 = 0; int k = 0;
+            for (size_t j = i > (size_t)Q.normN ? i - (size_t)Q.normN : 0; j < i; ++j) if (B[j].book) { p0 += (double)B[j].pull[0]; p1 += (double)B[j].pull[1]; ++k; }
+            if (k >= 10) { mPull[0][i] = p0 / k; mPull[1][i] = p1 / k; } } }
+};
+inline std::string lots(long long v) { return std::to_string(v); }
+inline Out more(const std::vector<Bar>& B, double tick, int dec, const MoreParams& Q = MoreParams()) {
+    Out o; const int n = (int)B.size(); if (n < Q.look + 2 || !(tick > 0)) return o; (void)dec;
+    const MoreCtx M(B, Q);
+    for (int side : { 1, -1 }) {   // +1 at a LOW (sellers attack, bids defend), -1 at a HIGH (buyers attack, offers defend)
+        const bool lo = side > 0; const int def = lo ? 0 : 1;
+        auto att = [&](int k) -> long long { return lo ? B[(size_t)k].sell : B[(size_t)k].buy; };
+        auto mAtt = [&](int k) -> double { return lo ? M.mSell[(size_t)k] : M.mBuy[(size_t)k]; };
+        auto newExt = [&](int k) { return M.okPrior[(size_t)k] && (lo ? B[(size_t)k].l < M.loPrior[(size_t)k] : B[(size_t)k].h > M.hiPrior[(size_t)k]); };
+        auto testExt = [&](int k) { return M.okPrior[(size_t)k] && (lo ? B[(size_t)k].l <= M.loPrior[(size_t)k] : B[(size_t)k].h >= M.hiPrior[(size_t)k]); };
+        const std::string A = lo ? "Sellers" : "Buyers", D = lo ? "bids" : "offers";
+        for (int k = Q.look; k < n; ++k) {
+            const Bar& b = B[(size_t)k]; const double ma = mAtt(k);
+            // T: trapped
+            if (newExt(k) && ma > 0 && (double)att(k) >= Q.trapX * ma && b.delta() * side < 0) {
+                for (int j = k + 1; j <= std::min(n - 1, k + Q.trapWin); ++j) { const Bar& q = B[(size_t)j];
+                    if (lo ? q.l < b.l : q.h > b.h) break;                                  // a new extreme first: no trap (yet)
+                    if ((lo ? q.c > b.h : q.c < b.l) && q.delta() * side > 0) {
+                        Read r; r.dir = side; r.head = A + " trapped";
+                        r.lines.push_back(A + " hit " + fx((double)att(k) / ma) + " normal at the " + (lo ? "low" : "high") + " (" + b.when + "),");
+                        r.lines.push_back("this candle closed " + std::string(lo ? "above" : "below") + " that candle: they are under water.");
+                        r.lines.push_back("Watch: their exits fuel the move; a Sw / Tst entry.");
+                        add(o, j, B, 'T', side, r); break; } } }
+            if (!b.book) continue;
+            const double mp = M.mPull[def][(size_t)k];
+            // P: defenders pulled while being hit
+            if (testExt(k) && ma > 0 && mp > 0 && (double)att(k) >= Q.hitX * ma && (double)b.pull[def] >= Q.pullX * mp) {
+                Read r; r.dir = -side; r.head = std::string(lo ? "Support" : "Resistance") + " leaving";
+                r.lines.push_back(A + " hit " + fx((double)att(k) / ma) + " normal at the " + (lo ? "low" : "high") + ",");
+                r.lines.push_back(D + " pulled " + lots(b.pull[def]) + " lots (" + fx((double)b.pull[def] / mp) + " normal) while hit.");
+                r.lines.push_back(std::string("Watch: a break ") + (lo ? "down" : "up") + "; no fade here.");
+                add(o, k, B, 'P', -side, r); }
+            // X: exhaustion without pulling
+            if (newExt(k) && ma > 0 && mp > 0 && k >= 3) {
+                long long pk = 0; for (int j = k - 3; j < k; ++j) pk = std::max(pk, att(j));
+                if ((double)pk >= Q.exPeak * ma && (double)att(k) <= Q.exFade * (double)pk && (double)b.pull[def] <= Q.exPullMax * mp) {
+                    Read r; r.dir = side; r.head = A + " running out, " + D + " stayed";
+                    r.lines.push_back(A + " " + lots(pk) + " -> " + lots(att(k)) + " lots at the new " + (lo ? "low" : "high") + ",");
+                    r.lines.push_back(D + " pulled only " + fx((double)b.pull[def] / mp) + " normal.");
+                    r.lines.push_back("Watch: a Sw / Tst entry.");
+                    add(o, k, B, 'X', side, r); } }
+        }
+    }
+    return o;
+}
+
+// (1.8.0) which of T / P / X are DRAWN, per market (the rest are computed and journaled only). The study (NOTES-RR0210.md, MBO store
+// 3-min bars, 2026-09-10 .. 11-18, first half of the days vs the second, 20+ cases each): T held its low / high 10 candles 57-63% vs 52-56%
+// for the same reclaim without the trap (ES, NQ, CL, both halves) -> drawn there; P broke LESS than a test hit without pulling (72-77% vs
+// 80-84%) and X held no better than any fresh extreme (14-23% vs 18-21%) -> not drawn anywhere. GC / HG / 6E / NG not measured yet -> not drawn.
+inline bool showMore(char k, const std::string& mkt) { return k == 'T' && (mkt == "ES" || mkt == "NQ" || mkt == "CL"); }
+
+// (1.8.0) the strip: at most 2 letters per candle, by priority (Rassul 2026-11-20: Sp / Ut > T > P > A > X > E > B > C; the I, hidden since
+// 0.19.5, keeps its place after Sp / Ut). Drawn top-priority first; a letter once per candle.
+struct SMk { std::string lab; int dir = 0; };
+inline int prio(const std::string& l) {
+    static const char* const P[] = { "Sp", "Ut", "I", "T", "P", "A", "X", "E", "B", "C" };
+    for (int i = 0; i < 10; ++i) if (l == P[i]) return i < 2 ? 0 : i - 1;
+    return 99;
+}
+inline std::vector<SMk> stripPick(const std::vector<SMk>& in, size_t cap = 2) {
+    std::vector<SMk> v; for (const SMk& m : in) { if (prio(m.lab) >= 99 || (m.dir != 1 && m.dir != -1)) continue; bool dup = false; for (const SMk& x : v) if (x.lab == m.lab) dup = true; if (!dup) v.push_back(m); }
+    std::stable_sort(v.begin(), v.end(), [](const SMk& a, const SMk& b) { return prio(a.lab) < prio(b.lab); });
+    if (v.size() > cap) v.resize(cap);
+    return v;
+}
 
 } // namespace wyr
