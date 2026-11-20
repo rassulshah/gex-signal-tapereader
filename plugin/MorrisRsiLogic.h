@@ -1,4 +1,7 @@
-// MorrisRsiLogic.h 0.1.0 (2026-11-19) -- lsMorrisRSI: the Morris modified RSI in its own pane, with regular divergences.
+// MorrisRsiLogic.h 0.1.1 (2026-11-20) -- lsMorrisRSI: the Morris modified RSI in its own pane, with regular divergences.
+// 0.1.1 Rassul 2026-11-20 05:46 CT "make the red and green lines dashed and slightly thinner and get rid of the gray dashed line": the 70 (red)
+//       and 30 (green) lines are drawn as short explicit dashes (DASH_ON px on, DASH_OFF px off, 1 px, solid pen per dash - does not depend on
+//       the platform's pen style); the grey 50 line is gone. The RSI curve and everything else unchanged.
 // Rassul 2026-11-19 11:55 CT "make a morris modified rsi based on 20 bars, the color is blue but below 30 make it green and above 70 make it
 // red and if there are diversions also"; 12:00 his IRT RSI settings (RSI Period 20, Smoothing Period 3 Simple, Price Close, Momentum Period 1,
 // Morris Modified RSI checked, Ref lines 70 / 30); 12:07 "go" on morris-rsi-mockup.html.
@@ -20,9 +23,10 @@
 
 namespace mrsi {
 
-static const char* const VERSION = "0.1.0";
+static const char* const VERSION = "0.1.1";
 static const int N = 20, SM = 3;                      // RSI period, smoothing (simple)
 static const double OB = 70.0, OS = 30.0, MID = 50.0;
+static const int DASH_ON = 4, DASH_OFF = 4;            // 70 / 30 line dashes (px), 1 px wide
 static const int DV_MAX = 30;                          // the two pivots at most 30 candles apart
 static const double BULL_ZONE = 40.0, BEAR_ZONE = 60.0;
 static const unsigned C_BLUE = 0x003D8BFF, C_GREEN = 0x0026C35A, C_RED = 0x00E04848, C_GREY = 0x00555555, C_WHITE = 0x00FFFFFF;   // IRT COLOR = 0x00RRGGBB (as SdmoLogic.h)
@@ -117,8 +121,11 @@ inline std::string fmt1(double x) { char b[16]; std::snprintf(b, sizeof b, "%.1f
 
 inline std::vector<Prim> layout(const Engine& E, const View& v) {
     std::vector<Prim> P; if (v.r - v.l < 20 || v.b - v.t < 20) return P;
-    auto hline = [&](double lv, unsigned col) { Prim p; p.kind = 0; p.x0 = v.l; p.x1 = v.r; p.y0 = p.y1 = yOf(v, lv); p.col = col; p.dash = true; P.push_back(p); };
-    hline(OB, C_RED); hline(MID, C_GREY); hline(OS, C_GREEN);
+    auto hline = [&](double lv, unsigned col) {              // short dashes, 1 px (0.1.1); no 50 line
+        const int y = yOf(v, lv);
+        for (int x = v.l; x <= v.r; x += DASH_ON + DASH_OFF) { Prim p; p.kind = 0; p.x0 = x; p.x1 = std::min(v.r, x + DASH_ON - 1); p.y0 = p.y1 = y; p.col = col; p.width = 1; p.dash = true; P.push_back(p); }
+    };
+    hline(OB, C_RED); hline(OS, C_GREEN);
     const int n = (int)E.B.size();
     const int a = std::max(0, v.first), z = std::min(n - 1, v.last);
     for (int i = std::max(1, a); i <= z; ++i) {

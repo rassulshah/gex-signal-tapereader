@@ -1,4 +1,4 @@
-// t_morrisrsi.cpp -- MorrisRsiLogic.h 0.1.0 tests
+// t_morrisrsi.cpp -- MorrisRsiLogic.h 0.1.1 tests
 #include "../MorrisRsiLogic.h"
 #include <cstdio>
 #include <fstream>
@@ -71,10 +71,23 @@ int main(int argc, char** argv) {
       Engine E; for (const auto& b : X) E.add(b);
       View v; v.l = 0; v.t = 0; v.r = 1000; v.b = 200; v.first = 0; v.last = 399; v.X = [](int j) { return (double)j * 2.5; }; v.textW = [](const std::string& t) { return (int)t.size() * 7; };
       const auto P = layout(E, v); bool inside = true, title = false, seg = false; int dvTags = 0;
-      for (const auto& q : P) { if (q.kind == 0 && (q.y0 < 0 || q.y0 > 200 || q.y1 < 0 || q.y1 > 200)) inside = false; if (q.kind == 1 && q.text.find("Morris RSI v0.1.0") == 0) title = true; if (q.kind == 0 && q.width == 2) seg = true; if (q.kind == 1 && q.text == "Dv") ++dvTags; }
+      for (const auto& q : P) { if (q.kind == 0 && (q.y0 < 0 || q.y0 > 200 || q.y1 < 0 || q.y1 > 200)) inside = false; if (q.kind == 1 && q.text.find("Morris RSI v0.1.1") == 0) title = true; if (q.kind == 0 && q.width == 2) seg = true; if (q.kind == 1 && q.text == "Dv") ++dvTags; }
       int vis = 0; for (const Dv& d : E.dv) if (d.t2 / 180 <= 399) ++vis;
       C(inside && title && seg, "layout: inside the pane, title with version, RSI segments"); C(dvTags == vis, "one Dv tag per divergence");
-      C(yOf(v, 70) < yOf(v, 30) && yOf(v, 100) == 0 && yOf(v, 0) == 200, "0 - 100 axis"); }
+      C(yOf(v, 70) < yOf(v, 30) && yOf(v, 100) == 0 && yOf(v, 0) == 200, "0 - 100 axis");
+      // 0.1.1: 70 / 30 = short 1 px dashes in red / green, no grey 50 line
+      const int y70 = yOf(v, 70), y30 = yOf(v, 30), y50 = yOf(v, 50); int d70 = 0, d30 = 0, grey = 0, at50 = 0; bool thin = true, shortD = true, gaps = true; int prev70 = -100;
+      for (const auto& q : P) { if (q.kind != 0) continue; if (q.col == C_GREY) ++grey;
+        if (q.y0 == q.y1 && q.y0 == y50 && q.x0 == v.l && q.x1 == v.r) ++at50;
+        const bool horiz = q.y0 == q.y1 && q.width == 1 && q.dash;
+        if (horiz && q.y0 == y70 && q.col == C_RED) { ++d70; if (q.x0 - prev70 < DASH_ON + DASH_OFF) gaps = false; prev70 = q.x0; if (q.x1 - q.x0 + 1 > DASH_ON) shortD = false; }
+        if (horiz && q.y0 == y30 && q.col == C_GREEN) { ++d30; if (q.x1 - q.x0 + 1 > DASH_ON) shortD = false; }
+        if (q.dash && q.width != 1) thin = false; }
+      C(grey == 0 && at50 == 0, "no grey 50 line");
+      C(d70 >= 100 && d30 == d70, "70 / 30 lines drawn as many short dashes across the pane");
+      C(thin && shortD && gaps, "dashes 1 px wide, <= DASH_ON px long, with gaps");
+      bool curveSame = true; for (const auto& q : P) if (q.kind == 0 && !q.dash && q.width == 2 && q.col != C_BLUE && q.col != C_RED && q.col != C_GREEN) curveSame = false; C(curveSame, "RSI curve: width 2, blue / red / green");
+      View tiny = v; tiny.r = 5; tiny.b = 5; C(layout(E, tiny).empty(), "too small a pane draws nothing"); }
     // parity with the Python reference on ES 11-19 (es_close.txt: t c h l per line; ref_rsi.txt: index value)
     if (argc > 2) { std::ifstream f(argv[1]); Engine E; long long t; double c, h, l; while (f >> t >> c >> h >> l) { mrsi::Bar b; b.t = t; b.c = c; b.h = h; b.l = l; E.add(b); }
       std::ifstream r(argv[2]); int i; double x; int cmp = 0, diff = 0; double mx = 0; while (r >> i >> x) { ++cmp; const double d = std::fabs(E.val[(size_t)i] - x); mx = std::max(mx, d); if (d > 1e-6) ++diff; }

@@ -1,5 +1,5 @@
 /********************************************************************************
- *  MorrisRSI.cpp  --  Investor/RT RTX extension  lsMorrisRSI  "Morris RSI"  0.1.0  (2026-11-19)
+ *  MorrisRSI.cpp  --  Investor/RT RTX extension  lsMorrisRSI  "Morris RSI"  0.1.1  (2026-11-20)
  *
  *  Rassul 2026-11-19 11:55 CT "make a morris modified rsi based on 20 bars, the color is blue but below 30 make it green and above 70 make it
  *  red and if there are diversions also"; 12:00 his IRT RSI settings (20, smoothing 3 simple, Close, momentum 1, Morris modified, 70 / 30);
@@ -7,6 +7,8 @@
  *  Computed natively from the chart's own bars (continuous over the loaded candles, no session reset). Closed candles fixed, the forming
  *  candle drawn live. Divergences decided once (2nd pivot confirmed), recorded and redrawn from the record - never repainted.
  *  No settings (NO_UI), no hovers.
+ *  0.1.1 (2026-11-20 05:46 CT "make the red and green lines dashed and slightly thinner and get rid of the gray dashed line"): 70 / 30 lines
+ *        = short 1 px dashes (each dash a solid segment from the logic's draw list), grey 50 line removed.
  *  FILES  lsFlexLevels\MorrisRSI\dv-<MKT>-<spb>.txt         the divergences (t1|t2|dir)
  *         lsFlexLevels\MorrisRSI\status-<MKT>-<spb>.txt     version, bars, last value, divergence count
  ********************************************************************************/
@@ -49,7 +51,7 @@
 #define MRS_SEP "/"
 #endif
 
-static const char* MRS_VERSION = "0.1.0";   // = mrsi::VERSION = the setVersion literal
+static const char* MRS_VERSION = "0.1.1";   // = mrsi::VERSION = the setVersion literal
 static const int MRS_MAX_BARS = 3000;        // candles fed from the chart (newest)
 
 static long long mrsMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -194,7 +196,7 @@ int MorrisRSI::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
                 setPen((COLOR)p.col, 1, P_SOLID); RCT r; r.set(mrsC(x0), mrsC(y0), mrsC(x1 + 1), mrsC(y1 + 1)); r.draw(0, (COLOR)p.col, (COLOR)p.col, DRAW_OPAQUE, PAT_SOLID);
             } else if (p.kind == 0) {
                 const int x0 = std::max(L, std::min(R, p.x0)), x1 = std::max(L, std::min(R, p.x1)), y0 = std::max(T, std::min(Bt, p.y0)), y1 = std::max(T, std::min(Bt, p.y1));
-                setPen((COLOR)p.col, (short)p.width, p.dash ? P_DASH : P_SOLID);
+                setPen((COLOR)p.col, (short)p.width, P_SOLID);            // dashes are explicit segments (0.1.1)
                 PNT q0; q0.set(0, 0.0f); q0.h = mrsC(x0); q0.v = mrsC(y0); q0.setDrawPosition();
                 PNT q1; q1.set(0, 0.0f); q1.h = mrsC(x1); q1.v = mrsC(y1); q1.drawLineTo();
             } else {
@@ -211,7 +213,7 @@ extern "C" cppExtension* CreateExtension(void) {
     MorrisRSI* p = new MorrisRSI();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers, no settings
-    p->setDescription("LRA Morris RSI v0.1.0 - the Morris modified RSI (20, Close, momentum 1, simple means over only the last 20 changes) smoothed with a 3-candle simple average, in its own 0-100 pane: blue between 30 and 70, green under 30, red over 70, dashed 70 / 50 / 30 lines; regular divergences (Dv) between consecutive 3-bar ZigZag pivots at most 30 candles apart - bullish: a lower price low with a higher RSI low (1st RSI <= 40), bearish: a higher price high with a lower RSI high (1st RSI >= 60) - decided when the 2nd pivot is confirmed and never repainted. No settings.");
-    p->setVersion("0.1.0");   // = MRS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Morris RSI v0.1.1 - the Morris modified RSI (20, Close, momentum 1, simple means over only the last 20 changes) smoothed with a 3-candle simple average, in its own 0-100 pane: blue between 30 and 70, green under 30, red over 70, short-dashed 70 (red) / 30 (green) lines; regular divergences (Dv) between consecutive 3-bar ZigZag pivots at most 30 candles apart - bullish: a lower price low with a higher RSI low (1st RSI <= 40), bearish: a higher price high with a lower RSI high (1st RSI >= 60) - decided when the 2nd pivot is confirmed and never repainted. No settings.");
+    p->setVersion("0.1.1");   // = MRS_VERSION (gex-build reads this literal)
     return p;
 }
