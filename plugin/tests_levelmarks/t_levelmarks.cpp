@@ -63,6 +63,14 @@ int main(int argc, char** argv) {
       v.push_back(bar(T + 46 * 180, 108, 118, 104, 105, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (47 + i) * 180, 104, 106, 100, 102, 100));
       auto m = lvm::run(v, k); const long long t = v[45].t;
       C(m.count(t) && m[t].code == 'S' && m[t].lv == "PDH" && m[t].px == 110 && m[t].dir == -1, "(1.10.0) Sw of the untouched 1-hour high, labelled with the crossed key level PDH (got " + (m.count(t) ? m[t].lv : std::string("none")) + ")"); }
+    { // (1.10.1, the manual check: EU 10-15 10:03) the candle before the attempt closes exactly ON the level - no side, so no Sw; one tick below it is still a Sw
+      auto v = flat(12, 100); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDH";
+      v.push_back(bar(T + 13 * 180, 104, 110, 103, 110, 100));   // closes ON PDH
+      v.push_back(bar(T + 14 * 180, 110, 111, 105, 106, 300)); for (int i = 0; i < 4; ++i) v.push_back(bar(T + (15 + i) * 180, 106, 107, 104, 105, 100));
+      auto m = lvm::run(v, k); C(!m.count(v[13].t) || m[v[13].t].code != 'S', "(1.10.1) close ON the level before the attempt: no Sw");
+      auto w = flat(12, 100); w.push_back(bar(T + 13 * 180, 104, 109, 103, 109, 100));   // closes 1 below PDH
+      w.push_back(bar(T + 14 * 180, 109, 111, 105, 106, 300)); for (int i = 0; i < 4; ++i) w.push_back(bar(T + (15 + i) * 180, 106, 107, 104, 105, 100));
+      auto m2 = lvm::run(w, k); C(m2.count(w[13].t) && m2[w[13].t].code == 'S' && m2[w[13].t].dir == -1, "(1.10.1) close 1 below the level: still a Sw"); }
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v[3] = bar(v[3].t, 120, 120, 105, 108, 100);                // (1.9.0) PDL CLOSED through earlier = used up
       v[4] = bar(v[4].t, 108, 121, 107, 118, 100);
