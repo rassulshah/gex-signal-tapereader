@@ -83,6 +83,19 @@ int main(int argc, char** argv) {
       auto d = lvm::run(w, k, om, 60); C(d.count(w[13].t) && d[w[13].t].code == 'S', "(1.11.0) the opening candle follows the bar size (1-min open candle ends 1 min after the open)");
       C(lvm::rthOpenMin("ES") == 510 && lvm::rthOpenMin("NQ") == 510 && lvm::rthOpenMin("CL") == 480 && lvm::rthOpenMin("NG") == 480 && lvm::rthOpenMin("GC") == 440 && lvm::rthOpenMin("EU") == 440 && lvm::rthOpenMin("HG") == 430 && lvm::rthOpenMin("ZZ") == -1, "(1.11.0) RTH opens per market");
       C(lvm::isOpenCandle(8 * 3600 + 33 * 60, 510, 180) && !lvm::isOpenCandle(8 * 3600 + 36 * 60, 510, 180) && !lvm::isOpenCandle(8 * 3600 + 30 * 60, 510, 180), "(1.11.0) ES 3-min opening candle = the 8:33 stamp"); }
+    { // (1.12.0, Rassul 2026-11-21 05:51 CT "we can skip data release for sweeps, they shouldnt qualify") a Sw candle holding a release is dropped
+      auto w = flat(12, 100); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDH";
+      w.push_back(bar(T + 13 * 180, 104, 109, 103, 109, 100));
+      w.push_back(bar(T + 14 * 180, 109, 111, 105, 106, 300)); for (int i = 0; i < 4; ++i) w.push_back(bar(T + (15 + i) * 180, 106, 107, 104, 105, 100));
+      const long long te = w[13].t;
+      std::vector<long long> in1(1, te - 180), in2(1, te - 1), out1(1, te), out2(1, te - 181), none;
+      C(!lvm::run(w, k, -1, 180, &in1).count(te) || lvm::run(w, k, -1, 180, &in1)[te].code != 'S', "(1.12.0) a release at the candle's start: no Sw");
+      C(!lvm::run(w, k, -1, 180, &in2).count(te) || lvm::run(w, k, -1, 180, &in2)[te].code != 'S', "(1.12.0) a release inside the candle: no Sw");
+      { auto m = lvm::run(w, k, -1, 180, &out1); C(m.count(te) && m[te].code == 'S', "(1.12.0) a release at the candle's END (= the next candle) keeps the Sw"); }
+      { auto m = lvm::run(w, k, -1, 180, &out2); C(m.count(te) && m[te].code == 'S', "(1.12.0) a release in the candle before keeps the Sw"); }
+      { auto m = lvm::run(w, k, -1, 180, &none); C(m.count(te) && m[te].code == 'S', "(1.12.0) no releases: the Sw stays"); }
+      std::vector<long long> many; for (int i = 0; i < 50; ++i) many.push_back(te - 100000 + i * 1000); many.push_back(te - 90); std::sort(many.begin(), many.end());
+      C(lvm::newsCandle(te, 180, &many) && !lvm::newsCandle(te + 180, 180, &many), "(1.12.0) a sorted list of many releases: only the candle holding one"); }
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v[3] = bar(v[3].t, 120, 120, 105, 108, 100);                // (1.9.0) PDL CLOSED through earlier = used up
       v[4] = bar(v[4].t, 108, 121, 107, 118, 100);
