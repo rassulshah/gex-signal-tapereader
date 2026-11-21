@@ -71,6 +71,18 @@ int main(int argc, char** argv) {
       auto w = flat(12, 100); w.push_back(bar(T + 13 * 180, 104, 109, 103, 109, 100));   // closes 1 below PDH
       w.push_back(bar(T + 14 * 180, 109, 111, 105, 106, 300)); for (int i = 0; i < 4; ++i) w.push_back(bar(T + (15 + i) * 180, 106, 107, 104, 105, 100));
       auto m2 = lvm::run(w, k); C(m2.count(w[13].t) && m2[w[13].t].code == 'S' && m2[w[13].t].dir == -1, "(1.10.1) close 1 below the level: still a Sw"); }
+    { // (1.11.0, Rassul 2026-11-21 05:40 CT "remove opening candle as a candidate for sweeps") the same Sw on the RTH opening candle is dropped; one candle later it is kept
+      auto w = flat(12, 100); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDH";
+      w.push_back(bar(T + 13 * 180, 104, 109, 103, 109, 100));
+      w.push_back(bar(T + 14 * 180, 109, 111, 105, 106, 300)); for (int i = 0; i < 4; ++i) w.push_back(bar(T + (15 + i) * 180, 106, 107, 104, 105, 100));
+      long long q = w[13].t % 86400; if (q < 0) q += 86400; const int om = (int)((q - 180) / 60);
+      C((q - 180) % 60 == 0, "(1.11.0) test bars sit on minute boundaries");
+      auto a = lvm::run(w, k, om, 180); C(!a.count(w[13].t) || a[w[13].t].code != 'S', "(1.11.0) a Sw on the RTH opening candle is dropped");
+      auto b = lvm::run(w, k, om - 3, 180); C(b.count(w[13].t) && b[w[13].t].code == 'S', "(1.11.0) the same Sw on the 2nd candle of RTH is kept");
+      auto c = lvm::run(w, k); C(c.count(w[13].t) && c[w[13].t].code == 'S', "(1.11.0) no market given = nothing excluded");
+      auto d = lvm::run(w, k, om, 60); C(d.count(w[13].t) && d[w[13].t].code == 'S', "(1.11.0) the opening candle follows the bar size (1-min open candle ends 1 min after the open)");
+      C(lvm::rthOpenMin("ES") == 510 && lvm::rthOpenMin("NQ") == 510 && lvm::rthOpenMin("CL") == 480 && lvm::rthOpenMin("NG") == 480 && lvm::rthOpenMin("GC") == 440 && lvm::rthOpenMin("EU") == 440 && lvm::rthOpenMin("HG") == 430 && lvm::rthOpenMin("ZZ") == -1, "(1.11.0) RTH opens per market");
+      C(lvm::isOpenCandle(8 * 3600 + 33 * 60, 510, 180) && !lvm::isOpenCandle(8 * 3600 + 36 * 60, 510, 180) && !lvm::isOpenCandle(8 * 3600 + 30 * 60, 510, 180), "(1.11.0) ES 3-min opening candle = the 8:33 stamp"); }
     { auto v = flat(12, 120); std::vector<wyr::Lvl> k(1); k[0].px = 110; k[0].name = "PDL";
       v[3] = bar(v[3].t, 120, 120, 105, 108, 100);                // (1.9.0) PDL CLOSED through earlier = used up
       v[4] = bar(v[4].t, 108, 121, 107, 118, 100);

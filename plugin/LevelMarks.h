@@ -26,7 +26,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.10.1";   // (1.10.1, Rassul 2026-11-20 20:27 CT "first do manual testing": the hand check found EU 10-15 10:03 marked a high sweep of 1hL when the candle before closed exactly ON the level - a close on the level has no side, so no Sw from it)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-20 16:44 CT "yes, use strict rule"): a Sw needs a level nobody TRADED through since it formed (wicks count, one attempt per level - the 1.8.0 rule), and the mark is LABELLED with the best key level its candle crossed (wick through, close back) even if that key level was touched earlier (GC 11-20 9:00: swept the untouched 1-hour high 3,582.8, crossed PhrH 3,582.4 -> "PhrH"); 1.9.0's formation start, combined names, repeat fallback and 1hH / PhrH names stay
+static const char* const VERSION = "1.11.0";   // (1.11.0, Rassul 2026-11-21 05:40 CT "we need to remove opening candle as a candidate for sweeps" - CL 2026-01-02 8:03 Sw LonLO was the RTH opening candle, its V99+ / R40 came from the open, swept both ways and failed): no Sw on the RTH opening candle (the candle that ENDS one bar after the RTH open: ES / NQ 8:30, CL / NG 8:00, GC / 6E 7:20, HG 7:10 CT) - rthOpenMin(); Bk / Cx unchanged
+// was VERSION = "1.10.1";   // (1.10.1, Rassul 2026-11-20 20:27 CT "first do manual testing": the hand check found EU 10-15 10:03 marked a high sweep of 1hL when the candle before closed exactly ON the level - a close on the level has no side, so no Sw from it)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-20 16:44 CT "yes, use strict rule"): a Sw needs a level nobody TRADED through since it formed (wicks count, one attempt per level - the 1.8.0 rule), and the mark is LABELLED with the best key level its candle crossed (wick through, close back) even if that key level was touched earlier (GC 11-20 9:00: swept the untouched 1-hour high 3,582.8, crossed PhrH 3,582.4 -> "PhrH"); 1.9.0's formation start, combined names, repeat fallback and 1hH / PhrH names stay
 // was VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 14:20 CT "the 9:09 was a lonHi" - NQ 9:00 swept LonHI 26,447.75 but was labelled PHH): a SESSION level (ON / London / Asia / the pre-open hour / Open) counts "unbroken" from the candle that FORMED it (its high / low = the level), not from 5 PM - Asia trading above the later LonHI hid it; combined names ("ONL/PHL") take the best part's priority and short name instead of being dropped
 // was VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 10:34-10:37 CT "look at the sw signal, shouldnt it meet a threshold of 20", "the red sweep bar doesnt meet the threshold.. fix", "I should only be on key levels that are named like overnight etc.. and we should have a 20 threshold just like sweeps"; lsRevRead 0.21.3): the Sw needs the Sw CANDLE ITSELF at BVMax or BRMax >= 20 and its strength line is that candle's own (was the max over the attempt candles - HG 11-20 08:03 a weak red Sw got V99+ from the green candle before it); the attempt-volume gate is gone (11:00 CT "shouldnt this be a sweep", ES 09:00 ONH); iPick() names only session / PD / PF / volume / weekly levels - never an hour level (PHH / PHL / 2h / 3h); I_MIN 20 = the I candle's own BVMax / BRMax minimum
 // was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-20 09:20 CT "add [the I] ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): iPick() = the ONE level an I names, by the Bk / Sw priority (session > PD > PF > volume > weekly > hours; a tie = the furthest reclaimed); iUnderSw() = the I candle is also a Sw of the same direction (only the Sw shows); no Bk / Sw / Cx rule change
@@ -147,7 +148,19 @@ inline bool pick(const std::vector<Cand>& c, Cand& out) {
     return ok;
 }
 
-inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key) {
+// (1.11.0) the RTH open in Central minutes of the day for the market root, -1 = unknown (no candle excluded)
+inline int rthOpenMin(const std::string& mkt) {
+    if (mkt == "ES" || mkt == "NQ" || mkt == "MES" || mkt == "MNQ") return 8 * 60 + 30;
+    if (mkt == "CL" || mkt == "NG" || mkt == "MCL") return 8 * 60;
+    if (mkt == "GC" || mkt == "EU" || mkt == "6E" || mkt == "MGC") return 7 * 60 + 20;
+    if (mkt == "HG") return 7 * 60 + 10;
+    return -1; }
+// (1.11.0) the candle stamped (bar END) at openMin + spb is the RTH opening candle
+inline bool isOpenCandle(long long t, int openMin, long long spb) {
+    if (openMin < 0 || spb <= 0) return false;
+    long long q = t % 86400; if (q < 0) q += 86400;
+    return q == (long long)openMin * 60 + spb; }
+inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, int openMin = -1, long long spb = 0) {
     std::map<long long, Mark> out; const int n = (int)B.size(); if (n < 6) return out;
     std::vector<double> v((size_t)n); for (int i = 0; i < n; ++i) v[(size_t)i] = (double)(B[(size_t)i].buy + B[(size_t)i].sell);
     auto maxV = [&](int a, int b) { double m = 0; for (int k = std::max(0, a); k < b; ++k) m = std::max(m, v[(size_t)k]); return m; };
@@ -173,6 +186,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             int dpt = att[0]; for (int k : att) if (sup ? B[(size_t)k].l < B[(size_t)dpt].l : B[(size_t)k].h > B[(size_t)dpt].h) dpt = k;
             int back = -1; for (int k = dpt; k < std::min(n, dpt + 3); ++k) if (sup ? B[(size_t)k].c > z.px : B[(size_t)k].c < z.px) { back = k; break; }
             if (back < 0) continue;
+            if (isOpenCandle(B[(size_t)dpt].t, openMin, spb)) continue;   // (1.11.0, "remove opening candle as a candidate for sweeps") the RTH opening candle is never a Sw
             bool newExt = false; for (int k = dpt + 1; k <= back; ++k) if (sup ? B[(size_t)k].l < B[(size_t)dpt].l : B[(size_t)k].h > B[(size_t)dpt].h) newExt = true;
             if (newExt) continue;
             double am = 0; for (int k : att) am = std::max(am, v[(size_t)k]);
