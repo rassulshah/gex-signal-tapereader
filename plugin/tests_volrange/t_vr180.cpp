@@ -40,6 +40,6 @@ int main() {
     // parser: garbage / torn
     { std::map<long long, vrr::Mk> w; C(vrr::parseWy("garbage", w) == -1 && w.empty(), "no header = not parsed (keep the last good)"); }
     { std::map<long long, vrr::Mk> w; C(vrr::parseWy("WY|1|NQ|180|0.20.0\n123|Bk|1|PDL|100|V20\n124|Sw|2|x|1|\n125|Tst|-1|PDL|0|62%\nabc|Sw|1\n126|Sw|-1|PDH|5|", w) == 2 && w.size() == 2, "Bk / Sw only, bad lines dropped"); }
-    C(std::string(vrr::VERSION) == "1.10.0", "version");   // (1.10.0) Cx from the marks file too (t_vr1100)
+    C(std::string(vrr::VERSION) == "1.11.0", "version");   // (1.10.0) Cx from the marks file too (t_vr1100); (1.11.0) the AR (t_vr1110)
     std::printf("%s %d pass, %d fail\n", bad ? "FAILED" : "ALL PASS", ok, bad); return bad;
 }

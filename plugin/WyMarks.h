@@ -14,7 +14,8 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.4.0";   // (2.4.0, Rassul 2026-11-20 09:20 CT "add it ... add the badge for it also and include the level and strength line", 09:24 "build"; lsRevRead 0.21.2, mockup i-badge-mockup.html): the I badge is back - letter / level / strength like Bk / Sw; a bullish (green) I goes UNDER its candle, a bearish (red) I OVER it; iLine() writes the I line, with a 7th field "Sw" when the same candle is a Sw (recorded for the nightly, never drawn - parseAll reads 3 / 5 / 6 fields only)
+static const char* const VERSION = "2.5.0";   // (2.5.0, Rassul 2026-11-23 09:25-09:34 CT "implement the AR ... automatic rally bar that occurs after a cx", "the AR bar should also have a strength line", "go"; lsRevRead 0.23.0 / LevelMarks 1.13.0, mockup ar-mockup.html): + the AR badge - "AR" and its strength line (stamp|AR|dir||0|R51), over a green candle, under a red one, as Bk / Sw / Cx
+// was VERSION = "2.4.0";   // (2.4.0, Rassul 2026-11-20 09:20 CT "add it ... add the badge for it also and include the level and strength line", 09:24 "build"; lsRevRead 0.21.2, mockup i-badge-mockup.html): the I badge is back - letter / level / strength like Bk / Sw; a bullish (green) I goes UNDER its candle, a bearish (red) I OVER it; iLine() writes the I line, with a 7th field "Sw" when the same candle is a Sw (recorded for the nightly, never drawn - parseAll reads 3 / 5 / 6 fields only)
 // was VERSION = "2.3.0";   // (2.3.0, Rassul 2026-11-19 15:35-16:58 CT, price-pane-cleanup-mockup.html, "ok"): + FT / Tst / Rev after a Bk (LevelMarks 1.3.0 seq): "FT" (a plain letter), "Tst" (level + %), "Rev" (+ strength); a tag can ask for its side (FT / Rev with the break, Tst on the pivot side)
 // was VERSION = "2.2.0";   // (2.2.0, Rassul 11:30-11:35 CT: the strength line) mark lines may carry a 6th field = the strength ("V45" / "R99+" / ""); 3 / 5 / 6 fields read
 // was VERSION = "2.1.0";   // (2.1.0, Rassul 10:50-10:51 CT "ok build", "remember placement of other signals like cmx so you have to coordinate everything"): the key levels published in the file (L|px|name lines, read by the BO indicator for its Rly level); the layout also keeps clear of boxes other indicators occupy (the BO indicator's letters from SignalBoard 'L')
@@ -23,8 +24,8 @@ static const int LINE1_H = 13, LINE2_H = 11;   // (2.0.0) a two-line tag: 13 px 
 static const size_t MAX_BYTES = 1024 * 1024;
 
 struct M { char code = 0; int dir = 0; std::string lv; long long px = 0; std::string st; };   // (2.2.0) st = the strength line ("" = none)   // code 'I' / 'B' (Bk) / 'S' (Sw) / 'C' (Cx)
-inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : s == "FT" ? 'F' : s == "Tst" ? 'T' : s == "Rev" ? 'R' : 0; }
-inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : ""; }
+inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : s == "FT" ? 'F' : s == "Tst" ? 'T' : s == "Rev" ? 'R' : s == "AR" ? 'A' : 0; }   // (2.5.0) 'A' = AR (the file's "A" lines - absorbed - are another letter: not a mark here)
+inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : ""; }
 // (2.3.0) where a tag wants to sit: 0 = by the candle (over green, under red); +1 over / -1 under. FT and Rev go with the break (over for a
 // bullish one), a Tst on its pivot's side (under a bullish Tst's pivot low, over a bearish one's high) - as the BO indicator's FT / Pb / Rev
 inline int sideOf(const M& m) { return m.code == 'F' || m.code == 'R' ? m.dir : m.code == 'T' || m.code == 'I' ? -m.dir : 0; }   // (2.4.0) I: under a bullish one, over a bearish one

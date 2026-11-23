@@ -11,6 +11,10 @@
 //       side with no new extreme first; (1.8.0: no volume gate - the Sw candle's own BVMax / BRMax >= 20 instead). dir = up for a swept low.
 //   Cx  a ZigZag (3-bar High / Low) pivot candle, or the candle before it, with the biggest volume in 20+; decided when the pivot is confirmed;
 //       green at a pivot low, red at a pivot high; its levels = the levels inside the candle.
+//   AR  (1.13.0) the bar that answers a climax: after a DRAWN Cx, the first of the 3 candles after the pivot candle that is green after a climax
+//       in a down wave (Cx at a pivot low; red after one in an up wave), overlaps the pivot candle (green: its low below the pivot candle's high;
+//       red: its high above the pivot candle's low) and has a BRMax of 10 or more; one per Cx; shown "AR" + the strength line; it may share its
+//       candle with a Bk / Sw / Cx. Known when the pivot is confirmed and the AR candle has closed; never changes after.
 //   One mark per candle (Sw, then Bk, then Cx - first come), one level per mark by priority: session (ON, London, Asia, Open) > prior day >
 //   prior full session > volume > weekly > hours (prior hour PHL / PHH, then 2h / 3h back). MenthorQ / gamma names do not label a mark.
 //   Repeats cut: a code shows at most once per level per session unless price went 1+ ATR(13) away from the level and came back.
@@ -26,7 +30,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.12.0";   // (1.12.0, Rassul 2026-11-21 05:51 CT "we can skip data release for sweeps, they shouldnt qualify" - 6E 2026-01-09 7:33 Sw LonLO was the 7:30 data-release candle, V99+ / R99+ from the news): no Sw on a candle that holds a scheduled release (the Event Calendar list: the nightly LRA-Calendar-ALL.csv + its weekly rules), any impact, any market row ALL or this market - newsCandle()
+static const char* const VERSION = "1.13.0";   // (1.13.0, Rassul 2026-11-23 09:25 CT "i want you to implement the AR which is an automatic rally bar that occurs after a cx . so if there is a climax, and there is a bar that has its low below the pivot high and is within 3 bars of the pivot and has a BRMax of at least 10. so if the cx was in a downwave , the ARbar would have to be green", 09:26 "the AR bar should also have a strength line", "here is a decent example" (NQ 11-23 6:51 AM, the green candle after the 6:48 pivot low; Cx 6:45), 09:34 "go"; mockup ar-mockup.html): the AR - arCands() / arPick() below; Bk / Sw / Cx / FT / Tst / Rev untouched
+// was VERSION = "1.12.0";   // (1.12.0, Rassul 2026-11-21 05:51 CT "we can skip data release for sweeps, they shouldnt qualify" - 6E 2026-01-09 7:33 Sw LonLO was the 7:30 data-release candle, V99+ / R99+ from the news): no Sw on a candle that holds a scheduled release (the Event Calendar list: the nightly LRA-Calendar-ALL.csv + its weekly rules), any impact, any market row ALL or this market - newsCandle()
 // was VERSION = "1.11.0";   // (1.11.0, Rassul 2026-11-21 05:40 CT "we need to remove opening candle as a candidate for sweeps" - CL 2026-01-02 8:03 Sw LonLO was the RTH opening candle, its V99+ / R40 came from the open, swept both ways and failed): no Sw on the RTH opening candle (the candle that ENDS one bar after the RTH open: ES / NQ 8:30, CL / NG 8:00, GC / 6E 7:20, HG 7:10 CT) - rthOpenMin(); Bk / Cx unchanged
 // was VERSION = "1.10.1";   // (1.10.1, Rassul 2026-11-20 20:27 CT "first do manual testing": the hand check found EU 10-15 10:03 marked a high sweep of 1hL when the candle before closed exactly ON the level - a close on the level has no side, so no Sw from it)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-20 16:44 CT "yes, use strict rule"): a Sw needs a level nobody TRADED through since it formed (wicks count, one attempt per level - the 1.8.0 rule), and the mark is LABELLED with the best key level its candle crossed (wick through, close back) even if that key level was touched earlier (GC 11-20 9:00: swept the untouched 1-hour high 3,582.8, crossed PhrH 3,582.4 -> "PhrH"); 1.9.0's formation start, combined names, repeat fallback and 1hH / PhrH names stay
 // was VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 14:20 CT "the 9:09 was a lonHi" - NQ 9:00 swept LonHI 26,447.75 but was labelled PHH): a SESSION level (ON / London / Asia / the pre-open hour / Open) counts "unbroken" from the candle that FORMED it (its high / low = the level), not from 5 PM - Asia trading above the later LonHI hid it; combined names ("ONL/PHL") take the best part's priority and short name instead of being dropped
@@ -287,7 +292,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
 //        its range must be bigger (rule 7) - the PB Rev candle rules.
 // Pure function of the closed candles and the Bk marks: no repaint.
 struct SMark { char code = 0; int dir = 0; std::string lv; long long px = 0; int pct = 0; long long bkT = 0; std::string st; };   // st = the Rev's strength line (filled by the host, as fillStrength)   // 'F' FT / 'T' Tst / 'R' Rev
-inline const char* seqText(char c) { return c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : ""; }
+inline const char* seqText(char c) { return c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : ""; }   // (1.13.0) 'A' = the AR (arPick), written and drawn like a Rev: code + strength
 inline std::map<long long, std::vector<SMark> > seq(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks) {
     std::map<long long, std::vector<SMark> > out; const int n = (int)B.size(); if (n < 6) return out;
     std::map<long long, int> at; for (int i = 0; i < n; ++i) at[B[(size_t)i].t] = i;
@@ -395,6 +400,47 @@ inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long lon
     return n;
 }
 
+
+// ---- (1.13.0) THE AR - the bar that answers a climax (Rassul 2026-11-23 09:25-09:34 CT, quoted at VERSION; mockup ar-mockup.html). Bullish shown, bearish = mirror:
+//   1 there is a DRAWN Cx (a mark of run(), dir +1 = at a pivot low: the climax of a down wave);
+//   2 the AR is one of the AR_BARS (3) candles after the PIVOT candle (the Cx sits on the pivot candle or on the candle before it; the pivot candle itself is
+//     not an AR - asked 09:30 CT, not answered before the build);
+//   3 it is GREEN (close above open);
+//   4 it overlaps the pivot candle: its low is below the pivot candle's high;
+//   5 its BRMax (the Range pane's count: stCount on the range in ticks) is AR_MIN (10) or more.
+//   The first candle that passes is the AR; one per Cx; one AR per candle. Strength line = the Bk / Sw line (V / R with the larger count).
+// Two steps because the candles' colour and overlap come from the session's own candles (WB, as run() / seq()) and BRMax from the chart's closed candles (the
+// vectors of fillStrength). Both are pure functions of closed candles: a candidate's BRMax is fixed once it has closed, candidates are tried in order, so the
+// AR appears once (when its candle has closed and the pivot is confirmed) and never changes - no repaint.
+static const int AR_MIN = 10, AR_BARS = 3;
+struct ArCand { long long cxT = 0, pivT = 0; int dir = 0; std::vector<long long> c; };   // one Cx: its candle, its pivot candle, its side, and the candles after the pivot with the colour and the overlap (in order)
+inline std::vector<ArCand> arCands(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks) {
+    std::vector<ArCand> out; const int n = (int)B.size(); if (n < 3) return out;
+    std::map<long long, int> at; for (int i = 0; i < n; ++i) at[B[(size_t)i].t] = i;
+    std::vector<std::pair<int, int> > piv;   // pivot candle, side (+1 low / -1 high) - the pivots of run() and seq()
+    { const std::vector<wyr::Leg> LG = wyr::legs(B); int prevA = -1;
+      for (int i = 0; i < n; ++i) { const int a = LG[(size_t)i].a; if (a != prevA && i > 0) { bool seen = false; for (const auto& p : piv) if (p.first == a) seen = true; if (!seen) piv.push_back(std::make_pair(a, LG[(size_t)i].dir == 1 ? 1 : -1)); } prevA = a; } }
+    for (const auto& kv : marks) { if (kv.second.code != 'C' || (kv.second.dir != 1 && kv.second.dir != -1)) continue;
+        const auto it = at.find(kv.first); if (it == at.end()) continue; const int kk = it->second, d = kv.second.dir;
+        int k = -1; for (const auto& p : piv) { if (p.second != d) continue; if (p.first == kk) { k = kk; break; } if (p.first == kk + 1) k = kk + 1; }   // the Cx candle is the pivot, or the candle before it
+        if (k < 0) continue;
+        ArCand a; a.cxT = kv.first; a.pivT = B[(size_t)k].t; a.dir = d;
+        for (int j = k + 1; j < n && j <= k + AR_BARS; ++j) { const wyr::Bar& b = B[(size_t)j];
+            const bool colour = d > 0 ? b.c > b.o : b.c < b.o; const bool over = d > 0 ? b.l < B[(size_t)k].h : b.h > B[(size_t)k].l;
+            if (colour && over) a.c.push_back(b.t); }
+        out.push_back(a); }
+    return out;
+}
+// the AR of every Cx still drawn in M (after fillStrength): candle stamp -> SMark 'A' (dir = the Cx's, bkT = the Cx candle, st = the strength line)
+inline std::map<long long, SMark> arPick(const std::vector<ArCand>& cands, const std::map<long long, Mark>& M, const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G) {
+    std::map<long long, SMark> out; if (R.size() != T.size() || G.size() != T.size()) return out;
+    for (const ArCand& a : cands) { const auto m = M.find(a.cxT); if (m == M.end() || m->second.code != 'C' || m->second.dir != a.dir) continue;
+        for (const long long t : a.c) { const auto it = std::lower_bound(T.begin(), T.end(), t); if (it == T.end() || *it != t) continue; const int i = (int)(it - T.begin());
+            if (stCount(R, G, i) < AR_MIN) continue;
+            if (!out.count(t)) { SMark s; s.code = 'A'; s.dir = a.dir; s.bkT = a.cxT; s.st = strength(V, R, G, i, i); out[t] = s; }
+            break; } }
+    return out;
+}
 
 // (1.1.0) the one level AT candle i for another indicator's tag (the BO indicator's Rly): a level inside the candle's range or within tol ticks of
 // its extreme ext; same priority / short names as the marks; false = none
