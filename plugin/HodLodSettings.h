@@ -5,7 +5,7 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.42.4";   // (2.42.4) no settings change   // was "2.42.3";   // (2.42.3) no settings change
+static const char* const PLUGIN_VERSION = "2.43.0";   // (2.43.0) no settings change (now line only: constants, not settings)   // was "2.42.4";   // (2.42.4) no settings change   // was "2.42.3";   // (2.42.3) no settings change
 // was PLUGIN_VERSION = "2.42.2";   // (2.42.2) rows keep the session - no settings change
 // was PLUGIN_VERSION = "2.42.1";   // (2.42.1) voice names - no settings change
 // was PLUGIN_VERSION = "2.42.0";   // (2.42.0) the two signal rows - no settings change

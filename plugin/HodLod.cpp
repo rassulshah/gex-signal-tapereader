@@ -1,5 +1,13 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.43.0 (2026-11-22 19:36 CT, Rassul 19:10 "i need to simplify the display and only keep the now line"; 19:36 "1. yes. 2. no go" = the spoken alerts stay
+ *         on, no version number on the line; mockup now-line-mockup.html): NOW LINE ONLY. The box (SW / COB rows, session line, 1st / 2nd extreme
+ *         table, note rows) and the Options line (with its regime pill / 0DTE tag) are no longer DRAWN (HodLodLogic.h HL_BOX_DRAW /
+ *         HL_OPTIONS_LINE_DRAW = false; true brings each back). The box is still laid out for its SPOT: the Now line sits centred on that spot with
+ *         its bottom edge on the box's bottom edge (hl::nowSpot, tests_hodlod/t_hl2430.cpp). Nothing else changes: every value is still computed
+ *         and written (status, reads, the gamma record), the spoken sweep / Cob alerts, the projection (laid out with no table in its way, as Show
+ *         table off), the LOD? / HOD? marker and the HOD / LOD confirm pills. Status line DISPLAY.
+ *  2.42.4 (2026-11-20 17:22 CT): the COB row = one tag per Cob wave (TopSignals 1.2.2)
  *  2.42.3 (2026-11-20 17:10 CT): the SW / COB rows show the session of the chart's last candle (after the close and over the weekend: the last session), not the PC clock's
  *  2.42.2 (2026-11-20 16:51 CT, Rassul "get rid of that rule. keep all sweeps of the session"): the SW / COB rows show every sweep / Cob of the session, newest left (no 60-min expiry)
  *  2.42.1 (2026-11-20 14:30 CT): SweepVoice 1.1.2 - speaks the renamed sweep levels 1hH / 1hL / PhrH / PhrL (lsRevRead 0.21.6)
@@ -2144,6 +2152,11 @@ int HodLod::draw(void)
             // (2.40.0) the TODAY PLAN as drawn (the sweep sections above are no longer drawn; their SWROW lines stay for the bridge's sweep odds)
             S->placeLine += tpl::statusLine(S->tpPlan, "htf " + S->tpHtfWhy + " ; reader " + S->tpStWhy + (L.planOk ? " ; drawn" : " ; not drawn (pane too narrow: the header-only box)")); }
     }
+    // (2.43.0, Rassul 2026-11-22 19:10 CT "only keep the now line") NOW LINE ONLY: the box was laid out above (placement, hysteresis, dock, width -
+    // all unchanged) only for its SPOT; it is not drawn. The layout is redone with no table, so the projection runs uncut and its label keeps
+    // clear of nothing that is not there (exactly as Show table off). HL_BOX_DRAW true = the 2.42.4 picture.
+    const bool boxLaid = L.tableOk; const hl::Box boxAt = L.table; const std::vector<hl::Box> boxNotes = L.noteRows; int nsForm = -1;
+    if (!hl::HL_BOX_DRAW && boxLaid) { hl::Opts O3 = O; O3.table = false; L = hl::layoutAll(S->view, pb, yOf, M, pe, PL.pos, projX, &avoid, &O3); }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
         if (p.set(S->fxIdx, (float)S->fxView.price, kBarCenter) == RTX_OK && p.h > 0) mx = (int)p.h;
@@ -2368,19 +2381,22 @@ int HodLod::draw(void)
         // (2.37.0, mockup hodlod-new-box-mockup.html) + at the far left of the same row (the box's left edge): the gamma pill and "0DTE Exp 3:00 PM"
         // (moved out of the box header); the Now line stays centred and is never covered - the expiry goes first, then the pill (HodLodTop.h nowLeft)
         int l = pb.l + HL_RB_LEFT, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
-        const int anchorT = L.tableOk ? (L.gexOk ? (std::min)(L.table.t, L.gexRow.t) : L.table.t) : (int)pane.bottom - 22;
-        const int cx = L.tableOk ? (L.table.l + L.table.r) / 2 : (l + r) / 2;
+        // (2.43.0) hl::nowSpot: box drawn = 4 px above it (as before); box laid out but not drawn = on its bottom edge; no box = the pane's bottom centre
+        const hl::NowSpot NS = hl::nowSpot(boxLaid, boxAt, boxNotes, L.tableOk, L.gexOk, L.gexRow, (int)pane.bottom, l, r); nsForm = NS.form;
+        const int anchorB = NS.bottom;   // was anchorT - 4
+        const int cx = NS.cx;
         auto meas = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
         const hl::Seg pill = hl::gammaPill(S->view); std::string ex; unsigned exC = hl::C_SLATE;
         for (size_t q = 0; q < S->view.sessSegs.size(); q++) if (S->view.sessSegs[q].s.compare(0, 6, "Expiry") == 0) { ex = hl::hlShortExpiry(S->view.sessSegs[q].s); exC = S->view.sessSegs[q].col == hl::C_AMBER ? hl::C_AMBER : hl::C_SLATE; }
         const unsigned pf = pill.col == hl::C_GREEN ? hl::C_PILL_G : (pill.col == hl::C_RED ? hl::C_PILL_R : hl::C_PILL_N);
-        const int xL = L.tableOk ? L.table.l : l;
+        const int xL = NS.left;
         // (2.39.0, mockups gamma-line-mockup.html / hodlod-new-box-mockup.html) THE GAMMA LINE at the old Now spot (just above the box), centred
         // on the box: regime pill | badge | G V C | Next, "0DTE Exp 3:00 PM" at the box's left edge; the Now line moves one row up (3 px gap)
         gml::Draw G; S->gmDrawnF = false; S->gmLevel = -1; S->gmText.clear();
         if (S->gmReady && r - l >= 40) {
-            G = gml::layout(htop::gammaTag(pill.s), pill.col, pf, S->gmBadge, S->gmGvc, S->gmNext, htop::zeroDte(ex), exC, meas, cx, anchorT - 4, l, r, xL, 10);
+            G = gml::layout(htop::gammaTag(pill.s), pill.col, pf, S->gmBadge, S->gmGvc, S->gmNext, htop::zeroDte(ex), exC, meas, cx, anchorB, l, r, xL, 10);
             if (G.ok && G.t <= (int)pane.top + 24) G = gml::Draw();   // no room under the title row: no gamma line (the pill stays on the Now row)
+            if (!hl::HL_OPTIONS_LINE_DRAW) { if (G.ok) { S->gmLevel = G.level; S->gmText = G.text; } G = gml::Draw(); }   // (2.43.0) NOW LINE ONLY: laid out for the status text, never painted
         }
         const bool gmDrawn = G.ok;
         if (gmDrawn) {
@@ -2391,7 +2407,7 @@ int HodLod::draw(void)
             }
             S->gmDrawnF = true; S->gmLevel = G.level; S->gmText = G.text;
         }
-        const int nowB = gml::nowBottom(G, anchorT - 4);
+        const int nowB = gml::nowBottom(G, anchorB);
         nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, cx, nowB, l, r, 10);
         const int yB = nowB, yT = D.ok ? D.t : yB - 18;
         const int gLeft = (G.pill || G.exp) ? (std::min)(G.l, G.pill ? G.pillL : G.expL) : G.l;   // (2.39.1) the pill / 0DTE at the far left
@@ -2406,7 +2422,7 @@ int HodLod::draw(void)
                 S->nlDrawn = true; S->nlBox = hl::Box{ D.l, D.t, D.r, D.b }; S->nlLevel = D.level; S->nlShown = D.shown;
             }
             htop::Left Lf;
-            if (!gmDrawn) {   // (2.39.0) no gamma line (book stale / missing, no room): the pill + 0DTE stay at the left of the Now row (2.37.x)
+            if (!gmDrawn && hl::HL_OPTIONS_LINE_DRAW) {   // (2.39.0) no gamma line (book stale / missing, no room): the pill + 0DTE stay at the left of the Now row (2.37.x); (2.43.0) not with NOW LINE ONLY
                 auto meas3 = [&](const std::string& s2, int f, bool bold) { return textW(s2, f, bold); };
                 Lf = htop::nowLeftTag(htop::gammaTag(pill.s), pill.col, pf, htop::zeroDte(ex), exC, meas3, xL, yT, yB, D.ok ? D.l : 1000000, r, 10);   // (2.37.1) the labelled pill
                 for (const htop::It& it : Lf.items) {
@@ -2422,10 +2438,14 @@ int HodLod::draw(void)
                 stripOk = true; }
         }
     }
+    S->placeLine += std::string("DISPLAY,") + hl::HL_VERSION + ",now line only (2.43.0)"
+                  + (hl::HL_BOX_DRAW ? std::string(",box drawn") : boxLaid ? ",box NOT drawn - laid out at " + std::to_string(boxAt.l) + " " + std::to_string(boxAt.t) + " " + std::to_string(boxAt.r) + " " + std::to_string(boxAt.b) : std::string(",box NOT drawn - no spot"))
+                  + (hl::HL_OPTIONS_LINE_DRAW ? ",options line drawn" : ",options line NOT drawn (decided + recorded)") + ",now line " + (S->nlDrawn ? "drawn" : "not drawn")
+                  + ",spot form " + std::to_string(nsForm) + " (0 above the drawn box / 1 on the hidden box's bottom edge / 2 pane bottom centre),spoken alerts + records unchanged\n";
     S->placeLine += "NOW_LEVELS," + std::string(nowl::VERSION) + "," + (S->nlDrawn ? "box " + std::to_string(S->nlBox.l) + "," + std::to_string(S->nlBox.t) + "," + std::to_string(S->nlBox.r) + "," + std::to_string(S->nlBox.b)
                     + (S->nlLevel == 1 ? ",Last Bk dropped" : S->nlLevel == 3 ? ",liquidity phrase dropped" : "") + ",pieces " + std::to_string(S->nlShown) + "/" + std::to_string((int)S->nlSegs.size()) : std::string("not drawn")) + ",runs " + std::to_string(S->nlRuns)
                   + ",liq " + S->nlLiqWhy + " rows " + std::to_string(S->nlLiqRows) + " phrase " + (S->nlLiqPhrase ? "1" : "0") + ",marks " + std::to_string(S->nlMarks) + ",bars " + std::to_string((int)S->nlBars.size()) + "," + S->nlWhy + ",line " + nowl::plain(S->nlSegs) + "\n";
-    S->placeLine += "GAMMA_LINE," + std::string(gml::VERSION) + "," + (S->gmDrawnF ? "drawn level " + std::to_string(S->gmLevel) + (S->gmLevel >= 1 ? " (narrow: 0DTE" + std::string(S->gmLevel >= 2 ? ", setups" : "") + (S->gmLevel >= 3 ? ", Next" : "") + (S->gmLevel >= 4 ? ", G V C" : "") + (S->gmLevel >= 5 ? ", regime word" : "") + (S->gmLevel >= 6 ? ", pill" : "") + " dropped)" : "") : std::string(S->gmReady ? "not drawn (no room)" : "not drawn"))
+    S->placeLine += "GAMMA_LINE," + std::string(gml::VERSION) + "," + (S->gmDrawnF ? "drawn level " + std::to_string(S->gmLevel) + (S->gmLevel >= 1 ? " (narrow: 0DTE" + std::string(S->gmLevel >= 2 ? ", setups" : "") + (S->gmLevel >= 3 ? ", Next" : "") + (S->gmLevel >= 4 ? ", G V C" : "") + (S->gmLevel >= 5 ? ", regime word" : "") + (S->gmLevel >= 6 ? ", pill" : "") + " dropped)" : "") : std::string(!hl::HL_OPTIONS_LINE_DRAW ? (S->gmReady ? "not drawn (2.43.0 now line only; decided + recorded)" : "not drawn (2.43.0 now line only)") : S->gmReady ? "not drawn (no room)" : "not drawn"))
                   + "," + S->gmWhy + ",book " + S->gmBookWhy + ",strikes " + std::to_string((int)S->gmBook.s.size()) + ",V/C hook " + S->gmFlowWhy
                   + ",record " + (S->gmRecFile.empty() ? std::string("-") : S->gmRecFile) + " +" + std::to_string(S->gmRecN) + (S->gmAppendFails ? " append fails " + std::to_string(S->gmAppendFails) : "") + ",line " + S->gmText + "\n";
     S->placeLine += "NOW_ROW," + std::string(htop::VERSION) + ",left " + (S->gmDrawnF ? std::string("pill + 0DTE at the far left of the gamma row (2.39.1)") : std::string()) + (S->gmDrawnF ? std::string() : S->nrKeep == 2 ? "gamma tag + 0DTE expiry" : S->nrKeep == 1 ? (S->nrLvl <= 0 ? "gamma tag (expiry dropped: no room)" : S->nrLvl == 1 ? "gamma tag short (expiry + setups dropped: no room)" : "gamma word only (expiry + label dropped: no room)") : S->nrKeep == 0 ? "none (would touch the Now line)" : "not drawn")
@@ -2600,6 +2620,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.42.4");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.43.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

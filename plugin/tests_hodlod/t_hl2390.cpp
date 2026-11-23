@@ -143,7 +143,7 @@ int main() {
         CHECK(!live(c, B, 7104, nullptr).ok && badgeSegs(live(c, B, 7104, nullptr)).empty(), "no significant strike = no badge = no line");
         const std::string h = rd("../HodLod.cpp");
         CHECK(h.find("S->gmV.stale()") != std::string::npos && h.find("gamma line: book ") != std::string::npos, "host: a stale book draws no gamma line (status says why)");
-        CHECK(h.find("if (!gmDrawn)") != std::string::npos, "host: no gamma line = the pill + 0DTE stay on the Now row (2.37.x)"); }
+        CHECK(h.find("if (!gmDrawn && hl::HL_OPTIONS_LINE_DRAW)") != std::string::npos, "host: no gamma line = the pill + 0DTE stay on the Now row (2.37.x) - (2.43.0, Rassul 2026-11-22 \"only keep the now line\") only while the Options line is drawn at all"); }
     std::printf("[8] narrow pane drop order, no overlaps\n");
     {   const Ctx c = makeCtx(ES, NM, 0.25, 2);
         std::vector<Bar> B = quiet(7144); B.push_back(bar(T0 + 180 * 25, 7144, 7146, 7143, 7143.75));

@@ -57,11 +57,16 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.42.4";   // (2.42.4, Rassul 17:22 CT "the cob is the cob wave") the COB row = one tag per Cob wave (TopSignals 1.2.2)   // was "2.42.3";   // (2.42.3) rows keep the chart's last session   // was "2.42.2";   // (2.42.2) the SW / COB rows keep the whole session (TopSignals 1.2.1)   // was "2.42.1";   // (2.42.1) SweepVoice 1.1.2: the 1hH / 1hL / PhrH / PhrL clips   // was "2.42.0";   // (2.42.0, Rassul 2026-11-20 13:36 "perfect" / 14:13 build) the two signal rows SW / COB (HodLodTop 1.2.0, TopSignals 1.2.0)   // was "2.41.4";   // (2.41.4) SweepVoice 1.1.1   // was "2.41.3";   // (2.41.3, Rassul 2026-11-20 12:22 CT) the right pill = "Range N%" (range so far / ADR, host) + every market's sweep and Cob spoken (SweepVoice 1.1.0)
+static const char* const HL_VERSION = "2.43.0";   // (2.43.0, Rassul 2026-11-22 19:10 CT "i need to simplify the display and only keep the now line", 19:36 "1. yes. 2. no go", mockup now-line-mockup.html) NOW LINE ONLY: the box and the Options line are not drawn (HL_BOX_DRAW / HL_OPTIONS_LINE_DRAW), the Now line sits on the box's bottom edge (nowSpot); everything is still computed, recorded and spoken   // was "2.42.4";   // (2.42.4, Rassul 17:22 CT "the cob is the cob wave") the COB row = one tag per Cob wave (TopSignals 1.2.2)   // was "2.42.3";   // (2.42.3) rows keep the chart's last session   // was "2.42.2";   // (2.42.2) the SW / COB rows keep the whole session (TopSignals 1.2.1)   // was "2.42.1";   // (2.42.1) SweepVoice 1.1.2: the 1hH / 1hL / PhrH / PhrL clips   // was "2.42.0";   // (2.42.0, Rassul 2026-11-20 13:36 "perfect" / 14:13 build) the two signal rows SW / COB (HodLodTop 1.2.0, TopSignals 1.2.0)   // was "2.41.4";   // (2.41.4) SweepVoice 1.1.1   // was "2.41.3";   // (2.41.3, Rassul 2026-11-20 12:22 CT) the right pill = "Range N%" (range so far / ADR, host) + every market's sweep and Cob spoken (SweepVoice 1.1.0)
 // was HL_VERSION = "2.41.2";   // (2.41.2, Rassul 2026-11-20 12:04 CT "lets only keep cob and sweeps because of the limited room") the signal line shows Cob (left) and Sw (centre) only - no BkTst
 // was HL_VERSION = "2.41.1";   // (2.41.1, Rassul 11:58 CT) the box ends at the last candle (host axisR = priceEdge), not the price axis
 // was HL_VERSION = "2.41.0";   // (2.41.0, Rassul 2026-11-20 10:47 CT "get rid of the left and right buy and sell sections and use the horizontal space for hod values", 10:53 "lets go with A", mockup hodlod-box-wide-mockup.html A; 10:32 "it should be aligned to the left") the BUY AT / SELL AT sections are gone (the Today Plan stays in the MQ Reader): ONE SESSION section across the whole box - Exp / Act with the 1st and 2nd extreme as before, the "1st extreme by / % of days" table moved to the RIGHT of those two rows (the box is 2 rows shorter); the box starts at the pane's left edge (no left keep-out, host)
 static const bool HL_WIDE_SESSION = true;   // (2.41.0) false = the 2.40.0 three-section box
+// (2.43.0, Rassul 2026-11-22 19:10 CT "i need to simplify the display and only keep the now line"; 19:36 "1. yes. 2. no go" = the spoken alerts
+// stay on, no version number on the line; mockup now-line-mockup.html) NOW LINE ONLY. Only the DRAWING changes: every value is still computed,
+// written (status, reads, the gamma record) and spoken. No setting (his rule: defaults only) - a constant each, true brings the element back.
+static const bool HL_BOX_DRAW = false;            // the HOD / LOD box (SW / COB rows, session line, 1st / 2nd extreme table, note rows): laid out for its spot, not drawn
+static const bool HL_OPTIONS_LINE_DRAW = false;   // the Options (gamma) line and its regime pill / 0DTE tag: decided + recorded, not drawn
 // was HL_VERSION = "2.40.0";   // (2.40.0, Rassul 2026-11-20 09:43 CT "this looks good. build", mockup hodlod-box-plan-mockup.html) the LOD / HOD SWEEPS sections replaced by BUY AT · 3-HOUR SUPPORT (left) / SELL AT · 3-HOUR RESISTANCE (right) = the MQ Reader TODAY PLAN for this market (TodayPlan.h 1.0.0: CobSignal HTFNOW + the Reader state.json, the Reader's own rules); the sweep rows are still built and written to the status file (SWROW) for the bridge, not drawn
 // was HL_VERSION = "2.39.1";   // (2.39.1, Rassul 2026-11-20 09:32 CT "the gamma badge should be more aligned to the left so you will have more space for the options line and fix the arrows because they are overlapping") the regime pill + "0DTE Exp" at the FAR LEFT of the gamma row (the box's left edge), the centred gamma line gets the space; every arrow (Now + gamma lines) in its own slot, text drawn in its measured box (GammaLine 1.1.0, NowLevels 1.3.1)
 // was HL_VERSION = "2.39.0";   // (2.39.0, Rassul 2026-11-20 07:45 CT "build", mockups gamma-line-mockup.html + hodlod-new-box-mockup.html) the GAMMA line between the Now line and the box: regime pill | GAMMA WATCH / TESTING / BREAK / SWEEP at the significant MenthorQ strikes | G V C pressure | Next (GammaLine.h 1.0.0); 0DTE text at the row's far left; each closed candle decided once and recorded (lsFlexLevels\HodLod\GammaLine-<MKT>-<spb>s-<session>.csv)
@@ -2810,6 +2815,24 @@ inline void applyOpts(Layout& L, const Opts& O)
     }
     L.items.swap(keep);
     if (!O.table) L.tableOk = false;
+}
+// (2.43.0) WHERE THE NOW LINE GOES (the host passes cx / bottom / left to nowl::layout and gml::layout).
+//   form 0  the box is drawn: centred on it, 4 px above it (above its GEX strip when that is drawn) - the picture up to 2.42.4.
+//   form 1  the box was laid out but is not drawn (HL_BOX_DRAW false): centred on the box's spot, its bottom edge ON the box's bottom edge
+//           (the lowest of the table and its note rows), never below the pane - the Now line takes the bottom of the price pane.
+//   form 2  no box at all (pane too small / Show table off): the pane's bottom centre, 26 px up - as before.
+struct NowSpot { int cx = 0, bottom = 0, left = 0, form = 2; };
+inline NowSpot nowSpot(bool boxLaid, const Box& box, const std::vector<Box>& noteRows, bool boxDrawn, bool gexOk, const Box& gexRow, int paneBottom, int l, int r)
+{
+    NowSpot s;
+    if (boxDrawn) { s.form = 0; s.cx = (box.l + box.r) / 2; s.left = box.l; s.bottom = (gexOk ? (std::min)(box.t, gexRow.t) : box.t) - 4; return s; }
+    if (boxLaid && box.r > box.l && box.b > box.t) {
+        int b = box.b;
+        for (size_t q = 0; q < noteRows.size(); ++q) if (noteRows[q].r > noteRows[q].l && noteRows[q].b > b) b = noteRows[q].b;
+        if (b > paneBottom - 1) b = paneBottom - 1;
+        s.form = 1; s.cx = (box.l + box.r) / 2; s.left = box.l; s.bottom = b; return s;
+    }
+    s.form = 2; s.cx = (l + r) / 2; s.left = l; s.bottom = paneBottom - 22 - 4; return s;
 }
 inline void tagElem(Layout& L, size_t from, int elem) { for (size_t i = from; i < L.items.size(); i++) L.items[i].elem = elem; }
 // (2.0.5) avoid = other indicators' boxes on this pane (the Dealer Profile header / banner, the Tape Reader box): the table and the
