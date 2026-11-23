@@ -208,6 +208,8 @@ REM (2026-11-19) lsMorrisRSI 0.1.0 (Rassul 11:55 CT "make a morris modified rsi 
 call :one MorrisRSI lsMorrisRSI MorrisRsiLogic.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
 REM (2026-11-21) lsEffortRewardPane 0.2.0 (Rassul "build it. make sure you do an independed code review and no memory leasks etc... then build"): Effort Reward v0.2 pane - green up / red down per-level effort at the top / bottom 25%% of each candle + the sweep read strip (strict absorption lots, NO / LIGHT / MODERATE / HEAVY, hidden lots, turn pill); params lsFlexLevels\LRA-EffortReward-MKT.csv (nightly lra.effort_reward)
 call :one EffortRewardPane lsEffortRewardPane ErPaneLogic.h MarketKey.h HostSlot.h PerfGuard.h
+REM (2026-11-22) lsTurn 1.0.0 (Rassul "Let's rename the indicator to Turn since it describes the process of a turn", "build"): Turn v1.0 pane - Stop Run / Effort / Exhaustion / Answer at a swept key level and the read strip (STAND ASIDE / WAIT / BEST ODDS ? / UNCLEAR); an upgrade of lsEffortRewardPane (left as it is); params lsFlexLevels\LRA-TurnPane-MKT.csv (nightly lra.turn_pane)
+call :one Turn lsTurn TurnLogic.h MarketKey.h HostSlot.h PerfGuard.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
 REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
 rem (2026-11-01 21:29 CT, Rassul "get rid of the defense lines" - retired) call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h MarkParams.h PerfGuard.h ColumnBoard.h
@@ -414,7 +416,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - no plugin installs on weekdays 6:10 AM-3:00 PM CT; new builds install the first time Investor/RT is closed after 3:00 PM ^(weekends any time^) ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! - builds install when Investor/RT is closed ^(any day, any time^) )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC Breakout Breakout1 CobSignal IRTReader ChartView FirstExtreme BookFlow BookFlowBg DefenseLines Context ZoneDefense ZoneDefenseMarks SR StepTrend RevRead RevReadMarks ZzoCombo ZzoComboMarks VolRead RangeRead HtfSR EventCal SDMO MorrisRSI EffortRewardPane) do (
+for %%N in (LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC Breakout Breakout1 CobSignal IRTReader ChartView FirstExtreme BookFlow BookFlowBg DefenseLines Context ZoneDefense ZoneDefenseMarks SR StepTrend RevRead RevReadMarks ZzoCombo ZzoComboMarks VolRead RangeRead HtfSR EventCal SDMO MorrisRSI EffortRewardPane Turn) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
