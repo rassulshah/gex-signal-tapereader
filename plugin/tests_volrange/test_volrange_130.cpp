@@ -70,7 +70,9 @@ int main(int argc, char** argv) {
         CHECK(E.markOf(top).code == 0, "the top bar is not a pivot yet (biggest in 30, under 50)");
         E.addBar(bar(t, p + 2, p + 2.5, p, p + 0.5, 150), t); t += 180;
         E.addBar(bar(t, p + 0.5, p + 1, p - 4, p - 3.5, 200), t); t += 180;                                           // takes out the 3-bar low
-        CHECK(E.markOf(top).code == vrr::MK_P && E.markOf(top).dir == -1, "confirmed pivot high on a 20+ bar = P, red");
+        CHECK(E.markOf(top).code == 0, "(1.10.0) a confirmed pivot high on a 20+ bar is no Cx by itself: the pane has no pivot rule of its own");
+        { std::map<long long, vrr::Mk> w; vrr::Mk m1; m1.code = vrr::MK_P; m1.dir = -1; w[E.T[(size_t)top]] = m1; E.wy.swap(w); E.wyLines = 0; }
+        CHECK(E.markOf(top).code == vrr::MK_P && E.markOf(top).dir == -1, "(1.10.0) the price chart's Cx line on that candle = Cx, red (t_vr1100 covers the real files)");
         (void)hi;
         vrr::Engine B = eng(); t = D0 + 9 * 3600;
         for (int i = 0; i < 60; ++i) { B.addBar(bar(t, 100, 100.5, 99.5, 100.25, 100), t); t += 180; }
@@ -95,7 +97,7 @@ int main(int argc, char** argv) {
         CHECK(E.markOf(13).code != vrr::MK_CT, "after the origin breaks: no Ct");
         E.setCobs({}); E.cobMarks(); CHECK(E.markOf(7).code == vrr::MK_CB, "a Cob that left the status list keeps its marks");
         E.hlLocal[ts[7]] = vrr::Hl{ -1, vrr::HL_PBREV }; E.hlLocal[ts[10]] = vrr::Hl{ 1, vrr::HL_PBREV };
-        CHECK(E.markOf(7).code == vrr::MK_CB && E.markOf(10).code == vrr::MK_REV && E.markOf(10).dir == 1, "priority: CB over Rev; Rev shows in the Volume pane");
+        CHECK(E.markOf(7).code == vrr::MK_CB && E.markOf(10).code != vrr::MK_REV, "priority: CB stays; (1.3.5) there is no Rev mark (this check still expected one - stale since 2026-11-16)");
         // layout: grey unless marked; the code is drawn bold in the bar's colour
         vrr::View v; v.l = 0; v.t = 0; v.r = 900; v.b = 120; v.first = 0; v.last = (int)E.V.size() - 1; v.bw = 10; v.X = [](int j) { return 150.0 + j * 40; };
         const std::vector<vrr::Prim> P = vrr::layout(E, v, nullptr);
@@ -118,7 +120,7 @@ int main(int argc, char** argv) {
                 if ((first[(size_t)i].code != a.code || first[(size_t)i].dir != a.dir) && a.code != vrr::MK_P) stable = false; }
             CHECK(same, (mode ? "Range" : "Volume") << ": bar by bar = one straight pass");
             CHECK(stable, (mode ? "Range" : "Volume") << ": a mark given at the close never changes, except to a pivot confirmed later");
-            CHECK(cnt[vrr::MK_BK] > 5 && cnt[vrr::MK_SW] > 5 && cnt[vrr::MK_P] > 5 && cnt[vrr::MK_BIG] > 5, (mode ? "Range" : "Volume") << ": every kind occurs (Bk " << cnt[vrr::MK_BK] << ", Sw " << cnt[vrr::MK_SW] << ", P " << cnt[vrr::MK_P] << ", big50 " << cnt[vrr::MK_BIG] << " of " << B.size() << ")");
+            CHECK(cnt[vrr::MK_P] == 0 && cnt[vrr::MK_BIG] > 5,   /* (1.8.0) no Bk / Sw and (1.10.0) no Cx without the marks file */ (mode ? "Range" : "Volume") << ": every kind occurs (Bk " << cnt[vrr::MK_BK] << ", Sw " << cnt[vrr::MK_SW] << ", P " << cnt[vrr::MK_P] << ", big50 " << cnt[vrr::MK_BIG] << " of " << B.size() << ")");
             const int marked = cnt[vrr::MK_BK] + cnt[vrr::MK_SW] + cnt[vrr::MK_P] + cnt[vrr::MK_BIG];
             CHECK(marked < (int)B.size() / 12, (mode ? "Range" : "Volume") << ": marks stay rare (" << marked << " of " << B.size() << ")");
             std::cout << (mode ? "Range " : "Volume") << " marks on the fixture: Bk " << cnt[vrr::MK_BK] << " Sw " << cnt[vrr::MK_SW] << " P " << cnt[vrr::MK_P] << " big50 " << cnt[vrr::MK_BIG] << " of " << B.size() << " bars\n";

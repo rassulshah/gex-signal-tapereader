@@ -26,7 +26,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-19 18:31-18:35 CT "those info boxes for the range and vol are missing. add them back", "ok but color so it looks nice. build"): the numbers (Max / consecutive / green / red) back next to the 3-line read, coloured (grey labels, the Max gold from 10, green / red rows); dropped when there is no room   // was "1.8.0";   // (1.8.0, Rassul 2026-11-19 18:18 CT "ok" + 18:19 "switch to 10": the panes no longer work out Bk / Sw themselves - they show Bk / Sw exactly on the candles the price chart marked them (lsRevRead's wy-<MKT>-<secs>.txt, the same file lsRevReadMarks draws from), so the panes and the price chart can never disagree; no file = no Bk / Sw. A Bk / Sw bar shows its Max count from 10 up (other bars: from 20 up as before). A Bk / Sw wins over an SR on the same bar)   // was "1.7.0"   // (1.7.0, Rassul 2026-11-19 16:54-16:58 CT "1. ok": the panes' Bk / Sw on the price chart's rules (LevelMarks 1.3.0): a Bk bar's range >= the prior bar's and range or volume up (the BO candle rule); a Sw bar is green for a swept low, red for a swept high; DPoc / WPoc / Open are not levels)
+static const char* const VERSION = "1.10.0";   // (1.10.0, Rassul 2026-11-23 07:26 CT "are the rules for the cx badge and the cx label on the volume different", 07:32 "go with badge for both", 07:33 "why is cx on the range ?"; mockup cx-badge-label-mockup.html): the Volume pane no longer works out Cx itself - it shows Cx exactly on the candles the price chart marked (the Cx lines of lsRevRead's wy-<MKT>-<secs>.txt, as Bk / Sw since 1.8.0), so badge and label can never disagree; no file = no Cx. The Range pane shows no Cx at all (Cx = climactic VOLUME; its own "biggest range at a pivot" carried the same letters). The pane's own pivot rule is gone (it passed a candle that was only the biggest of its own colour in 20+: NQ 2026-11-23 6:21 AM "Cx 31" without a badge, 6:48 AM "Cx 41" where the badge sat on 6:45). The Max numbers, Bk / Sw, CB / SR / Ct, the bars' colours and the read are unchanged; the read's "Climax volume at the high / low" sentence follows the file's Cx too (Volume pane)   // was "1.9.0";   // (1.9.0, Rassul 2026-11-19 18:31-18:35 CT "those info boxes for the range and vol are missing. add them back", "ok but color so it looks nice. build"): the numbers (Max / consecutive / green / red) back next to the 3-line read, coloured (grey labels, the Max gold from 10, green / red rows); dropped when there is no room   // was "1.8.0";   // (1.8.0, Rassul 2026-11-19 18:18 CT "ok" + 18:19 "switch to 10": the panes no longer work out Bk / Sw themselves - they show Bk / Sw exactly on the candles the price chart marked them (lsRevRead's wy-<MKT>-<secs>.txt, the same file lsRevReadMarks draws from), so the panes and the price chart can never disagree; no file = no Bk / Sw. A Bk / Sw bar shows its Max count from 10 up (other bars: from 20 up as before). A Bk / Sw wins over an SR on the same bar)   // was "1.7.0"   // (1.7.0, Rassul 2026-11-19 16:54-16:58 CT "1. ok": the panes' Bk / Sw on the price chart's rules (LevelMarks 1.3.0): a Bk bar's range >= the prior bar's and range or volume up (the BO candle rule); a Sw bar is green for a swept low, red for a swept high; DPoc / WPoc / Open are not levels)
 // was VERSION = "1.6.0";   // (1.6.0, 2026-11-17 21:17 CT) the read = 3 plain lines (who is winning / why / what to watch, VRRead.h 1.2.0 toPlain), no numbers table   // was "1.5.3"   // (1.5.3, 2026-11-17 14:25 CT) the verdict starts with the candle time ("2:21 PM Quiet", "Now" for the forming candle)   // was "1.5.2"   // (1.5.2, his 11:18 CT screenshot) the verdict wraps; tick decimals fixed (HG 0.011000 -> 0.0110); range size words; reason names   // was "1.5.1"   // (1.5.1, 2026-11-17 09:32 CT screenshot: the mouse right of the last candle reads the last closed candle; the sentences behind the verdict first)   // was "1.5.0"   // (1.5.0, 2026-11-17 Rassul 08:35-08:44 CT: the split read - verdict + plain-English sentences on the left, the numbers on the right)   // was "1.4.0"   // (1.4.0, 2026-11-17 Rassul 06:54-07:02 CT: the pane reads right of the last candle - verdict / candle / two behaviours + the numbers, for the candle under the mouse; Volume looks inside the candle through lsBookFlow's record; VRRead.h)   // was "1.3.5";   // (1.3.5, 2026-11-16 21:17 CT Rassul "lets not color the volume or range based on just being a rev bar . volume and range should only be colored because the volume or range is significaant": the Rev mark is gone)   // was "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
@@ -138,17 +138,22 @@ inline void parseCk(const std::string& text, std::vector<CobIt>& out) {
     });
 }
 // (1.8.0) "t|Bk|dir|lv|px|st" / "t|Sw|dir|..." (lsRevRead 0.20.0 wy-<MKT>-<secs>.txt): the price chart's Bk / Sw candles by chart time; every other line ignored
+// (1.10.0) + "t|Cx|dir|lv|px|" (lv may be empty): the price chart's Cx candles (MK_P; dir +1 = at a pivot low, -1 = at a pivot high). The price chart puts ONE of
+// Sw / Bk / Cx on a candle; should a file ever carry two, a Bk / Sw is never replaced by a Cx. Returns the number of Bk / Sw lines (as before); Cx lines are not counted in it.
 inline int parseWy(const std::string& text, std::map<long long, Mk>& out) {
     if (text.compare(0, 5, "WY|1|") != 0) return -1;
     int n = 0;
     hlLines(text, [&](const std::string& l) {
         const std::vector<std::string> f = hlSplit(l, '|', 4); long long t = 0, d = 0;
-        if (f.size() < 3 || (f[1] != "Bk" && f[1] != "Sw") || !hlNum(f[0], t) || t <= 0 || !hlNum(f[2], d) || (d != 1 && d != -1)) return;
+        const bool cx = f.size() >= 2 && f[1] == "Cx";
+        if (f.size() < 3 || (f[1] != "Bk" && f[1] != "Sw" && !cx) || !hlNum(f[0], t) || t <= 0 || !hlNum(f[2], d) || (d != 1 && d != -1)) return;
+        if (cx) { if (!out.count(t)) { Mk m; m.code = MK_P; m.dir = (int)d; out[t] = m; } return; }
         Mk m; m.code = f[1] == "Bk" ? MK_BK : MK_SW; m.dir = (int)d; out[t] = m; ++n;
     });
     return n;
 }
 static const bool LV_FROM_WY = true;   // (1.8.0)
+static const bool CX_FROM_WY = true;   // (1.10.0) the Volume pane's Cx = the price chart's Cx (the same file); the Range pane has none
 static const int LOOK = 1500;       // bars looked back at most (a count can only reach CAP)
 enum Mode { VOL = 0, RANGE = 1 };
 
@@ -182,27 +187,19 @@ struct Engine {
     std::vector<double> PR, ATR; std::vector<long long> LT; double prevC = NAN, trSum = 0; bool hlOn = false;
     std::map<long long, Hl> hlRaw, hlLocal;            // by chart time (as T) / by local seconds (as LT)
     // (1.3.0) the marks: per closed bar its high / low / close, the pivot mark, the level mark and the 3-hour levels standing BEFORE it
-    int spb = 0; std::vector<double> Hh, Ll, Cc; std::vector<signed char> pv, lvC, lvD; std::vector<double> htf;   // htf: 4 per bar (NAN = none)
-    int zd = 0, zext = 0; hsr::Walk hw; hsr::Snap hsn;
+    int spb = 0; std::vector<double> Hh, Ll, Cc; std::vector<signed char> lvC, lvD; std::vector<double> htf;   // htf: 4 per bar (NAN = none)   // (1.10.0) no pv: the pane has no pivot rule of its own any more
+    hsr::Walk hw; hsr::Snap hsn;
     std::map<long long, std::vector<double>> lvDay; int lvDone = 0; std::map<long long, int> lvLast;
     std::vector<double> Oo, Vol; std::map<long long, vrd::Inside> inside;   // (1.4.0) per closed bar its open and volume; lsBookFlow's per-candle order facts by chart time (the host fills it)
     std::vector<CobIt> cobs; std::map<long long, int> cbAt, srAt, ctAt; int cobN = -1;                    // by bar time (local seconds or chart time)
-    std::map<long long, Mk> wy; int wyLines = -1;                                                         // (1.8.0) the price chart's Bk / Sw by chart time (-1 = no file)
+    std::map<long long, Mk> wy; int wyLines = -1;                                                         // (1.8.0) the price chart's Bk / Sw by chart time (-1 = no file); (1.10.0) and its Cx (MK_P)
+    int cxAt(int i) const { if (!CX_FROM_WY || mode != VOL || i < 0 || i >= (int)T.size()) return 0; const auto w = wy.find(T[(size_t)i]); return w != wy.end() && w->second.code == MK_P ? w->second.dir : 0; }   // (1.10.0) the price chart's Cx on closed bar i: +1 at a pivot low, -1 at a pivot high, 0 none (always 0 in the Range pane)
+    int wyCx() const { int k = 0; for (const auto& kv : wy) if (kv.second.code == MK_P) ++k; return k; }
     void reset() { Oo.clear(); Vol.clear(); V.clear(); G.clear(); T.clear(); S.clear(); PR.clear(); ATR.clear(); LT.clear(); prevC = NAN; trSum = 0;
-        Hh.clear(); Ll.clear(); Cc.clear(); pv.clear(); lvC.clear(); lvD.clear(); htf.clear(); zd = 0; zext = 0; hw.reset(); hsn = hsr::Snap(); lvDone = 0; lvLast.clear(); cbAt.clear(); srAt.clear(); ctAt.clear(); cobN = -1; }
+        Hh.clear(); Ll.clear(); Cc.clear(); lvC.clear(); lvD.clear(); htf.clear(); hw.reset(); hsn = hsr::Snap(); lvDone = 0; lvLast.clear(); cbAt.clear(); srAt.clear(); ctAt.clear(); cobN = -1; }
     bool deadBar(int i) const { return Hh[(size_t)i] == 0 && Ll[(size_t)i] == 0 && Cc[(size_t)i] == 0; }
-    // the ZigZag (3-bar High / Low, the chart's ZigZag): a pivot is marked when the wave that follows confirms it - on its bar, or the bar before, when biggest in PV_MIN+
-    void zigStep(int i) {
-        if (i < 1 || deadBar(i)) return;
-        if (zd == 0) { zd = Hh[1] >= Hh[0] ? 1 : -1; zext = 0; }
-        double pl = 1e300, ph = -1e300; for (int j = std::max(0, i - 3); j < i; ++j) { if (deadBar(j)) continue; pl = std::min(pl, Ll[(size_t)j]); ph = std::max(ph, Hh[(size_t)j]); }
-        int piv = -1, pd = 0;
-        if (zd == 1) { if (Hh[(size_t)i] > Hh[(size_t)zext]) zext = i; else if (Ll[(size_t)i] < pl && i != zext) { piv = zext; pd = -1; zext = i; zd = -1; } }
-        else         { if (Ll[(size_t)i] < Ll[(size_t)zext]) zext = i; else if (Hh[(size_t)i] > ph && i != zext) { piv = zext; pd = 1; zext = i; zd = 1; } }
-        if (piv < 0) return;
-        if (S[(size_t)piv].mx() >= PV_MIN) pv[(size_t)piv] = (signed char)pd;
-        else if (piv >= 1 && S[(size_t)piv - 1].mx() >= PV_MIN && pv[(size_t)piv - 1] == 0) pv[(size_t)piv - 1] = (signed char)pd;
-    }
+    // (1.10.0) the pane's own ZigZag pivot rule (zigStep, 1.3.0: a confirmed pivot bar, or the bar before, biggest in 20+ of all bars OR of its own colour) is gone:
+    // Cx comes from the price chart's file (cxAt), whose rule is the biggest volume of ALL the 20 candles before (LevelMarks.h)
     // the level marks of the bars not yet looked at, with the levels as they stand now (the host calls it after it read the level files)
     void markLevels() {
         const int n = (int)V.size();
@@ -269,12 +266,12 @@ struct Engine {
         Mk m; if (!hlOn || i < 0 || i >= (int)T.size()) return m;
         int d = 0;
         if ((d = byTime(cbAt, i)) != 0) { m.code = MK_CB; m.dir = d; return m; }
-        if (LV_FROM_WY) { const auto w = wy.find(T[(size_t)i]); if (w != wy.end()) return w->second; }   // (1.8.0) the price chart's Bk / Sw (wins over an SR on the same bar)
+        if (LV_FROM_WY) { const auto w = wy.find(T[(size_t)i]); if (w != wy.end() && w->second.code != MK_P) return w->second; }   // (1.8.0) the price chart's Bk / Sw (wins over an SR on the same bar); (1.10.0) its Cx keeps the Cx place below
         if ((d = byTime(srAt, i)) != 0) { m.code = MK_SR; m.dir = d; return m; }
         if (!LV_FROM_WY && i < (int)lvC.size() && lvC[(size_t)i]) { m.code = lvC[(size_t)i]; m.dir = lvD[(size_t)i]; return m; }
         /* (1.3.5) no Rev mark: a bar is coloured only because its volume / range is significant */
         if ((d = byTime(ctAt, i)) != 0) { m.code = MK_CT; m.dir = d; return m; }
-        if (i < (int)pv.size() && pv[(size_t)i]) { m.code = MK_P; m.dir = pv[(size_t)i]; return m; }
+        if ((d = cxAt(i)) != 0) { m.code = MK_P; m.dir = d; return m; }                                  // (1.10.0) the price chart's Cx (Volume pane only)
         if (S[(size_t)i].mx() >= BIG_MIN) { m.code = MK_BIG; m.dir = S[(size_t)i].green ? 1 : -1; return m; }
         if (mode == RANGE && (d = highlight(i)) != 0) { m.code = MK_BO; m.dir = d; return m; }
         return m;
@@ -312,11 +309,10 @@ struct Engine {
         if (n < HL_ATR_N) { trSum += tr; a = n == HL_ATR_N - 1 ? trSum / HL_ATR_N : 0; } else a = (ATR[(size_t)n - 1] * (HL_ATR_N - 1) + tr) / HL_ATR_N;
         PR.push_back(r); ATR.push_back(a); LT.push_back(localT); if (!dead && std::isfinite(b.c)) prevC = b.c;
         Oo.push_back(b.o); Vol.push_back(b.v);   // (1.4.0)
-        Hh.push_back(b.h); Ll.push_back(b.l); Cc.push_back(b.c); pv.push_back(0); lvC.push_back(0); lvD.push_back(0);                 // (1.3.0)
+        Hh.push_back(b.h); Ll.push_back(b.l); Cc.push_back(b.c); lvC.push_back(0); lvD.push_back(0);                 // (1.3.0)
         { double q[4] = { NAN, NAN, NAN, NAN }; if (tick > 0 && spb > 0 && spb < hsr::SECS && hsr::periodOk(spb)) { int k = 0; for (const hsr::Lv& x : hsr::standing(hsn, tick)) if (k < 4) q[k++] = x.px;
               if (!dead && localT > 0) { hsr::Bar hb; hb.t = localT; hb.h = b.h; hb.l = b.l; hb.c = b.c; const hsr::Snap s2 = hw.add(hb, spb); if (s2.dir != 0) hsn = s2; } }
-          htf.insert(htf.end(), q, q + 4); }
-        zigStep((int)V.size() - 1); }
+          htf.insert(htf.end(), q, q + 4); } }
     Stat forming(const Bar& b) const { return statFor(valueOf(b), b.c >= b.o, (int)V.size()); }
 };
 
@@ -378,7 +374,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         if (onForm) { vrd::Cd k; k.o = form->o; k.h = form->h; k.l = form->l; k.c = form->c; k.vol = form->v; k.when = "now"; x.c.push_back(k); }
         const Stat s = onForm ? E.forming(*form) : E.S[(size_t)at]; x.cntAll = s.all; x.cntSame = s.same;
         { const int ai = onForm ? at : at - 1; if (ai >= 0 && ai < (int)E.ATR.size()) x.atr = E.ATR[(size_t)ai]; }
-        if (!onForm) { x.cx = at < (int)E.pv.size() && E.pv[(size_t)at] ? E.pv[(size_t)at] : (at >= 1 && at - 1 < (int)E.pv.size() ? E.pv[(size_t)at - 1] : 0);
+        if (!onForm) { x.cx = E.cxAt(at) ? E.cxAt(at) : E.cxAt(at - 1);                                // (1.10.0) the price chart's Cx on this candle or the one before (0 in the Range pane)
             const auto it = E.inside.find(E.T[(size_t)at]); if (it != E.inside.end()) x.in = it->second; }
         vrd::Out o = vrd::toPlain((!onForm && E.deadBar(at)) ? vrd::Out() : (E.mode == VOL ? vrd::volumeRead(x) : vrd::rangeRead(x)), E.mode != VOL);
         // (1.9.0, Rassul 2026-11-19 18:31-18:35 CT "those info boxes for the range and vol are missing. add them back", "ok but color so it looks nice. build")
@@ -456,7 +452,8 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     if (E.hlOn) { int cnt[MK_CB + 1] = { 0 }; std::string last; int shown = 0;
         for (int i = n - 1; i >= 0; --i) { const Mk m = E.markOf(i); if (!m.code) continue; ++cnt[m.code]; if (m.code >= MK_P && shown < 8) { ++shown; last = "MARK," + std::to_string(E.T[(size_t)i]) + "," + std::to_string(i < (int)E.LT.size() ? E.LT[(size_t)i] : 0) + "," + mkText(m.code) + "," + (m.dir > 0 ? "G" : "R") + "\n" + last; } }
         o += "MARKS,1.3.0,CB " + std::to_string(cnt[MK_CB]) + ",SR " + std::to_string(cnt[MK_SR]) + ",Bk " + std::to_string(cnt[MK_BK]) + ",Sw " + std::to_string(cnt[MK_SW]) + ",Rev " + std::to_string(cnt[MK_REV]) + ",Ct " + std::to_string(cnt[MK_CT]) + ",P " + std::to_string(cnt[MK_P]) +
-             ",big50 " + std::to_string(cnt[MK_BIG]) + ",BO " + std::to_string(cnt[MK_BO]) + ",level days " + std::to_string(E.lvDay.size()) + ",Cobs read " + std::to_string(E.cobs.size()) + "\n" + "WY,1.8.0 Bk / Sw from the price chart's marks file," + (E.wyLines < 0 ? std::string("no file - no Bk / Sw") : std::to_string(E.wyLines) + " Bk / Sw read") + "\n" + last; }
+             ",big50 " + std::to_string(cnt[MK_BIG]) + ",BO " + std::to_string(cnt[MK_BO]) + ",level days " + std::to_string(E.lvDay.size()) + ",Cobs read " + std::to_string(E.cobs.size()) + "\n" + "WY,1.8.0 Bk / Sw from the price chart's marks file," + (E.wyLines < 0 ? std::string("no file - no Bk / Sw") : std::to_string(E.wyLines) + " Bk / Sw read") + "\n"
+             + "CX,1.10.0 " + (vol ? std::string("Cx from the price chart's marks file,") + (E.wyLines < 0 ? std::string("no file - no Cx") : std::to_string(E.wyCx()) + " Cx read") : std::string("no Cx in the Range pane (Cx = climactic volume)")) + "\n" + last; }
     if (E.hlOn) { int g = 0, r = 0; for (int i = 0; i < n; ++i) { const int h = E.highlight(i); if (h > 0) ++g; else if (h < 0) ++r; }
         o += "HIGHLIGHT,1.1.0 grey bars; BO / BD with range >= 1.2 x ATR(13) of the bar before, every PB Rev and CoB Rev bar green / red,signals read " + std::to_string(E.hlRaw.size()) + " + " + std::to_string(E.hlLocal.size()) + ",green " + std::to_string(g) + ",red " + std::to_string(r) + "\n"; }
     for (int i = std::max(0, n - 5); i < n; ++i) { const Stat& s = E.S[(size_t)i]; std::snprintf(b, sizeof b, "LAST,%lld,%s,%.10g,%sMax=%s,%s=%s,%s%s=%s\n", E.T[(size_t)i], s.green ? "G" : "R", E.V[(size_t)i], pre.c_str(), fm(s.mx()).c_str(), pre.c_str(), fm(s.all).c_str(), pre.c_str(), s.green ? "G" : "R", fm(s.same).c_str()); o += b; }
