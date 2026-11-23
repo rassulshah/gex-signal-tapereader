@@ -23,6 +23,7 @@
 #include "WyRead.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <map>
 #include <set>
 #include <string>
@@ -30,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.13.0";   // (1.13.0, Rassul 2026-11-23 09:25 CT "i want you to implement the AR which is an automatic rally bar that occurs after a cx . so if there is a climax, and there is a bar that has its low below the pivot high and is within 3 bars of the pivot and has a BRMax of at least 10. so if the cx was in a downwave , the ARbar would have to be green", 09:26 "the AR bar should also have a strength line", "here is a decent example" (NQ 11-23 6:51 AM, the green candle after the 6:48 pivot low; Cx 6:45), 09:34 "go"; mockup ar-mockup.html): the AR - arCands() / arPick() below; Bk / Sw / Cx / FT / Tst / Rev untouched
+static const char* const VERSION = "1.14.0";   // (1.14.0, Rassul 2026-11-23 14:00-14:18 CT "for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level etc", "no the 3h is  the S1 S2 R1 R2  levels", "no the bk and tst can also include hourly", "ok so you are just adding to bk right ?", "and for SW you are limiting to major levels right", "for the AR badge ,   if the Green bar is bigger than the ATR and its high is above the cmx bar with the hevy volume , it is also valid AR", "build") (a) + the 3-HOUR S / R (R1 R2 S1 S2 of HtfSr.h, the lines lsHtfSR draws) as levels of every mark: the host hands run() the levels standing before each candle (H3); (b) a Sw is kept only when the level it is LABELLED with is MAJOR (swMajor: session ON / London / Asia, PD, PF, weekly, the 3h S / R) - the hour highs / lows, the pre-open hour (PhrH / PhrL) and VAH / VAL no longer name a Sw; what makes a sweep (a level nobody traded through, the close back, colour, strength 20+, no opening / release candle) is unchanged; Bk / Tst / Cx keep every level they had and gain the 3h S / R; (c) the AR's second way in: range > ATR(13) of the candle before AND beyond the Cx candle's extreme (AR_ATR) - see THE AR
+// was VERSION = "1.13.0";   // (1.13.0, Rassul 2026-11-23 09:25 CT "i want you to implement the AR which is an automatic rally bar that occurs after a cx . so if there is a climax, and there is a bar that has its low below the pivot high and is within 3 bars of the pivot and has a BRMax of at least 10. so if the cx was in a downwave , the ARbar would have to be green", 09:26 "the AR bar should also have a strength line", "here is a decent example" (NQ 11-23 6:51 AM, the green candle after the 6:48 pivot low; Cx 6:45), 09:34 "go"; mockup ar-mockup.html): the AR - arCands() / arPick() below; Bk / Sw / Cx / FT / Tst / Rev untouched
 // was VERSION = "1.12.0";   // (1.12.0, Rassul 2026-11-21 05:51 CT "we can skip data release for sweeps, they shouldnt qualify" - 6E 2026-01-09 7:33 Sw LonLO was the 7:30 data-release candle, V99+ / R99+ from the news): no Sw on a candle that holds a scheduled release (the Event Calendar list: the nightly LRA-Calendar-ALL.csv + its weekly rules), any impact, any market row ALL or this market - newsCandle()
 // was VERSION = "1.11.0";   // (1.11.0, Rassul 2026-11-21 05:40 CT "we need to remove opening candle as a candidate for sweeps" - CL 2026-01-02 8:03 Sw LonLO was the RTH opening candle, its V99+ / R40 came from the open, swept both ways and failed): no Sw on the RTH opening candle (the candle that ENDS one bar after the RTH open: ES / NQ 8:30, CL / NG 8:00, GC / 6E 7:20, HG 7:10 CT) - rthOpenMin(); Bk / Cx unchanged
 // was VERSION = "1.10.1";   // (1.10.1, Rassul 2026-11-20 20:27 CT "first do manual testing": the hand check found EU 10-15 10:03 marked a high sweep of 1hL when the candle before closed exactly ON the level - a close on the level has no side, so no Sw from it)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-20 16:44 CT "yes, use strict rule"): a Sw needs a level nobody TRADED through since it formed (wicks count, one attempt per level - the 1.8.0 rule), and the mark is LABELLED with the best key level its candle crossed (wick through, close back) even if that key level was touched earlier (GC 11-20 9:00: swept the untouched 1-hour high 3,582.8, crossed PhrH 3,582.4 -> "PhrH"); 1.9.0's formation start, combined names, repeat fallback and 1hH / PhrH names stay
@@ -97,11 +99,13 @@ inline int pri(const std::string& n, int hb) {
     static const char* const S3[] = { "VAH", "VAL" };   // (1.3.0, 16:30 "remove poc") no DPoc / WPoc
     static const char* const S4[] = { "PWH", "PWL", "CWH", "CWL" };
     static const char* const S5[] = { "PHL", "PHH" };
+    static const char* const S6[] = { "R1", "R2", "S1", "S2" };   // (1.14.0) the 3-hour S / R: after the weekly levels, before the hour levels
     for (const char* x : S0) if (n == x) return 0;
     for (const char* x : S1) if (n == x) return 10;
     for (const char* x : S2) if (n == x) return 20;
     for (const char* x : S3) if (n == x) return 30;
     for (const char* x : S4) if (n == x) return 40;
+    for (const char* x : S6) if (n == x) return 45;
     for (const char* x : S5) if (n == x) return 50;
     if (n.find('/') != std::string::npos) return priParts(n);   // (1.9.0) a combined name not listed above
     return -1;
@@ -117,8 +121,13 @@ inline std::string shortName(const std::string& n, int hb, bool high) {
 }
 
 struct Lv { long long px = 0; std::string name; int from = 0; int hb = 0; bool high = false; };
+// (1.14.0) the 3-hour S / R standing BEFORE a candle trades (ticks; 0 = none / broken): one per candle of B, from the host's HtfSr walk
+struct H3 { long long r1 = 0, r2 = 0, s1 = 0, s2 = 0; bool has(long long px) const { return px > 0 && (px == r1 || px == r2 || px == s1 || px == s2); } };
+// (1.14.0, "for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level") the levels that may NAME a Sw:
+// session (0), prior day (10), prior full session (20), weekly (40), the 3h S / R (45). Not VAH / VAL (30), not the pre-open hour (50), no hour level.
+inline bool swMajor(const std::string& name, int hb) { if (hb != 0) return false; const int p = pri(name, 0); return p == 0 || p == 10 || p == 20 || p == 40 || p == 45; }
 // the levels at candle i: the key / volume levels (from the session start) + the high / low of the 3 full clock hours before i's hour
-inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std::vector<wyr::Lvl>& key) {
+inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std::vector<wyr::Lvl>& key, const std::vector<H3>* h3 = nullptr) {
     std::vector<Lv> v; for (const wyr::Lvl& z : key) { if (z.px <= 0 || pri(z.name, 0) < 0) continue;   // MenthorQ / gamma / VWAP never make or label a mark
         Lv a; a.px = z.px; a.name = z.name; a.from = 0;
         // (1.9.0, Rassul 14:20 CT "the 9:09 was a lonHi") a SESSION level (ON / London / Asia / the pre-open hour / Open) exists from the candle
@@ -133,6 +142,14 @@ inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std
                     if (!found) continue; } }
             a.from = fk + 1; }
         v.push_back(a); }
+    // (1.14.0) the 3-hour S / R as they stood before candle i: a level since the first candle that had it at this price (its "untraded" check starts there)
+    if (h3 && i > 0 && (size_t)i < h3->size() && h3->size() == B.size()) {
+        const H3& q = (*h3)[(size_t)i]; const long long px[4] = { q.r1, q.r2, q.s1, q.s2 }; static const char* const nm[4] = { "R1", "R2", "S1", "S2" };
+        for (int s2 = 0; s2 < 4; ++s2) { if (px[s2] <= 0) continue;
+            bool dup = false; for (int u = 0; u < s2; ++u) if (px[u] == px[s2]) dup = true;
+            if (dup) continue;
+            int from = i; while (from > 0 && (*h3)[(size_t)from - 1].has(px[s2])) --from;
+            Lv a; a.px = px[s2]; a.name = nm[s2]; a.from = from; a.hb = 0; a.high = s2 < 2; v.push_back(a); } }
     if (B.empty() || i <= 0) return v;
     const long long hp = wyr::hourOf(B[(size_t)i].t), h0 = wyr::hourOf(B[0].t);
     for (long long hh = hp - 1; hh >= hp - 3; --hh) {
@@ -171,7 +188,7 @@ inline bool newsCandle(long long t, long long spb, const std::vector<long long>*
     if (!rel || rel->empty() || spb <= 0) return false;
     const auto it = std::lower_bound(rel->begin(), rel->end(), t - spb);
     return it != rel->end() && *it < t; }
-inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, int openMin = -1, long long spb = 0, const std::vector<long long>* rel = nullptr) {
+inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, int openMin = -1, long long spb = 0, const std::vector<long long>* rel = nullptr, const std::vector<H3>* h3 = nullptr) {
     std::map<long long, Mark> out; const int n = (int)B.size(); if (n < 6) return out;
     std::vector<double> v((size_t)n); for (int i = 0; i < n; ++i) v[(size_t)i] = (double)(B[(size_t)i].buy + B[(size_t)i].sell);
     auto maxV = [&](int a, int b) { double m = 0; for (int k = std::max(0, a); k < b; ++k) m = std::max(m, v[(size_t)k]); return m; };
@@ -181,7 +198,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     // Sw: one attempt per level
     { std::set<std::pair<long long, std::string> > done;
       for (int f = 5; f < n; ++f) {
-        const std::vector<Lv> L = levelsAt(B, f, key);
+        const std::vector<Lv> L = levelsAt(B, f, key, h3);
         for (const Lv& z : L) {
             const std::pair<long long, std::string> id(z.px, z.name); if (done.count(id)) continue;
             if (B[(size_t)f - 1].c == z.px) continue;   // (1.10.1) the close before sits ON the level: no side, so no sweep from it
@@ -209,13 +226,25 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             if (it != raw.end()) { if (it->second.first == 'S') { it->second.second.push_back(c); rawA[dpt] = std::min(rawA[dpt], att[0]); } continue; }
             raw[dpt] = std::make_pair('S', std::vector<Cand>(1, c)); rawDir[dpt] = sup ? 1 : -1; rawA[dpt] = att[0];
         } } }
+    // (1.10.0) a Sw's label may be any KEY level its mark candle crossed (wick through it, close back on the other side), touched earlier or not:
+    // the untouched level (often an hour high / low) decides THAT it is a sweep, the key level it crossed names it
+    for (auto& kv : raw) { if (kv.second.first != 'S') continue; const int i = kv.first; const int d = rawDir[i]; const wyr::Bar& b = B[(size_t)i];
+        for (const Lv& z : levelsAt(B, i, key, h3)) { if (z.hb != 0 || pri(z.name, 0) < 0) continue;
+            const int a0 = rawA.count(i) ? rawA[i] : i; const long long pc = a0 > 0 ? B[(size_t)a0 - 1].c : b.o;   // the close before the attempt: still on the level's original side
+            const bool crossed = d > 0 ? (pc > z.px && b.l < z.px && b.c > z.px) : (pc < z.px && b.h > z.px && b.c < z.px); if (!crossed) continue;
+            bool have = false; for (const Cand& x : kv.second.second) if (x.px == z.px && x.name == z.name) have = true;
+            if (!have) { Cand c; c.px = z.px; c.name = z.name; c.hb = 0; c.high = d < 0; kv.second.second.push_back(c); } } }
+    // (1.14.0) a sweep candle that crossed NO major level is not a Sw any more: it is taken out HERE, before the Bk and Cx steps, so the candle can
+    // still be the Bk / Cx it is (GC 2026-11-23 7:57 AM: a sweep of the pre-open hour's low that closed up through LonHI, AsiaHI, ONH and PFH - a Bk)
+    for (auto it = raw.begin(); it != raw.end(); ) { bool mj = false; if (it->second.first == 'S') { for (const Cand& z : it->second.second) if (swMajor(z.name, z.hb)) mj = true; }
+        if (it->second.first == 'S' && !mj) { rawDir.erase(it->first); rawA.erase(it->first); it = raw.erase(it); } else ++it; }
     // Bk: closes through a level
     for (int i = 5; i < n; ++i) {
         const bool big = v[(size_t)i] >= maxV(i - 5, i);
         { const long long r0 = B[(size_t)i].h - B[(size_t)i].l, r1 = B[(size_t)i - 1].h - B[(size_t)i - 1].l;   // (1.3.0, 16:32 "implement the range rule for breaks also and the either rule") the BO candle rule
           if (!(r0 >= r1 && (r0 > r1 || v[(size_t)i] > v[(size_t)i - 1]))) continue; }
         std::vector<std::pair<long long, Cand> > crossed;   // distance from the close before -> level
-        for (const Lv& z : levelsAt(B, i, key)) {
+        for (const Lv& z : levelsAt(B, i, key, h3)) {
             const long long pc = B[(size_t)i - 1].c, c = B[(size_t)i].c;
             if (!((pc > z.px && c < z.px) || (pc < z.px && c > z.px))) continue;
             if (z.hb > 0 && !big) continue;
@@ -238,18 +267,10 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             if (kk < 20 || v[(size_t)kk] < maxV(kk - 20, kk) || raw.count(kk)) continue;
             const long long ext = side > 0 ? B[(size_t)k].l : B[(size_t)k].h;
             std::vector<std::pair<long long, Cand> > in;
-            for (const Lv& z : levelsAt(B, kk, key)) if (B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), cd)); }
+            for (const Lv& z : levelsAt(B, kk, key, h3)) if (B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), cd)); }
             std::stable_sort(in.begin(), in.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first < b.first; });
             std::vector<Cand> cs; for (size_t q = 0; q < in.size() && q < 4; ++q) cs.push_back(in[q].second);
             raw[kk] = std::make_pair('C', cs); rawDir[kk] = side; break; } } }
-    // (1.10.0) a Sw's label may be any KEY level its mark candle crossed (wick through it, close back on the other side), touched earlier or not:
-    // the untouched level (often an hour high / low) decides THAT it is a sweep, the key level it crossed names it
-    for (auto& kv : raw) { if (kv.second.first != 'S') continue; const int i = kv.first; const int d = rawDir[i]; const wyr::Bar& b = B[(size_t)i];
-        for (const Lv& z : levelsAt(B, i, key)) { if (z.hb != 0 || pri(z.name, 0) < 0) continue;
-            const int a0 = rawA.count(i) ? rawA[i] : i; const long long pc = a0 > 0 ? B[(size_t)a0 - 1].c : b.o;   // the close before the attempt: still on the level's original side
-            const bool crossed = d > 0 ? (pc > z.px && b.l < z.px && b.c > z.px) : (pc < z.px && b.h > z.px && b.c < z.px); if (!crossed) continue;
-            bool have = false; for (const Cand& x : kv.second.second) if (x.px == z.px && x.name == z.name) have = true;
-            if (!have) { Cand c; c.px = z.px; c.name = z.name; c.hb = 0; c.high = d < 0; kv.second.second.push_back(c); } } }
     // one level each, repeats cut (per code + level, in candle order)
     std::map<std::pair<char, std::string>, std::pair<int, long long> > last;
     for (const auto& kv : raw) {
@@ -261,7 +282,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             for (int k = it->second.first + 1; k < i; ++k) if (std::fabs((double)(B[(size_t)k].c - px)) >= atr[(size_t)k] && atr[(size_t)k] > 0) return false;   // went 1+ ATR away and came back
             return true; };
         if (m.code == 'S') {   // (1.9.0) the best level that is not a repeat: a sweep is never dropped because its best level was swept earlier (it names the next one)
-            std::vector<Cand> ord; for (const Cand& z : cs) if (pri(z.name, z.hb) >= 0) ord.push_back(z);
+            std::vector<Cand> ord; for (const Cand& z : cs) if (swMajor(z.name, z.hb)) ord.push_back(z);   // (1.14.0) only a MAJOR level names a Sw (was: any level of the list, pri >= 0); none crossed = no Sw
             std::stable_sort(ord.begin(), ord.end(), [](const Cand& x, const Cand& y) { return pri(x.name, x.hb) < pri(y.name, y.hb); });
             bool got = false; for (const Cand& z : ord) { const std::string lv = shortName(z.name, z.hb, z.high); if (isRepeat(lv, z.px)) continue; m.px = z.px; m.lv = lv; got = true; break; }
             if (!got) continue;
@@ -412,14 +433,19 @@ inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long lon
 // Two steps because the candles' colour and overlap come from the session's own candles (WB, as run() / seq()) and BRMax from the chart's closed candles (the
 // vectors of fillStrength). Both are pure functions of closed candles: a candidate's BRMax is fixed once it has closed, candidates are tried in order, so the
 // AR appears once (when its candle has closed and the pivot is confirmed) and never changes - no repaint.
+// (1.14.0, Rassul 2026-11-23 14:00 CT "if the Green bar is bigger than the ATR and its high is above the cmx bar with the hevy volume , it is also valid AR"; 14:16
+// "and what is the other range that is going in  for the AR tag" - answered: either way is enough; "build") rule 5 has a SECOND way in: the candle's range is
+// bigger than ATR(13) of the candle before it (wyr::atr13, the PB Rev's ATR) AND its high is above the Cx CANDLE's high (bearish: its low below the Cx candle's
+// low). Rules 1 - 4 stay for both ways. Strength line: the V / R count when there is one (10+), else the range against that ATR ("1.4x").
 static const int AR_MIN = 10, AR_BARS = 3;
-struct ArCand { long long cxT = 0, pivT = 0; int dir = 0; std::vector<long long> c; };   // one Cx: its candle, its pivot candle, its side, and the candles after the pivot with the colour and the overlap (in order)
+struct ArCand { long long cxT = 0, pivT = 0; int dir = 0; std::vector<long long> c; std::vector<long long> x; };   // x (1.14.0) = per candidate: range / ATR x 1000 when the ATR way passes, else -1   // one Cx: its candle, its pivot candle, its side, and the candles after the pivot with the colour and the overlap (in order)
 inline std::vector<ArCand> arCands(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks) {
     std::vector<ArCand> out; const int n = (int)B.size(); if (n < 3) return out;
     std::map<long long, int> at; for (int i = 0; i < n; ++i) at[B[(size_t)i].t] = i;
     std::vector<std::pair<int, int> > piv;   // pivot candle, side (+1 low / -1 high) - the pivots of run() and seq()
     { const std::vector<wyr::Leg> LG = wyr::legs(B); int prevA = -1;
       for (int i = 0; i < n; ++i) { const int a = LG[(size_t)i].a; if (a != prevA && i > 0) { bool seen = false; for (const auto& p : piv) if (p.first == a) seen = true; if (!seen) piv.push_back(std::make_pair(a, LG[(size_t)i].dir == 1 ? 1 : -1)); } prevA = a; } }
+    const std::vector<double> atr = wyr::atr13(B);
     for (const auto& kv : marks) { if (kv.second.code != 'C' || (kv.second.dir != 1 && kv.second.dir != -1)) continue;
         const auto it = at.find(kv.first); if (it == at.end()) continue; const int kk = it->second, d = kv.second.dir;
         int k = -1; for (const auto& p : piv) { if (p.second != d) continue; if (p.first == kk) { k = kk; break; } if (p.first == kk + 1) k = kk + 1; }   // the Cx candle is the pivot, or the candle before it
@@ -427,7 +453,10 @@ inline std::vector<ArCand> arCands(const std::vector<wyr::Bar>& B, const std::ma
         ArCand a; a.cxT = kv.first; a.pivT = B[(size_t)k].t; a.dir = d;
         for (int j = k + 1; j < n && j <= k + AR_BARS; ++j) { const wyr::Bar& b = B[(size_t)j];
             const bool colour = d > 0 ? b.c > b.o : b.c < b.o; const bool over = d > 0 ? b.l < B[(size_t)k].h : b.h > B[(size_t)k].l;
-            if (colour && over) a.c.push_back(b.t); }
+            if (!(colour && over)) continue;
+            const double rng = (double)(b.h - b.l), a0 = j >= 1 && (size_t)j - 1 < atr.size() ? atr[(size_t)j - 1] : 0.0;
+            const bool beyond = d > 0 ? b.h > B[(size_t)kk].h : b.l < B[(size_t)kk].l;
+            a.c.push_back(b.t); a.x.push_back(std::isfinite(a0) && a0 > 0 && rng > a0 && beyond ? (long long)std::llround(std::min(99.0, rng / a0) * 1000.0) : -1LL); }
         out.push_back(a); }
     return out;
 }
@@ -435,9 +464,12 @@ inline std::vector<ArCand> arCands(const std::vector<wyr::Bar>& B, const std::ma
 inline std::map<long long, SMark> arPick(const std::vector<ArCand>& cands, const std::map<long long, Mark>& M, const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G) {
     std::map<long long, SMark> out; if (R.size() != T.size() || G.size() != T.size()) return out;
     for (const ArCand& a : cands) { const auto m = M.find(a.cxT); if (m == M.end() || m->second.code != 'C' || m->second.dir != a.dir) continue;
-        for (const long long t : a.c) { const auto it = std::lower_bound(T.begin(), T.end(), t); if (it == T.end() || *it != t) continue; const int i = (int)(it - T.begin());
-            if (stCount(R, G, i) < AR_MIN) continue;
-            if (!out.count(t)) { SMark s; s.code = 'A'; s.dir = a.dir; s.bkT = a.cxT; s.st = strength(V, R, G, i, i); out[t] = s; }
+        for (size_t q = 0; q < a.c.size(); ++q) { const long long t = a.c[q]; const long long ax = q < a.x.size() ? a.x[q] : -1;
+            const auto it = std::lower_bound(T.begin(), T.end(), t); if (it == T.end() || *it != t) continue; const int i = (int)(it - T.begin());
+            if (stCount(R, G, i) < AR_MIN && ax < 0) continue;   // (1.14.0) BRMax 10+ OR the ATR way
+            if (!out.count(t)) { SMark s; s.code = 'A'; s.dir = a.dir; s.bkT = a.cxT; s.st = strength(V, R, G, i, i);
+                if (s.st.empty() && ax >= 0) { char b2[16]; std::snprintf(b2, sizeof b2, "%.1fx", (double)ax / 1000.0); s.st = b2; }
+                out[t] = s; }
             break; } }
     return out;
 }

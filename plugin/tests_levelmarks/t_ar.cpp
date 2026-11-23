@@ -1,4 +1,4 @@
-// t_ar.cpp -- LevelMarks 1.13.0: the AR, the bar that answers a climax (Rassul 2026-11-23 09:25 CT "i want you to implement the AR which is an automatic
+// t_ar.cpp -- LevelMarks 1.13.0 / 1.14.0 (the ATR way, bottom of main): the AR, the bar that answers a climax (Rassul 2026-11-23 09:25 CT "i want you to implement the AR which is an automatic
 // rally bar that occurs after a cx . so if there is a climax, and there is a bar that has its low below the pivot high and is within 3 bars of the pivot and has
 // a BRMax of at least 10. so if the cx was in a downwave , the ARbar would have to be green", 09:26 "the AR bar should also have a strength line", his example:
 // NQ 11-23 6:51 AM). Real candles + the real Cx badges of the price chart's marks file: NQ 2026-11-20 .. 11-23 and ES 2026-11-20 (the mockup's three windows).
@@ -48,8 +48,12 @@ int main() {
       C(!A.count(at(d20, 8, 45)), "8:45 AM (green, BRMax 0) is passed over");
       C(A.count(at(d23, 2, 12)) && A.find(at(d23, 2, 12))->second.dir == -1, "NQ 11-23 2:12 AM = AR, red");
       for (const auto& kv : A) { const auto it = std::lower_bound(x.T.begin(), x.T.end(), kv.first); const int i = (int)(it - x.T.begin()); const wyr::Bar& b = x.B[(size_t)i];
-          C(kv.second.dir > 0 ? b.c > b.o : b.c < b.o, "every AR has the colour: " + b.when); C(lvm::stCount(x.R, x.G, i) >= lvm::AR_MIN, "every AR has BRMax 10+: " + b.when);
-          C(!kv.second.st.empty() && (kv.second.st[0] == 'V' || kv.second.st[0] == 'R'), "every AR has its strength line: " + b.when); C(x.M.count(kv.second.bkT) == 1, "every AR belongs to a Cx badge: " + b.when); }
+          C(kv.second.dir > 0 ? b.c > b.o : b.c < b.o, "every AR has the colour: " + b.when); { const std::vector<double> atr = wyr::atr13(x.B); const auto ci = std::lower_bound(x.T.begin(), x.T.end(), kv.second.bkT); const wyr::Bar& cx = x.B[(size_t)(ci - x.T.begin())];   // (1.14.0) BRMax 10+ OR the ATR way
+            const bool brm = lvm::stCount(x.R, x.G, i) >= lvm::AR_MIN, atrWay = i > 0 && (double)(b.h - b.l) > atr[(size_t)i - 1] && (kv.second.dir > 0 ? b.h > cx.h : b.l < cx.l);
+            C(brm || atrWay, "every AR has BRMax 10+ or is bigger than the ATR and beyond its Cx candle: " + b.when);
+            const std::string& st = kv.second.st; C(!st.empty() && (st[0] == 'V' || st[0] == 'R' || (st.back() == 'x' && st.find('.') != std::string::npos)), "every AR has its strength line: " + b.when);
+            if (!st.empty() && st.back() == 'x') { C(atrWay && lvm::stCount(x.R, x.G, i) < lvm::ST_MIN && lvm::stCount(x.V, x.G, i) < lvm::ST_MIN, "an 'x' strength line only without a V / R count: " + b.when);
+                char w[16]; std::snprintf(w, sizeof w, "%.1fx", (double)(b.h - b.l) / atr[(size_t)i - 1]); C(st == w, "the 'x' line = range / ATR(13) of the candle before: " + b.when + " " + st + " " + w); } } C(x.M.count(kv.second.bkT) == 1, "every AR belongs to a Cx badge: " + b.when); }
       { std::set<long long> cx; for (const auto& kv : A) cx.insert(kv.second.bkT); C(cx.size() == A.size(), "one AR per Cx"); }
       // the candidates: 6:45 Cx -> pivot 6:48; candles with colour + overlap in order
       { const auto K = lvm::arCands(x.B, x.M); bool got = false; for (const auto& a : K) if (a.cxT == at(d23, 6, 45)) { got = true; C(a.pivT == at(d23, 6, 48) && a.dir == 1 && !a.c.empty() && a.c[0] == at(d23, 6, 51), "the 6:45 Cx sits on the candle before its pivot (6:48); first candidate 6:51"); }
@@ -112,6 +116,36 @@ int main() {
       // two Cx whose first passing candle is the same one: it is marked once
       { Syn s = down({ bar(31, 934, 946, 934, 945), bar(32, 945, 950, 944, 949) }); lvm::Mark m; m.code = 'C'; m.dir = 1; s.M[s.B[29].t] = m; C(s.ar().size() == 1, "one AR per candle"); } }
     C(std::string(lvm::seqText('A')) == "AR" && std::string(lvm::seqText('R')) == "Rev" && std::string(lvm::seqText('F')) == "FT" && std::string(lvm::seqText('T')) == "Tst", "seqText: AR, the others as before");
-    C(lvm::AR_MIN == 10 && lvm::AR_BARS == 3 && std::string(lvm::VERSION) == "1.13.0", "AR_MIN 10, AR_BARS 3, LevelMarks 1.13.0");
+    // ---- (1.14.0, Rassul 2026-11-23 14:00 CT "if the Green bar is bigger than the ATR and its high is above the cmx bar with the hevy volume , it is also valid AR")
+    { const Fx x = load("nq1123ar.psv", "wy_NQ_1123.txt"); const auto A = ars(x); const long long d20 = 1795132800LL;
+      const auto a745 = A.find(at(d20, 7, 45));
+      C(a745 != A.end() && a745->second.dir == 1 && a745->second.bkT == at(d20, 7, 36), "NQ 11-20 7:45 AM = AR by the ATR way, green, after the 7:36 Cx (the mockup's candle)");
+      C(a745 != A.end() && a745->second.st == "1.2x", "its strength line reads 1.2x (no BRMax 10)");
+      C(!A.count(at(d20, 7, 39)) && !A.count(at(d20, 7, 42)), "7:39 and 7:42 (green, not above the Cx candle's high) are passed over");
+      C(A.count(at(1795392000LL, 6, 51)) && A.find(at(1795392000LL, 6, 51))->second.st == "R51", "his 6:51 AM example is unchanged (R51)"); }
+    {   // hand-made: quiet candles of both colours (range 4, so ATR is about 4 and no candle is a BRMax 10), a pivot low with range 10 (high 941)
+        auto mk = [](const std::vector<wyr::Bar>& after) { Syn s; long long p = 1000; for (int i = 0; i < 30; ++i) { s.B.push_back(i == 21 ? bar(i, p - 2, p + 6, p - 3, p) /* one green candle of range 9: later greens under it have no BRMax 10 */ : i % 2 ? bar(i, p - 2, p + 1, p - 3, p) : bar(i, p, p + 1, p - 3, p - 2)); p -= 2; }
+            s.B.push_back(bar(30, p, p + 1, p - 9, p - 6, 900)); for (const wyr::Bar& b : after) s.B.push_back(b); lvm::Mark m; m.code = 'C'; m.dir = 1; s.M[s.B[30].t] = m; return s; };
+        { Syn s = mk({ bar(31, 935, 943, 935, 942), bar(32, 942, 947, 941, 946) }); const auto A = s.ar();
+          C(A.size() == 1 && A.begin()->first == s.B[31].t && !A.begin()->second.st.empty() && A.begin()->second.st.back() == 'x', "range 8 > ATR and high 943 above the Cx candle's 941: the AR, strength in x"); }
+        { Syn s = mk({ bar(31, 934, 941, 933, 940), bar(32, 941, 946, 939, 940), bar(33, 940, 942, 939, 941) });
+          C(s.ar().empty(), "range 8 > ATR but the high only AT the Cx candle's high: no AR (and the small green after it is under the ATR)"); }
+        { Syn s = mk({ bar(31, 938, 942, 938, 941), bar(32, 941, 946, 940, 940), bar(33, 940, 942, 939, 941) });
+          C(s.ar().empty(), "above the Cx candle's high but range 4, not bigger than the ATR: no AR"); }
+        { Syn s = mk({ bar(31, 941, 950, 941, 949), bar(32, 949, 952, 948, 950) });
+          C(s.ar().empty(), "bigger than the ATR and above the Cx candle, but its low is not below the pivot candle's high: no AR (rule 4 stays)"); }
+        { Syn s = mk({ bar(31, 934, 936, 933, 935), bar(32, 935, 937, 934, 936), bar(33, 936, 938, 935, 937), bar(34, 936, 946, 935, 945), bar(35, 945, 948, 944, 947) });
+          C(s.ar().empty(), "the 4th candle after the pivot never counts, ATR way included (rule 2 stays)"); }
+        { Syn s = mk({ bar(31, 942, 943, 935, 936), bar(32, 936, 944, 935, 943), bar(33, 943, 946, 942, 945) }); const auto A = s.ar();
+          C(A.size() == 1 && A.begin()->first == s.B[32].t, "a red candle is never the AR of a low; the next green one that passes is"); }
+    }
+    {   // mirror: a climax at a high, a red candle bigger than the ATR with its low below the Cx candle's low
+        Syn s; long long p = 1000; for (int i = 0; i < 30; ++i) { s.B.push_back(i % 2 ? bar(i, p + 2, p + 3, p - 1, p) : bar(i, p, p + 3, p - 1, p + 2)); p += 2; }
+        s.B.push_back(bar(30, p, p + 9, p - 1, p + 6, 900));   // pivot high: 1060 .. low 1059, high 1069
+        s.B.push_back(bar(31, p + 5, p + 5, p - 3, p - 2)); s.B.push_back(bar(32, p - 2, p - 1, p - 5, p - 4));
+        lvm::Mark m; m.code = 'C'; m.dir = -1; s.M[s.B[30].t] = m; const auto A = s.ar();
+        C(A.size() == 1 && A.begin()->first == s.B[31].t && A.begin()->second.dir == -1, "mirror: a red candle bigger than the ATR, low below the Cx candle's low = AR of a high");
+    }
+    C(lvm::AR_MIN == 10 && lvm::AR_BARS == 3 && std::string(lvm::VERSION) == "1.14.0", "AR_MIN 10, AR_BARS 3, LevelMarks 1.14.0");
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;
 }

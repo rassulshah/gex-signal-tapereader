@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.3.1";   // (1.3.1 = lsHodLod 2.39.1, Rassul 2026-11-20 09:32 CT "fix the arrows because they are overlapping") every arrow owns a slot ASP + ARW + ASP (4 | 9 px ink incl. the 2-px pen | 4) in the measured width; text items carry their measured box [l, r] and the host draws them centred in it (IRT's left-justified text sits ~4 px right of rect.left and ran into the arrows)
+static const char* const VERSION = "1.4.0";   // (1.4.0 = lsHodLod 2.44.0, Rassul 2026-11-23 14:09 CT GC screenshot, the line read "WATCH: PHL .. 2hL" with PFH 3638.1 / ONH 3636.4 right under price: "why isnt the level line catching the most obvious levels"; 14:15 "and for levels, you are also using the same levels as SW right" - yes; "build") the line names MAJOR levels only, the Sw list of LevelMarks 1.14.0 (major(): session ON / London / Asia, PD, PF, weekly, the 3-hour S / R R1 R2 S1 S2 the host hands in as keys): the prior hours' highs / lows (PHH / PHL, 2h, 3h) and VAH / VAL are no longer WATCH / Next levels, and a Bk / Sw mark on a level that is not major gives no BREAK / SWEEP badge, no BkTst state and no Last Bk part (its badge stays on the candle)
+// was "1.3.1";   // (1.3.1 = lsHodLod 2.39.1, Rassul 2026-11-20 09:32 CT "fix the arrows because they are overlapping") every arrow owns a slot ASP + ARW + ASP (4 | 9 px ink incl. the 2-px pen | 4) in the measured width; text items carry their measured box [l, r] and the host draws them centred in it (IRT's left-justified text sits ~4 px right of rect.left and ran into the arrows)
 // was "1.3.0";   // (1.3.0 = lsHodLod 2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) ONE short liquidity phrase for the level the badge names, from lsLimitProfile 2.68.0's DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that PASSED its scoring (shown = 1); "Bids building" / "Offers leaving" / "Bids holding" / "Bids pulled", the label grey, the word in the defender's colour when it helps the defence (bids green, offers red) and the attacker's when it fails; a file older than 2 min or no state = no phrase; on a narrow pane the phrase drops FIRST (before Next / Last Bk)
 // was "1.2.0";   // (1.2.0 = lsHodLod 2.37.2, 23:02 CT) live = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP only at the close, from the chart's Bk / Sw marks   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
 static const long long E1904 = 2082844800LL;
@@ -84,10 +85,13 @@ inline int pri(const std::string& n) {
     for (const char* x : S2) { if (n == x) return 20; }
     for (const char* x : S3) { if (n == x) return 30; }
     for (const char* x : S4) { if (n == x) return 40; }
+    if (n == "R1" || n == "R2" || n == "S1" || n == "S2") return 45;   // (1.4.0) the 3-hour S / R
     if (n == "PHH" || n == "PHL") return 50;
     if (n.size() == 3 && n[0] >= '2' && n[0] <= '9' && n[1] == 'h' && (n[2] == 'H' || n[2] == 'L')) return 60;
     return -1;
 }
+// (1.4.0) the levels the line may name = the levels that may name a Sw (LevelMarks swMajor)
+inline bool major(const std::string& n) { const int p = pri(n); return p == 0 || p == 10 || p == 20 || p == 40 || p == 45; }
 inline std::string shortName(const std::string& n) {
     if (n == "LonLO") return "LLO";
     if (n == "LonHI") return "LHI";
@@ -172,7 +176,7 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
     Out o; o.live = live; if (B.size() < 3 || !std::isfinite(live) || !(tick > 0)) return o; o.ok = true;
     const int n = (int)B.size();
     auto idxOf = [&](long long t) { for (int i = n - 2; i >= 0; i--) if (B[(size_t)i].t == t) return i; return -1; };   // closed candles only
-    std::vector<Mark> marks; for (const Mark& m : marksIn) { if (m.code != "Bk") continue; const int k = idxOf(m.t); if (k >= 0 && bkOk(B, k)) marks.push_back(m); }
+    std::vector<Mark> marks; for (const Mark& m : marksIn) { if (m.code != "Bk" || !major(m.lv)) continue; const int k = idxOf(m.t); if (k >= 0 && bkOk(B, k)) marks.push_back(m); }   // (1.4.0) breaks of major levels only
     // last Bk of the session
     for (const Mark& m : marks) if (m.code == "Bk" && idxOf(m.t) >= 0) { o.bk = m; o.haveBk = true; }
     // (18:52, three states) the Bks of the current move, furthest back first: TESTING = the pullback trades into a Bk candle's range (<= 100%
@@ -232,18 +236,18 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
         if (testing.ok) o.tst = testing; else if (watching.ok && !pending) o.tst = watching; else o.tst.why = pending ? "waiting for the FT" : why;
     } else o.tst.why = "no break yet";
     // Next: the nearest named level above and below the live price
-    std::vector<Key> keys; for (const Key& kk : keysIn) { const std::string s = shortName(kk.name); if (pri(s) >= 0 && pri(s) < 50 && kk.px > 0) keys.push_back(Key{ s, kk.px }); }   // the hour levels come live from the bars below, not the key file's snapshot
-    for (const Key& kk : hourKeys(std::vector<Bar>(B.begin(), B.end() - 1), B.back().t)) keys.push_back(kk);
+    std::vector<Key> keys; for (const Key& kk : keysIn) { const std::string s = shortName(kk.name); if (major(s) && kk.px > 0) keys.push_back(Key{ s, kk.px }); }   // (1.4.0) was pri 0..49 + the hour levels below   // the hour levels come live from the bars below, not the key file's snapshot
+    // (1.4.0) no hour levels: was  for (const Key& kk : hourKeys(std::vector<Bar>(B.begin(), B.end() - 1), B.back().t)) keys.push_back(kk);
     const double eps = tick * 0.5;
     {   // (1.2.0) 1. the closed candle's own marks: BREAK = a Bk mark passing the BO candle rule, SWEEP = a Sw mark of strength 10+ in the
         // right colour - shown while that candle is the last closed one (until the next close)
         const int lc = n - 2; const Bar& c0 = B[(size_t)lc];
         for (const Mark& m : marksIn) {
-            if (m.t != c0.t || pri(m.lv) < 0) continue;
+            if (m.t != c0.t || !major(m.lv)) continue;
             if (m.code == "Bk" && bkOk(B, lc)) { o.bs.state = 1; o.bs.dir = m.dir; o.bs.name = m.lv; o.bs.px = m.px; break; }
         }
         if (!o.bs.state) for (const Mark& m : marksIn) {
-            if (m.t != c0.t || m.code != "Sw" || pri(m.lv) < 0) continue;
+            if (m.t != c0.t || m.code != "Sw" || !major(m.lv)) continue;
             if (strengthOf(m.st) < SW_MIN) { o.bs.why = "Sw mark under strength 10"; continue; }
             if (m.dir > 0 ? !(c0.c > c0.o) : !(c0.c < c0.o)) { o.bs.why = "Sw mark in the wrong candle colour"; continue; }
             o.bs.state = 2; o.bs.dir = m.dir; o.bs.name = m.lv; o.bs.px = m.px; break;
