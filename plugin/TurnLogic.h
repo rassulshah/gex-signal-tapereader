@@ -1,4 +1,9 @@
-// TurnLogic.h 1.0.1 (2026-11-22; 1.0.0 the same day) -- the logic of lsTurn "Turn v1.0" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// TurnLogic.h 1.1.0 (2026-11-23; 1.0.1 2026-11-22; 1.0.0 the same day) -- the logic of lsTurn "Turn v1.1" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// (1.1.0, Rassul 2026-11-23 CT 09:45 "does the turn indicator only show values when there is a level"; 09:47 "can you show the indicator on
+// all bars ?"; 09:51 "go -  for now just do effort"): Effort on EVERY closed candle - the buyers' Effort at the top of the candle (up, green)
+// and the sellers' Effort at its bottom (down, red), the same ratio and the same right-hand column as on a candle at a level (effOf); the
+// strip of a plain candle under the mouse (stripOfEffort); pickLabels made fast for a pane where every candle carries bars (same answer).
+// Stop Run, Exhaustion, the Answer and the verdict are unchanged: at named levels and on sweep candles only.
 // (1.0.1, Rassul 22:50-23:00 CT "indicator should update when my mouse hovers over different candles"; "top strip should be moved higher to the
 // top of the pane, right now there is blackspace at the top . i cant see the ratios either"; "go"): the strip of a candle at a named level
 // (stripOfCand, levelNameAt, candSide) and one ratio label per candle side when the candles are too narrow for two (pickLabels); the
@@ -49,7 +54,7 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.1.0";
 static const size_t FILL_CAP = 150000;      // fills of one candle (more = the candle is not decided live)
 static const size_t SHOWN_CAP = 50000;      // resting orders tracked (is the aggressor a known resting order?)
 static const long long NEAR_TICKS = 64;     // only orders within this many ticks of the last trade are tracked
@@ -685,7 +690,7 @@ inline int barPx(double v, int half) {
     if (!std::isfinite(v) || v < 0 || half <= 0) return 0;
     const int h = (int)std::lround(std::min(v, BAR_CAP) / BAR_CAP * half); return h < 2 ? 2 : h;
 }
-enum { T_TEXT = 0, T_MUTED = 1, T_DIR = 2, T_AMBER = 3 };               // T_DIR = the colour of the turn: red at a swept high, green at a swept low
+enum { T_TEXT = 0, T_MUTED = 1, T_DIR = 2, T_AMBER = 3, T_BUY = 4, T_SELL = 5 };   // T_DIR = the colour of the turn: red at a swept high, green at a swept low; (1.1.0) T_BUY green, T_SELL red
 struct Seg { std::string text; int tone = T_TEXT; bool bold = false; };
 struct Strip { std::vector<Seg> segs; std::string pill, flat; int pillTone = T_MUTED, edgeTone = T_MUTED; };
 inline const char* verdictText(int v, bool bestProven) {
@@ -753,6 +758,40 @@ inline Strip stripOfCand(long long stopX1000, long long eff1000, bool numbers, c
     s.pill = "\x96"; s.pillTone = T_MUTED; s.edgeTone = T_MUTED;
     return s;
 }
+// (1.1.0) EFFORT ON EVERY CANDLE. The two Effort bars of a closed candle from its volume at price: up = the buyers' Effort at the top
+// of the candle, dn = the sellers' Effort at its bottom (barRatios: per price level in the 25% at that end / per level in the rest).
+// No bar where the candle has under 4 price levels or nothing traded in the rest. Grey under 0.5x (No Effort), as at a level.
+struct EffPair { Bar1 up, dn; };
+inline EffPair effOf(const Bars& b) {
+    EffPair e;
+    if (b.topOk && std::isfinite(b.top) && b.top >= 0) e.up = ratioBar(x1000(b.top), 0);
+    if (b.botOk && std::isfinite(b.bot) && b.bot >= 0) e.dn = ratioBar(x1000(b.bot), 0);
+    return e;
+}
+// the strip of a plain candle (no named level, not a sweep) under the mouse: "<time>   Buyers <word> Effort 1.2x / Sellers <word> Effort
+// 1.9x" - what is drawn on it, nothing else. Buyers green, sellers red, a No Effort side grey. -1 = no bar on that side.
+inline Strip stripOfEffort(long long up1000, long long dn1000, bool numbers, const std::string& prefix) {
+    Strip s;
+    struct Add { Strip& s; void operator()(const std::string& t, int tone, bool bold) const { Seg g; g.text = t; g.tone = tone; g.bold = bold; s.segs.push_back(g); s.flat += t; } } add = { s };
+    if (!prefix.empty()) add(prefix + "   ", T_MUTED, false);
+    if (up1000 >= 0) { const double x = (double)up1000 / 1000.0; const int k = effClass(x);
+        add(std::string("Buyers ") + word4(k) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_BUY, true); }
+    else add("Buyers \x96 Effort", T_MUTED, true);
+    add(" / ", T_MUTED, false);
+    if (dn1000 >= 0) { const double x = (double)dn1000 / 1000.0; const int k = effClass(x);
+        add(std::string("Sellers ") + word4(k) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_SELL, true); }
+    else add("Sellers \x96 Effort", T_MUTED, true);
+    s.pill = "\x96"; s.pillTone = T_MUTED; s.edgeTone = T_MUTED;
+    return s;
+}
+// which strip a candle at a named level shows under the mouse: its level's side (candSide) while the mouse is on a half of the candle
+// that has a level; (1.1.0) the mouse on the half with no level (only the other side's Effort bar is there) = the plain candle's strip
+inline bool candPlainSide(const Cand& c, bool mouseAboveAxis) {
+    if (c.hiL && c.loL) return false;
+    if (c.hiL) return !mouseAboveAxis;
+    if (c.loL) return mouseAboveAxis;
+    return true;
+}
 // Ratio labels when a candle is too narrow for two labels side by side: each candle side offers ONE label (its tallest bar's ratio,
 // centred on the candle). A label is kept when it touches no label already kept and no bar of another candle; the taller bar is asked
 // first (then the newer candle), so of two neighbours the bigger keeps its label. Rectangles are [l, r) x [t, b).
@@ -762,7 +801,9 @@ struct BarBox { LabBox box; int owner = 0; };
 inline bool boxesTouch(const LabBox& a, const LabBox& b, int padX) { return a.l < b.r + padX && b.l < a.r + padX && a.t < b.b && b.t < a.b; }
 // of two bars on one candle side the taller carries the label; equal heights: the left one (Stop Run / Exhaustion)
 inline int tallerOf(int hLeft, int hRight) { return hRight > hLeft ? 1 : 0; }
-inline std::vector<size_t> pickLabels(const std::vector<LabCand>& c, const std::vector<BarBox>& bars) {
+// (1.1.0) the same answer as the plain double loop (pickLabelsPlain, kept for the tests), found through columns of 64 px: with bars on
+// every candle a pane asks about hundreds of labels against hundreds of bars on every draw.
+inline std::vector<size_t> pickLabelsPlain(const std::vector<LabCand>& c, const std::vector<BarBox>& bars) {
     std::vector<size_t> order(c.size()); for (size_t i = 0; i < order.size(); ++i) order[i] = i;
     std::stable_sort(order.begin(), order.end(), [&c](size_t a, size_t b) { return c[a].h != c[b].h ? c[a].h > c[b].h : c[a].owner > c[b].owner; });
     std::vector<size_t> kept;
@@ -771,6 +812,35 @@ inline std::vector<size_t> pickLabels(const std::vector<LabCand>& c, const std::
         for (size_t j = 0; ok && j < kept.size(); ++j) if (boxesTouch(x.box, c[kept[j]].box, 1)) ok = false;
         for (size_t j = 0; ok && j < bars.size(); ++j) if (bars[j].owner != x.owner && boxesTouch(x.box, bars[j].box, 0)) ok = false;
         if (ok) kept.push_back(order[k]);
+    }
+    std::sort(kept.begin(), kept.end());
+    return kept;
+}
+inline std::vector<size_t> pickLabels(const std::vector<LabCand>& c, const std::vector<BarBox>& bars) {
+    if (c.size() * (bars.size() + c.size()) <= 4096) return pickLabelsPlain(c, bars);
+    static const long long CELL = 64, MAX_CELLS = 65536;
+    long long lo = 0, hi = 0; bool any = false;
+    const auto span = [&](const LabBox& b) { const long long a = std::min(b.l, b.r) - 2LL, z = std::max(b.l, b.r) + 2LL; if (!any) { lo = a; hi = z; any = true; } else { lo = std::min(lo, a); hi = std::max(hi, z); } };
+    for (const LabCand& x : c) span(x.box);
+    for (const BarBox& b : bars) span(b.box);
+    const long long cells = any ? (hi - lo) / CELL + 1 : 0;
+    if (cells <= 0 || cells > MAX_CELLS) return pickLabelsPlain(c, bars);
+    const auto cellOf = [&](long long v) { const long long k = (v - lo) / CELL; return (size_t)(k < 0 ? 0 : k >= cells ? cells - 1 : k); };
+    std::vector<std::vector<size_t> > barAt((size_t)cells), labAt((size_t)cells);
+    for (size_t j = 0; j < bars.size(); ++j) { const size_t a = cellOf(std::min(bars[j].box.l, bars[j].box.r) - 1LL), z = cellOf(std::max(bars[j].box.l, bars[j].box.r) + 1LL); for (size_t q = a; q <= z; ++q) barAt[q].push_back(j); }
+    std::vector<size_t> order(c.size()); for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&c](size_t a, size_t b) { return c[a].h != c[b].h ? c[a].h > c[b].h : c[a].owner > c[b].owner; });
+    std::vector<size_t> kept;
+    for (size_t k = 0; k < order.size(); ++k) {
+        const LabCand& x = c[order[k]]; bool ok = x.box.r > x.box.l && x.box.b > x.box.t; if (!ok) continue;
+        const size_t a = cellOf(x.box.l - 2LL), z = cellOf(x.box.r + 2LL);
+        for (size_t q = a; ok && q <= z; ++q) {
+            for (size_t j = 0; ok && j < labAt[q].size(); ++j) if (boxesTouch(x.box, c[labAt[q][j]].box, 1)) ok = false;
+            for (size_t j = 0; ok && j < barAt[q].size(); ++j) { const BarBox& b = bars[barAt[q][j]]; if (b.owner != x.owner && boxesTouch(x.box, b.box, 0)) ok = false; }
+        }
+        if (!ok) continue;
+        kept.push_back(order[k]);
+        const size_t ka = cellOf(x.box.l - 1LL), kz = cellOf(x.box.r + 1LL); for (size_t q = ka; q <= kz; ++q) labAt[q].push_back(order[k]);
     }
     std::sort(kept.begin(), kept.end());
     return kept;

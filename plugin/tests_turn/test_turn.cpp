@@ -1,8 +1,10 @@
-// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.0.1; 1.0.1: labelText, stripOfCand, levelNameAt, candSide, pickLabels). g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror
+// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.1.0; 1.1.0: effOf, stripOfEffort, candPlainSide, the fast pickLabels = the plain one;
+// 1.0.1: labelText, stripOfCand, levelNameAt, candSide, pickLabels). g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror
 #include "../TurnLogic.h"
 #include <cassert>
 #include <cstdio>
 #include <iostream>
+#include <ctime>
 #include <random>
 static int fails = 0, checks = 0;
 #define CHECK(c) do { ++checks; if (!(c)) { ++fails; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -339,7 +341,7 @@ static void drawing() {
 }
 // (1.0.1) the ratio on a bar, the strip of a candle at a named level, and which labels narrow candles keep
 static void mouseAndLabels() {
-    CHECK(std::string(VERSION) == "1.0.1");
+    CHECK(std::string(VERSION) == "1.1.0");
     // the ratio ON a bar: no x, one decimal under 10, none from 10 up, 99+ cap; the strip's ratioText is unchanged
     CHECK(labelText(0) == "0.0" && labelText(0.522) == "0.5" && labelText(2.435) == "2.4" && labelText(2.87) == "2.9" && labelText(9.94) == "9.9" && labelText(9.95) == "10" && labelText(13.652) == "14");
     CHECK(labelText(99.4) == "99" && labelText(99.5) == "99+" && labelText(1e9) == "99+" && labelText(-1).empty() && labelText(std::nan("")).empty() && labelText(1.0 / 0.0).empty());
@@ -408,8 +410,71 @@ static void mouseAndLabels() {
         for (size_t a = 0; a < kr.size(); ++a) CHECK(in[c.size() - 1 - kr[a]]);
     }
 }
+// (1.1.0) Effort on every candle: the two bars of a plain candle, its strip, which half of a level candle is plain, the fast label picker
+static void effortEveryCandle() {
+    // the two bars: buyers at the top (up), sellers at the bottom (down); the same numbers as the Effort of a candle at a level
+    { Bars b; b.topOk = true; b.top = 1.957; b.botOk = true; b.bot = 0.49;                      // ES 2026-11-20 9:51 AM
+      const EffPair e = effOf(b); CHECK(e.up.show && e.up.on && e.up.label == "2.0" && std::fabs(e.up.v - 1.957) < 1e-9); CHECK(e.dn.show && !e.dn.on && e.dn.label == "0.5" && std::fabs(e.dn.v - 0.49) < 1e-9);
+      CHECK(e.up.v == ratioBar(x1000(b.top), 0).v && e.dn.v == ratioBar(x1000(b.bot), 0).v); }  // = the level candle's Effort bar
+    { Bars b; b.topOk = true; b.top = 0.5; b.botOk = true; b.bot = 0.4996; const EffPair e = effOf(b); CHECK(e.up.on && e.up.label == "0.5" && e.dn.on && e.dn.label == "0.5"); }   // coloured from 0.5x; a ratio is kept to 3 decimals, as at a level (0.4996 = 0.500: on)
+    { Bars b; b.topOk = true; b.top = 0.4994; const EffPair e = effOf(b); CHECK(e.up.show && !e.up.on && !e.dn.show); }
+    { Bars b; const EffPair e = effOf(b); CHECK(!e.up.show && !e.dn.show && e.up.label.empty()); }                                   // under 4 price levels / nothing in the rest: no bar
+    { Bars b; b.topOk = true; b.top = std::nan(""); b.botOk = true; b.bot = -1; const EffPair e = effOf(b); CHECK(!e.up.show && !e.dn.show); }
+    { Bars b; b.topOk = true; b.top = 1.0 / 0.0; b.botOk = true; b.bot = 0; const EffPair e = effOf(b); CHECK(!e.up.show && e.dn.show && !e.dn.on && e.dn.label == "0.0"); }
+    { Bars b; b.topOk = true; b.top = 250; b.botOk = true; b.bot = 12.34; const EffPair e = effOf(b); CHECK(e.up.label == "99+" && e.dn.label == "12" && barPx(e.up.v, 60) == 60 && barPx(e.dn.v, 60) == 60); }
+    // from volume at price: a candle of 8 prices, the buyers heavy in its top two, the sellers thin in its bottom two
+    { std::vector<Row> rows; for (long long t = 100; t <= 107; ++t) { Row r; r.tick = t; r.buy = t >= 106 ? 60 : 10; r.sell = t <= 101 ? 2 : 20; rows.push_back(r); }
+      const EffPair e = effOf(barRatios(rows, 100, 107)); CHECK(e.up.show && e.up.on && e.up.label == "6.0" && e.dn.show && !e.dn.on && e.dn.label == "0.1");
+      const EffPair f = effOf(barRatios(rows, 100, 102)); CHECK(!f.up.show && !f.dn.show); }     // 3 price levels: none
+    // the strip of a plain candle: buyers green, sellers red, No = grey; a dash where there is no bar; never a verdict, a level or a pill
+    { const Strip a = stripOfEffort(610, 1800, true, "9:27 AM"); CHECK(a.flat == "9:27 AM   Buyers Light Effort 0.6x / Sellers Heavy Effort 1.8x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
+      CHECK(a.segs.size() == 4 && a.segs[0].tone == T_MUTED && !a.segs[0].bold && a.segs[1].tone == T_BUY && a.segs[1].bold && a.segs[2].tone == T_MUTED && a.segs[3].tone == T_SELL && a.segs[3].bold);
+      CHECK(stripOfEffort(610, 1800, false, "9:27 AM").flat == "9:27 AM   Buyers Light Effort / Sellers Heavy Effort");
+      CHECK(stripOfEffort(1957, 490, true, "").flat == "Buyers Heavy Effort 2.0x / Sellers No Effort 0.5x" && stripOfEffort(1957, 490, true, "").segs.size() == 3 && stripOfEffort(1957, 490, true, "").segs[2].tone == T_MUTED);
+      CHECK(stripOfEffort(1000, 1499, true, "").flat == "Buyers Moderate Effort 1.0x / Sellers Moderate Effort 1.5x" && stripOfEffort(1500, 999, true, "").flat == "Buyers Heavy Effort 1.5x / Sellers Light Effort 1.0x");
+      CHECK(stripOfEffort(-1, 3160, true, "10:06 AM").flat == "10:06 AM   Buyers \x96 Effort / Sellers Heavy Effort 3.2x" && stripOfEffort(230, -1, true, "").flat == "Buyers No Effort 0.2x / Sellers \x96 Effort");
+      for (const Strip& q : { stripOfEffort(610, 1800, true, "9:27 AM"), stripOfEffort(-1, -1, false, ""), stripOfEffort(0, 99999000, true, "x") }) {
+          CHECK(q.flat.find("Stop Run") == std::string::npos && q.flat.find("Exhaustion") == std::string::npos && q.flat.find("Answer") == std::string::npos && q.flat.find("\xBB") == std::string::npos && q.flat.find("%") == std::string::npos);
+          std::string f; for (const Seg& g : q.segs) { CHECK(g.tone == T_BUY || g.tone == T_SELL || g.tone == T_MUTED); f += g.text; } CHECK(f == q.flat); } }
+    // a candle at a level under the mouse: the half that has a level keeps the level's strip; the half with only the other side's Effort is plain
+    { Cand h; h.hiL = 8328; Cand l; l.loL = 8078; Cand b; b.hiL = 8328; b.loL = 8078; Cand n;
+      CHECK(!candPlainSide(h, true) && candPlainSide(h, false) && candPlainSide(l, true) && !candPlainSide(l, false) && !candPlainSide(b, true) && !candPlainSide(b, false) && candPlainSide(n, true) && candPlainSide(n, false)); }
+    // THE FAST LABEL PICKER = the plain one (1.0.1's double loop), on panes where every candle carries bars on both sides
+    std::mt19937 rng(20261123); long long bigPanes = 0, keptAll = 0;
+    const auto same = [](const std::vector<size_t>& a, const std::vector<size_t>& b) { return a == b; };
+    for (int rep = 0; rep < 600; ++rep) {
+        const int ax = 150, n = rep < 40 ? 1 + (int)(rng() % 6) : 60 + (int)(rng() % 1400), bw = 2 + (int)(rng() % 44), w = std::max(1, std::min((bw - 4) / 2, 20)), lw = 14 + (int)(rng() % 22);
+        const int x0 = rep % 7 == 3 ? -5000 : 30;                                                // panes left of zero too
+        std::vector<BarBox> bars; std::vector<LabCand> c; int x = x0, owner = 0;
+        for (int i = 0; i < n; ++i) { x += bw * (rng() % 9 == 0 ? 2 : 1);
+            for (int side = 0; side < 2; ++side) {                                               // side 0: the bars going up, 1: going down
+                const bool two = rng() % 3 == 0; const int hs = two ? 2 + (int)(rng() % 70) : 0, he = rng() % 11 == 0 ? 0 : 2 + (int)(rng() % 70); if (!hs && !he) continue;
+                const int h = std::max(hs, he);
+                if (hs) { BarBox b; b.owner = owner; b.box.l = x - 1 - w; b.box.r = x - 1; if (side == 0) { b.box.t = ax - hs; b.box.b = ax; } else { b.box.t = ax + 1; b.box.b = ax + 1 + hs; } bars.push_back(b); }
+                if (he) { BarBox b; b.owner = owner; b.box.l = x + 1; b.box.r = x + 1 + w; if (side == 0) { b.box.t = ax - he; b.box.b = ax; } else { b.box.t = ax + 1; b.box.b = ax + 1 + he; } bars.push_back(b); }
+                LabCand lc; lc.owner = owner; lc.h = h; lc.box.l = x - lw / 2; lc.box.r = lc.box.l + lw; if (side == 0) { lc.box.t = ax - h - 12; lc.box.b = ax - h - 1; } else { lc.box.t = ax + 1 + h + 1; lc.box.b = ax + 1 + h + 12; } c.push_back(lc);
+                ++owner; } }
+        if (rep % 13 == 5 && !c.empty()) { c[rng() % c.size()].box.r = c[0].box.l - 3; BarBox inv; inv.owner = -1; inv.box.l = x0 + 400; inv.box.r = x0 + 380; inv.box.t = 0; inv.box.b = 400; bars.push_back(inv); }   // an empty label, an inverted bar
+        const std::vector<size_t> a = pickLabels(c, bars), b = pickLabelsPlain(c, bars); CHECK(same(a, b));
+        if (c.size() * (bars.size() + c.size()) > 4096) ++bigPanes;
+        keptAll += (long long)a.size();
+        std::vector<LabCand> r(c.rbegin(), c.rend()); CHECK(pickLabels(r, bars).size() == a.size());   // the order the candidates come in does not matter
+    }
+    CHECK(bigPanes > 400 && keptAll > 1000);
+    // boxes far apart (more columns than the picker keeps): the plain loop answers, the same way
+    { std::vector<BarBox> bars; std::vector<LabCand> c;
+      for (int i = 0; i < 80; ++i) { LabCand lc; lc.owner = i; lc.h = 10 + i % 7; lc.box.l = (int)((long long)i * 2250000LL); lc.box.r = lc.box.l + 18; lc.box.t = 10; lc.box.b = 21; c.push_back(lc); BarBox b; b.owner = i + 1; b.box = lc.box; b.box.l += (i % 2) * 40; b.box.r += (i % 2) * 40; bars.push_back(b); }
+      const std::vector<size_t> a = pickLabels(c, bars); CHECK(a == pickLabelsPlain(c, bars) && a.size() == 40); }
+    // a pane of 1,500 candles with bars on both sides: one pick stays far under a millisecond's worth of work per candle
+    { const int ax = 150; std::vector<BarBox> bars; std::vector<LabCand> c;
+      for (int i = 0; i < 1500; ++i) for (int side = 0; side < 2; ++side) { const int x = 20 + i * 3, h = 2 + (i * 37 + side * 11) % 70; BarBox b; b.owner = i * 2 + side; b.box.l = x; b.box.r = x + 1; b.box.t = side ? ax + 1 : ax - h; b.box.b = side ? ax + 1 + h : ax; bars.push_back(b);
+          LabCand lc; lc.owner = i * 2 + side; lc.h = h; lc.box.l = x - 9; lc.box.r = x + 9; lc.box.t = side ? ax + 2 + h : ax - h - 12; lc.box.b = lc.box.t + 11; c.push_back(lc); }
+      const std::clock_t t0 = std::clock(); std::vector<size_t> a; for (int k = 0; k < 20; ++k) a = pickLabels(c, bars); const double ms = 1000.0 * (double)(std::clock() - t0) / CLOCKS_PER_SEC / 20;
+      const std::clock_t t1 = std::clock(); const std::vector<size_t> b = pickLabelsPlain(c, bars); const double msPlain = 1000.0 * (double)(std::clock() - t1) / CLOCKS_PER_SEC;
+      CHECK(a == b); CHECK(ms < 60.0); std::printf("pickLabels, 1,500 candles x 2 sides (3,000 labels asked, %zu kept): %.2f ms (the plain loop %.1f ms)\n", a.size(), ms, msPlain); }
+}
 int main() {
-    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing(); mouseAndLabels();
+    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing(); mouseAndLabels(); effortEveryCandle();
     std::printf("%d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

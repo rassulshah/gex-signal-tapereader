@@ -1,5 +1,14 @@
 /*
- *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.0"  1.0.1  (2026-11-22; 1.0.0 the same day)
+ *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.1"  1.1.0  (2026-11-23; 1.0.1 2026-11-22; 1.0.0 the same day)
+ *
+ *  (1.1.0) Rassul 2026-11-23 CT, on his CL chart: 09:45 "does the turn indicator only show values when there is a level"; 09:47 "can you
+ *  show the indicator on all bars ?"; 09:51 "go -  for now just do effort". EFFORT ON EVERY CLOSED CANDLE: the buyers' Effort at the top
+ *  of the candle goes up in green, the sellers' Effort at its bottom goes down in red, both in the right-hand column (where Effort stands
+ *  at a level), each with its ratio; grey under 0.5x as before. A candle at a named level keeps its Stop Run and Effort of that side and
+ *  gains the other side's Effort; a sweep candle with a read is unchanged (its other half carries Exhaustion and the Answer). The strip
+ *  under the mouse on a plain candle: "<time>   Buyers <word> Effort 1.2x / Sellers <word> Effort 1.9x". Effort is IRT's volume at
+ *  price of the closed candle (as before): nothing new is recorded, nothing else is read. Stop Run, Exhaustion, the Answer and the
+ *  verdict stay at named levels / sweeps. Mockup turn-effort-all-mockup.html. Notes NOTES-TURN110.md.
  *
  *  (1.0.1) Rassul 2026-11-22 22:50-23:00 CT, on his CL chart: "indicator should update when my mouse hovers over different candles";
  *  "top strip should be moved higher to the top of the pane, right now there is blackspace at the top . i cant see the ratios either";
@@ -66,7 +75,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.0.1"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.1.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -316,7 +325,8 @@ struct State {
     long long statusMs = -100000; std::string lastStatus, lastRead; long long draws = 0, calcs = 0, lastClosedKey = 0, decidedLive = 0, candsLive = 0;
     // (1.0.1) the mouse: the chart bar it is on while it is inside this pane (-1 = not in the pane), where it is, the axis row of the last draw
     pc::Tracker cur; int hov = -1, hovY = 0, axisY = 0; long long mouseMoves = 0;
-    int stripKind = 0, labMode = 0, labOffered = 0, labDrawn = 0;      // what the last draw showed (the status file): strip 0 none / 1 a sweep / 2 a level candle
+    int stripKind = 0, labMode = 0, labOffered = 0, labDrawn = 0;      // what the last draw showed (the status file): strip 0 none / 1 a sweep / 2 a level candle / (1.1.0) 3 a plain candle
+    int effCandles = 0;                                                // (1.1.0) candles the last draw gave an Effort bar that have no level and no sweep read
 };
 
 }  // namespace trh
@@ -620,7 +630,8 @@ private:
     void fill(int l, int t, int r, int b, COLOR c) { setPen(c, 1, P_SOLID); RCT rc; rc.set(coord(l), coord(t), coord(r), coord(b)); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
     void text(const std::string& s, int l, int t, int r, int b, COLOR c, bool centred) { setTextColor(c); RCT rc; rc.set(coord(l), coord(t), coord(r), coord(b)); rc.drawText(s.c_str(), centred, false); }
     static COLOR toneColor(int tone, int dir, bool forFill) {
-        return tone == turn::T_DIR ? (dir < 0 ? C_RED : C_GREEN) : tone == turn::T_AMBER ? C_AMBER : tone == turn::T_TEXT ? C_TEXT : (forFill ? C_AXIS : C_MUTED);
+        return tone == turn::T_DIR ? (dir < 0 ? C_RED : C_GREEN) : tone == turn::T_BUY ? C_GREEN : tone == turn::T_SELL ? C_RED   // (1.1.0) buyers green, sellers red
+             : tone == turn::T_AMBER ? C_AMBER : tone == turn::T_TEXT ? C_TEXT : (forFill ? C_AXIS : C_MUTED);
     }
     std::string prefixOf(const turn::Read& r, long long lastKey) { return prefixText(r.lv, r.stamp, r.src == 'N', lastKey); }
     // "<level> <time>" (the date too when the candle is not of the last candle's day); (1.0.1) also for a candle at a named level
@@ -654,6 +665,10 @@ private:
     // (the bars going up, the bars going down) offers ONE label - its taller bar's ratio, centred on the candle - and turn::pickLabels
     // decides which are drawn. Returns the labels it drew itself (wide).
     struct LabText { std::string text; COLOR c; };
+    // (1.1.0) the width of a ratio label in the 9 pt font, asked once per text and draw (every candle carries labels now). A scratch of ONE
+    // draw: emptied at the start of every render, so it never carries anything from one chart to the next (the per-chart state is State).
+    std::map<std::string, int> labW_;
+    int labW(const std::string& t) { const std::map<std::string, int>::const_iterator it = labW_.find(t); if (it != labW_.end()) return it->second; const int w = (int)getTextWidth(t.c_str(), -1) + 2; if (labW_.size() < 512) labW_[t] = w; return w; }
     int drawSide(int owner, int x, int dir, const turn::BarSet& bs, int axis, int half, int bw, bool wide, bool offer, int padL, int padR,
                  std::vector<turn::BarBox>& boxes, std::vector<turn::LabCand>& cands, std::vector<LabText>& texts) {
         const int gap = bw >= 12 ? 2 : bw >= 6 ? 1 : 0, w = std::max(1, std::min((bw - gap - 2) / 2, 20));
@@ -671,7 +686,7 @@ private:
             turn::BarBox bb; bb.owner = owner; bb.box.l = o.left; bb.box.r = o.left + w; bb.box.t = o.up ? axis - h : axis + 1; bb.box.b = o.up ? axis : axis + 1 + h; boxes.push_back(bb);
             if (o.b->label.empty()) continue;
             if (wide) {
-                const int lw = (int)getTextWidth(o.b->label.c_str(), -1) + 2; int l = o.left + w / 2 - lw / 2;
+                const int lw = labW(o.b->label); int l = o.left + w / 2 - lw / 2;
                 if (o.left < x) { if (l + lw > x - 1) l = x - 1 - lw; } else if (l < x + 1) l = x + 1;   // the two labels of a candle never touch
                 if (o.up) text(o.b->label, l, axis - h - 12, l + lw, axis - h - 1, c, true); else text(o.b->label, l, axis + 1 + h + 1, l + lw, axis + 1 + h + 12, c, true);
                 ++drawn; continue;
@@ -682,7 +697,7 @@ private:
         }
         for (int k = 0; k < 2; ++k) {
             if (!best[k]) continue;
-            const std::string& t = best[k]->b->label; const int lw = (int)getTextWidth(t.c_str(), -1) + 2;
+            const std::string& t = best[k]->b->label; const int lw = labW(t);
             int l = x - lw / 2; if (l + lw > padR) l = padR - lw; if (l < padL) l = padL;
             turn::LabCand lc; lc.owner = owner; lc.h = bestH[k]; lc.box.l = l; lc.box.r = l + lw;
             if (k == 0) { lc.box.t = axis - bestH[k] - 12; lc.box.b = axis - bestH[k] - 1; } else { lc.box.t = axis + 1 + bestH[k] + 1; lc.box.b = axis + 1 + bestH[k] + 12; }
@@ -694,7 +709,7 @@ private:
         RCT pane; pane.getPaneRect(false);
         const int L = pane.left, R = pane.right, T = pane.top, B = pane.bottom;
         S.cur.pane.l = L; S.cur.pane.t = T; S.cur.pane.r = R; S.cur.pane.b = B;   // (1.0.1) where the pane is: is the mouse inside, has it left
-        S.stripKind = 0; S.labMode = 0; S.labOffered = 0; S.labDrawn = 0;
+        S.stripKind = 0; S.labMode = 0; S.labOffered = 0; S.labDrawn = 0; S.effCandles = 0; labW_.clear();
         if (B - T < 40 || R - L < 40) return;
         FONT f10; f10.id = HELVETICA; f10.size = 10; f10.style = PLAIN; FONT f10b = f10; f10b.style = BOLD;
         FONT f9b = f10b; f9b.size = 9;                                   // (1.0.1) the ratios on the bars
@@ -717,14 +732,26 @@ private:
         const int sTop = T + 2, sBot = sTop + 18; int areaTop = T + 2;
         const long long viewKey = (long long)times[v1];
         const long long atKey = std::min(viewKey, S.lastClosedKey);
-        int kind = 0; turn::Read rd; long long cStop = -1, cEff = -1; std::string cPrefix;
+        int kind = 0; turn::Read rd; long long cStop = -1, cEff = -1, eUp = -1, eDn = -1; std::string cPrefix;
         const int hv = (S.hov >= v0 && S.hov <= v1) ? S.hov : -1;
         if (hv >= 0) {
             const long long key = (long long)times[hv];
             const std::map<long long, size_t>::const_iterator si = S.swAt.find(key);
             const std::map<long long, turn::Cand>::const_iterator ci = S.rec.cands.find(key);
             const bool isSw = si != S.swAt.end() && si->second < S.sweeps.size() && key <= S.lastClosedKey;
-            if (isSw) { rd = readFor(S, S.sweeps[si->second]); if (rd.src != '-' || ci == S.rec.cands.end()) kind = 1; }   // the same choice as the bars below
+            const bool above = S.hovY < S.axisY;
+            // a sweep with a read: its strip. A sweep with no read and no level record: its strip (NO READ) while the mouse is on the half
+            // its push is drawn on, as 1.0.1; (1.1.0) on the other half it is a plain candle
+            if (isSw) { const turn::Sw& w = S.sweeps[si->second]; rd = readFor(S, w); if (rd.src != '-' || (ci == S.rec.cands.end() && (w.dir < 0) == above)) kind = 1; }
+            // (1.1.0) a closed candle with no level - or the half of a level candle that has none: its two Effort bars
+            const bool plain = !kind && key <= S.lastClosedKey && (ci == S.rec.cands.end() || turn::candPlainSide(ci->second, above));
+            if (plain) {
+                const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
+                if (bi != S.bars.end()) { const turn::EffPair e = turn::effOf(bi->second.b);
+                    if (e.up.show) eUp = turn::x1000(bi->second.b.top);
+                    if (e.dn.show) eDn = turn::x1000(bi->second.b.bot); }
+                if (eUp >= 0 || eDn >= 0) { cPrefix = prefixText(std::string(), key, false, viewKey); kind = 3; }
+            }
             if (!kind && ci != S.rec.cands.end()) {
                 const turn::Cand& c = ci->second; const int side = turn::candSide(c, S.hovY < S.axisY);
                 if (side) {
@@ -745,13 +772,15 @@ private:
             const int l = L + 4, r = xLast, dir = kind == 1 ? rd.dir : 0;
             const std::string px = kind == 1 ? prefixOf(rd, viewKey) : cPrefix;
             const auto make = [&](bool numbers, bool withPrefix) {
-                return kind == 1 ? turn::stripOf(rd, S.P.bestProven, numbers, withPrefix ? px : std::string()) : turn::stripOfCand(cStop, cEff, numbers, withPrefix ? px : std::string()); };
+                return kind == 1 ? turn::stripOf(rd, S.P.bestProven, numbers, withPrefix ? px : std::string())
+                     : kind == 3 ? turn::stripOfEffort(eUp, eDn, numbers, withPrefix ? px : std::string())
+                     : turn::stripOfCand(cStop, cEff, numbers, withPrefix ? px : std::string()); };
             turn::Strip st = make(!wide, true);                           // the ratios in words where not every bar carries its own
             setFont(f10b); const int pw = (int)getTextWidth(st.pill.c_str(), -1) + 14;
             const int tx0 = l + 10, avail = r - pw - 14 - tx0;
             if (stripWidth(st, f10, f10b) > avail) st = make(false, true);    // too long: without the numbers,
             if (stripWidth(st, f10, f10b) > avail) st = make(false, false);   // then without the level and time,
-            size_t first = 0; if (stripWidth(st, f10, f10b) > avail && !st.segs.empty()) first = st.segs.size() - 1;                 // then the verdict alone
+            size_t first = 0; if (kind != 3 && stripWidth(st, f10, f10b) > avail && !st.segs.empty()) first = st.segs.size() - 1;   // then the verdict alone ((1.1.0) a plain candle: what fits, from the buyers on)
             fill(l, sTop, r, sBot, C_STRIP);
             fill(l, sTop, l + 4, sBot, toneColor(st.edgeTone, dir, true));
             setFont(f10b);
@@ -776,23 +805,30 @@ private:
         fill(L, axis, xLast, axis + 1, C_AXIS);
         setFont(f9b);
         std::vector<turn::BarBox> boxes; std::vector<turn::LabCand> cands; std::vector<LabText> texts; int owner = 0, wideDrawn = 0;
+        // (1.1.0) EVERY closed candle carries its two Effort bars (the right-hand column: buyers up, sellers down). A candle at a named level
+        // adds the Stop Run of that side (left column); a sweep candle with a read is drawn as before (its other half = Exhaustion + Answer).
         for (int i = v0; i <= v1; ++i) {
             const long long key = (long long)times[i];
+            if (key > S.lastClosedKey) continue;                        // the forming candle: nothing (its Effort is not final)
             const std::map<long long, size_t>::const_iterator si = S.swAt.find(key);
             const std::map<long long, turn::Cand>::const_iterator ci = S.rec.cands.find(key);
-            const bool isSw = si != S.swAt.end() && si->second < S.sweeps.size() && key <= S.lastClosedKey;
-            if (!isSw && ci == S.rec.cands.end()) continue;
-            PNT p; p.set(i, 0.0f, kBarCenter); const int x = p.h; if (x < L || x > R) continue;
+            const bool isSw = si != S.swAt.end() && si->second < S.sweeps.size();
             const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
+            if (!isSw && ci == S.rec.cands.end() && bi == S.bars.end()) continue;
+            PNT p; p.set(i, 0.0f, kBarCenter); const int x = p.h; if (x < L || x > R) continue;
             if (isSw) {
                 const turn::Sw& w = S.sweeps[si->second]; const turn::Read sr = readFor(S, w);
-                if (sr.src != '-' || ci == S.rec.cands.end()) { wideDrawn += drawSide(owner++, x, w.dir, turn::barsOf(sr), axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); continue; }
+                if (sr.src != '-') { wideDrawn += drawSide(owner++, x, w.dir, turn::barsOf(sr), axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); continue; }
             }
-            const turn::Cand& c = ci->second;                           // a candle at a named level: Stop Run + Effort of the side(s) it traded at
-            if (c.hiL) { turn::BarSet bs; bs.stop = turn::ratioBar(c.hiX1000, 50); if (bi != S.bars.end() && bi->second.b.topOk) bs.eff = turn::ratioBar(turn::x1000(bi->second.b.top), 0);
-                         wideDrawn += drawSide(owner++, x, -1, bs, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); }
-            if (c.loL) { turn::BarSet bs; bs.stop = turn::ratioBar(c.loX1000, 50); if (bi != S.bars.end() && bi->second.b.botOk) bs.eff = turn::ratioBar(turn::x1000(bi->second.b.bot), 0);
-                         wideDrawn += drawSide(owner++, x, 1, bs, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); }
+            const turn::EffPair e = bi != S.bars.end() ? turn::effOf(bi->second.b) : turn::EffPair();
+            turn::BarSet up, dn; up.eff = e.up; dn.eff = e.dn;
+            const bool atLevel = ci != S.rec.cands.end();
+            if (atLevel) { const turn::Cand& c = ci->second;            // a candle at a named level: + the Stop Run of the side(s) it traded at
+                if (c.hiL) up.stop = turn::ratioBar(c.hiX1000, 50);
+                if (c.loL) dn.stop = turn::ratioBar(c.loX1000, 50); }
+            else if (e.up.show || e.dn.show) ++S.effCandles;
+            if (up.stop.show || up.eff.show) wideDrawn += drawSide(owner++, x, -1, up, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts);
+            if (dn.stop.show || dn.eff.show) wideDrawn += drawSide(owner++, x, 1, dn, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts);
         }
         const std::vector<size_t> keep = turn::pickLabels(cands, boxes);
         for (size_t q = 0; q < keep.size(); ++q) { const size_t k = keep[q]; text(texts[k].text, cands[k].box.l, cands[k].box.t, cands[k].box.r, cands[k].box.b, texts[k].c, true); }
@@ -817,9 +853,9 @@ private:
         o << "RECORD|reads " << S.rec.reads.size() << "|level candles " << S.rec.cands.size() << "|writes " << S.recWrites << "|fails " << S.recFails << "|decided live " << S.decidedLive << "|candles live " << S.candsLive << "\n";
         o << "BARS|" << S.bars.size() << "|vap missing " << S.vapMissing << (S.vapFault ? "|VAP FAULT" : "") << "\n";
         if (!S.lastRead.empty()) o << "LAST|T|" << S.lastRead << "\n";
-        o << "DISPLAY|" << TURN_VERSION << "|strip on the pane top: " << (S.stripKind == 1 ? "a sweep" : S.stripKind == 2 ? "a candle at a level" : "none")
+        o << "DISPLAY|" << TURN_VERSION << "|strip on the pane top: " << (S.stripKind == 1 ? "a sweep" : S.stripKind == 2 ? "a candle at a level" : S.stripKind == 3 ? "a candle" : "none")
           << "|ratios " << (S.labMode == 2 ? "on every bar (wide candles)" : S.labMode == 1 ? "one per candle side" : "none") << " " << S.labDrawn << " of " << S.labOffered
-          << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "\n";
+          << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "|effort on plain candles " << S.effCandles << "\n";
         const std::string t = o.str();
         S.statusMs = now;
         if (t == S.lastStatus && !force) return;
@@ -839,7 +875,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Turn v1.0 - the process of a turn at a swept key level (lsRevRead Sw). Two columns per candle at a named level: Stop Run and Effort of the pushing side; on the sweep candle also Exhaustion and the Answer of the other side. Strip: the read (STAND ASIDE / WAIT / BEST ODDS ? / UNCLEAR) and the measured odds, for the candle under the mouse or the newest sweep.");
-    p->setVersion("1.0.1");
+    p->setDescription("LRA Turn v1.1 - the process of a turn at a swept key level (lsRevRead Sw). Every closed candle: the buyers' Effort at its top (green, up) and the sellers' Effort at its bottom (red, down). A candle at a named level: also the Stop Run of the pushing side; on the sweep candle also Exhaustion and the Answer of the other side. Strip: the read (STAND ASIDE / WAIT / BEST ODDS ? / UNCLEAR) and the measured odds, for the candle under the mouse or the newest sweep.");
+    p->setVersion("1.1.0");
     return p;
 }
