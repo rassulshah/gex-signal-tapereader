@@ -1,4 +1,4 @@
-// tests_turn/soak.cpp -- leak / soak test of lsTurn 1.0.0. 40 times: add the chart, feed Friday's real ES order events candle by candle
+// tests_turn/soak.cpp -- leak / soak test of lsTurn 1.0.1 (1.0.1: the mouse moves over the pane in every cycle). 40 times: add the chart, feed Friday's real ES order events candle by candle
 // (about 2.5 million events a cycle, the reads and the level candles decided and recorded), draw, remove the chart. Memory must not grow.
 // build as test_turn_host.cpp (plain for the RSS numbers, -fsanitize=address,undefined for the leak check); needs TURN_TEST_DATA.
 #define main turn_host_test_main
@@ -25,6 +25,8 @@ int main(int argc, char** argv) {
         s.chartTo(K845 - 180); idle.chartTo(K845 - 180); cycle(x, s.H); cycle(x, idle.H);
         for (long long forming = K845 - 180; forming <= K906 + 180; forming += 180) { s.chartTo(forming); idle.chartTo(forming); s.feedTo(forming <= K906 ? forming : K906 + 30); drain(x, s, idle); drawsTotal += (long long)s.H.draws.size(); }
         CHECK(s.F.at == s.F.ev.size());
+        for (long b = 0; b < (long)s.H.bars.size(); ++b) { mouseAt(x, s.H, b, s.H.barX0 + (int)b * s.H.barW, b % 2 ? 100 : 250); cycle(x, s.H); drawsTotal += (long long)s.H.draws.size(); }   // (1.0.1) the mouse over every candle, both sides of the axis
+        turn_test_window = nullptr; cycle(x, s.H);                     // ... and out of the pane again
         const std::string rec = get(P("TurnPane\\turn-ES-180.txt")); if (rep == 0) rec0 = rec;
         CHECK(countLines(rec, "T|") == 2 && rec == rec0);              // every cycle decides the same reads, byte for byte
         CHECK(stripText(s.H).find("ONH 9:03 AM   Heavy Stop Run / Heavy Effort / ") == 0);

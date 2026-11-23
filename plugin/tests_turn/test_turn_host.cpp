@@ -2,6 +2,8 @@
 // (ES / GC, Databento -> IRT event form, tests_turn/mk_events.py) arrive candle by candle on two charts of one DLL while the charts grow.
 // Checks: the sweep reads and the level candles are decided once and recorded, the strip and the bars, scrolling back, a restart without
 // repaint, the nightly's rows, garbled / foreign files, symbol change, backlog cap, a faulting feed, no leaks.
+// (1.0.1) the strip on the pane's top edge, the candle under the mouse (a sweep, a candle at a named level - either side -, a candle with
+// no bars, the forming candle, leaving the pane, another chart's window, bad events), one ratio per candle side on narrow candles.
 // g++ -std=c++17 -DLSPERF_FAKE -fsanitize=address,undefined -Wall -Wextra -Werror -Imock -I.. ; run from tests_turn with
 //   TURN_TEST_DATA=<dir with ev_ES.txt ev_GC.txt LRA-Turn-ES.csv LRA-Turn-GC.csv LRA-Turn-ES-nightly.csv wy-ES.txt wy-GC.txt>  (prep_host.py)
 #define TURN_FILE_CHECK_MS 0
@@ -9,9 +11,14 @@
 #define TURN_DECIDE_WAIT_MS 0
 #define TURN_NOSUM_WAIT_MS 0
 #define E_TIMER_MOCK 0
+#define PC_TEST_CURSOR 1      /* PaneCursor.h: the screen cursor is pc::test_cx / test_cy */
+#define TURN_TEST_WINDOW 1    /* Turn.cpp: the window under the cursor is turn_test_window */
 #include "irtsdk.h"
 namespace mock { Feed feed; Host* current = nullptr; }
 #include "../Turn.cpp"
+namespace pc { int test_cx = 0, test_cy = 0; bool test_ok = false; }
+void* turn_test_window = nullptr;
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -56,10 +63,10 @@ struct Sim {
 };
 static std::string stripText(const mock::Host& H) {                    // the strip's text pieces in drawing order (the row under the title); the gaps between
     std::string s; int at = -1;                                        // them are fixed pixel gaps of one space width each (6 px on the mock)
-    for (const mock::Draw& d : H.draws) if (d.type == "text" && d.t == H.paneTop + 18 && !d.centred) { if (at >= 0 && d.l > at) s += std::string((size_t)((d.l - at) / 6), ' '); s += d.text; at = d.r; }
+    for (const mock::Draw& d : H.draws) if (d.type == "text" && d.t == H.paneTop + 4 && !d.centred) { if (at >= 0 && d.l > at) s += std::string((size_t)((d.l - at) / 6), ' '); s += d.text; at = d.r; }
     return s;
 }
-static std::string pillText(const mock::Host& H) { for (const mock::Draw& d : H.draws) if (d.type == "text" && d.t == H.paneTop + 18 && d.centred) return d.text; return std::string(); }
+static std::string pillText(const mock::Host& H) { for (const mock::Draw& d : H.draws) if (d.type == "text" && d.t == H.paneTop + 4 && d.centred) return d.text; return std::string(); }
 static std::string dumpDraws(const mock::Host& H) {
     std::ostringstream o; for (const mock::Draw& d : H.draws) o << d.type << "|" << d.l << "|" << d.t << "|" << d.r << "|" << d.b << "|" << std::hex << d.color << "|" << d.border << std::dec << "|" << d.fsize << "|" << d.fstyle << "|" << d.centred << "|" << d.text << "\n"; return o.str();
 }
@@ -80,6 +87,29 @@ static void noOverlap(const mock::Host& H) {
     std::vector<const mock::Draw*> tx; for (const mock::Draw& d : H.draws) { CHECK(d.t >= H.paneTop && d.b <= H.paneBottom && d.l >= H.paneLeft && d.r <= H.paneRight); if (d.type == "text") tx.push_back(&d); }
     for (size_t i = 0; i < tx.size(); ++i) for (size_t j = i + 1; j < tx.size(); ++j) { const mock::Draw& a = *tx[i]; const mock::Draw& b = *tx[j];
         const bool ov = a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; if (ov) std::printf("overlap: '%s' [%d %d %d %d] / '%s' [%d %d %d %d]\n", a.text.c_str(), a.l, a.t, a.r, a.b, b.text.c_str(), b.l, b.t, b.r, b.b); CHECK(!ov); }
+}
+// (1.0.1) a ratio written on a bar: digits and at most one point ("2.9", "14"), or the cap "99+"; never an x
+static bool isRatio(const std::string& s) { if (s == "99+") return true; if (s.empty()) return false; int dots = 0; for (char c : s) { if (c == '.') ++dots; else if (!std::isdigit((unsigned char)c)) return false; } return dots <= 1; }
+static bool isMarks(const std::string& s) { return s.size() == 3 && s[1] == '/' && s[2] == '3' && s[0] >= '0' && s[0] <= '3'; }
+// the labels below the strip: each is a ratio or the Answer's marks, 9 pt; none lies over a bar of ANOTHER candle (bars = boxes below the strip, not the axis)
+static int barLabels(const mock::Host& H, int bw) {
+    int n = 0;
+    for (const mock::Draw& d : H.draws) { if (d.type != "text" || d.t <= H.paneTop + 21) continue; ++n;
+        CHECK(isRatio(d.text) || isMarks(d.text)); CHECK(d.fsize == 9); CHECK(d.text.find('x') == std::string::npos);
+        const int cx = (d.l + d.r) / 2;
+        for (const mock::Draw& b : H.draws) { if (b.type != "box" || b.t <= H.paneTop + 21 || b.b - b.t <= 1 || b.r - b.l > 20) continue;
+            const bool ov = d.l < b.r && b.l < d.r && d.t < b.b && b.t < d.b; if (!ov) continue;
+            const int bc = (b.l + b.r) / 2; const bool own = bc >= cx - bw / 2 - 1 && bc <= cx + bw / 2 + 1; if (!own) std::printf("label '%s' [%d %d %d %d] over a foreign bar [%d %d %d %d]\n", d.text.c_str(), d.l, d.t, d.r, d.b, b.l, b.t, b.r, b.b); CHECK(own); } }
+    return n;
+}
+static std::string barsOnly(const mock::Host& H) {                     // everything below the strip row: the bars, the axis and their labels
+    std::ostringstream o; for (const mock::Draw& d : H.draws) if (d.t > H.paneTop + 21) o << d.type << "|" << d.l << "|" << d.t << "|" << d.r << "|" << d.b << "|" << std::hex << d.color << std::dec << "|" << d.text << "\n"; return o.str();
+}
+// (1.0.1) the cursor at pane point (h, v) of this chart's window, on chart bar `bar`; the event must never be swallowed
+static void mouseAt(cppExtension* x, mock::Host& H, long bar, int h, int v, int type = E_MOUSE_MOVE) {
+    mock::current = &H; turn_test_window = (void*)&H; pc::test_ok = true; pc::test_cx = h + 100; pc::test_cy = v + 50;
+    RTX_EVENT e; std::memset(&e, 0, sizeof e); e.type = type; e.v.mouse.h = (short)h; e.v.mouse.v = (short)v; e.v.mouse.bar = bar;
+    CHECK(x->mouse(&e) == RTX_FAIL);
 }
 int main() {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -127,31 +157,102 @@ int main() {
     CHECK(sGC == "PhrH 9:03 AM   Heavy Stop Run / Heavy Effort / Moderate Exhaustion / Moderate Answer   \xBB BEST ODDS ?" && pillText(gc.H) == "?");
     // the bars: ratio labels on the candles at a level, the Answer as marks; green / light green up and red / light red down at a swept high
     { int ratio = 0, marks = 0, lg = 0, g = 0, lr = 0, r = 0, other = 0; const int x = gc.H.barX0 + (int)((K903 - gc.k0) / 180) * gc.H.barW;   // the 9:03 candle: all four bars
-      for (const mock::Draw& d : gc.H.draws) { if (d.t <= 35 || d.l < x - 30 || d.r > x + 30) continue;
-          if (d.type == "text" && d.text.size() >= 4 && d.text.back() == 'x') { ++ratio; }
+      for (const mock::Draw& d : gc.H.draws) { if (d.t <= 21 || d.l < x - 30 || d.r > x + 30) continue;
+          if (d.type == "text" && isRatio(d.text)) { ++ratio; CHECK(d.fsize == 9); }   // (1.0.1) no x, 9 pt
           if (d.type == "text" && d.text == "2/3") { ++marks; }
           if (d.type == "box" && d.r - d.l == 20) { if (d.color == trh::C_LGREEN && d.r <= x) ++lg; else if (d.color == trh::C_GREEN && d.l >= x) ++g; else if (d.color == trh::C_LRED && d.r <= x) ++lr; else if (d.color == trh::C_RED && d.l >= x) ++r; else ++other; } }
       std::printf("GC 9:03 candle: %d ratio labels, %d marks label, light green %d green %d light red %d red %d other %d\n", ratio, marks, lg, g, lr, r, other);
       CHECK(ratio == 3 && marks == 1 && lg == 1 && g == 1 && lr == 1 && r == 1 && other == 0); }
-    { int boxes = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 35 && d.r - d.l == 20) { ++boxes; CHECK(d.color == trh::C_GREEN || d.color == trh::C_LGREEN || d.color == trh::C_RED || d.color == trh::C_LRED || d.color == trh::C_AXIS); CHECK(d.border == d.color); }
+    { int boxes = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.r - d.l == 20) { ++boxes; CHECK(d.color == trh::C_GREEN || d.color == trh::C_LGREEN || d.color == trh::C_RED || d.color == trh::C_LRED || d.color == trh::C_AXIS); CHECK(d.border == d.color); }
       CHECK(boxes >= 6); }                                             // fill-only bars: the border is the fill colour (no outlines)
     noOverlap(es.H); noOverlap(gc.H);
     if (const char* dump = std::getenv("TURN_DUMP")) { put(std::string(dump) + "_ES.txt", dumpDraws(es.H)); put(std::string(dump) + "_GC.txt", dumpDraws(gc.H)); }
     const std::string stES = get(P("TurnPane\\status-ES-180.txt")); std::cout << stES;
-    CHECK(stES.find("VERSION|1.0.0") == 0 && stES.find("PARAMS|ok") != std::string::npos && stES.find("SWEEPS|ok|2|levels 16") != std::string::npos && stES.find("COVER|last 100%") != std::string::npos);
+    CHECK(stES.find("VERSION|1.0.1") == 0 && stES.find("PARAMS|ok") != std::string::npos && stES.find("SWEEPS|ok|2|levels 16") != std::string::npos && stES.find("COVER|last 100%") != std::string::npos);
     CHECK(stES.find("FEED|ready") != std::string::npos && stES.find("|faults 0|") != std::string::npos && stES.find("RECORD|reads 2|") != std::string::npos);
+    CHECK(stES.find("DISPLAY|1.0.1|strip on the pane top: a sweep|ratios on every bar (wide candles) ") != std::string::npos && stES.find("|mouse not in this pane|mouse moves 0") != std::string::npos);
+    // (1.0.1) the strip sits on the pane's top edge: its box is rows 2..20, nothing is drawn above it, the bars start under it
+    { bool stripBox = false; for (const mock::Draw& d : es.H.draws) { CHECK(d.t >= es.H.paneTop + 2); if (d.type == "box" && d.t == es.H.paneTop + 2 && d.b == es.H.paneTop + 20 && d.color == trh::C_STRIP) stripBox = true; }
+      CHECK(stripBox); CHECK(barLabels(es.H, 60) >= 6); CHECK(barLabels(gc.H, 60) >= 4); }
     // scrolling back: the strip reads the newest sweep at or before the last candle in view
     { const int keep = es.H.vis1; es.H.vis1 = (int)((K851 - es.k0) / 180); cycle(x, es.H); const std::string s = stripText(es.H); std::cout << "ES scrolled back: " << s << " | " << pillText(es.H) << "\n";
       CHECK(s == "LonHI 8:51 AM   Light Stop Run / Light Effort / No Exhaustion ? / Light Answer   \xBB UNCLEAR"); noOverlap(es.H);
       es.H.vis1 = (int)((K851 - 180 - es.k0) / 180); cycle(x, es.H); CHECK(stripText(es.H).empty());        // before any sweep: no strip
       es.H.vis1 = keep; cycle(x, es.H); CHECK(stripText(es.H) == sES); }
-    // narrow candles: no labels on the bars, the numbers go into the strip; nothing overlaps
-    { es.H.barW = 12; es.H.barX0 = 1200; cycle(x, es.H); const std::string s = stripText(es.H); std::cout << "ES narrow: " << s << "\n";
+    // (1.0.1) THE MOUSE: while it is in the pane the strip is about the candle under it
+    { const std::string rec0 = get(P("TurnPane\\turn-ES-180.txt")); const std::string bars0 = barsOnly(es.H); const int inv0 = es.H.invalidates;
+      const auto idx = [&](long long key) { return (long)((key - es.k0) / 180); };
+      const auto hx = [&](long long key) { return es.H.barX0 + (int)idx(key) * es.H.barW; };   // the mock draws a candle's centre here
+      // a sweep candle with its live read: that sweep's strip (8:51 LonHI), not the newest one
+      mouseAt(x, es.H, idx(K851), hx(K851), 100); CHECK(es.H.invalidates == inv0 + 1); cycle(x, es.H);
+      std::cout << "mouse on 8:51: " << stripText(es.H) << " | " << pillText(es.H) << "\n";
+      CHECK(stripText(es.H) == "LonHI 8:51 AM   Light Stop Run / Light Effort / No Exhaustion ? / Light Answer   \xBB UNCLEAR"); CHECK(barsOnly(es.H) == bars0); noOverlap(es.H);
+      mouseAt(x, es.H, idx(K851), hx(K851) + 3, 110); CHECK(es.H.invalidates == inv0 + 1);                   // the same candle, the same side: no redraw asked
+      // a candle at a named level that is not a sweep (9:06, ONH 28797, Stop Run 0.512x): level, time, Stop Run and Effort - nothing else
+      mouseAt(x, es.H, idx(K906), hx(K906), 100); CHECK(es.H.invalidates == inv0 + 2); cycle(x, es.H);
+      { const std::string s = stripText(es.H); std::cout << "mouse on 9:06: " << s << " | " << pillText(es.H) << "\n";
+        CHECK(s.find("ONH 9:06 AM   Light Stop Run / ") == 0 && s.size() > 8 && s.compare(s.size() - 7, 7, " Effort") == 0); CHECK(s.find("Exhaustion") == std::string::npos && s.find("Answer") == std::string::npos && s.find("\xBB") == std::string::npos);
+        CHECK(pillText(es.H) == "\x96"); CHECK(barsOnly(es.H) == bars0); noOverlap(es.H);
+        cycle(x, es.H);                                                // the status file tells what the draw BEFORE its calc showed
+        CHECK(lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|").find("strip on the pane top: a candle at a level|") != std::string::npos);
+        CHECK(lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|").find("|mouse on a candle of this pane|mouse moves 2") != std::string::npos); }
+      // a candle at a named high AND a named low (9:00: ONH 9.628x above, 28768 0.279x below): the side the mouse is on
+      mouseAt(x, es.H, idx(K903 - 180), hx(K903 - 180), 100); cycle(x, es.H);
+      { const std::string up = stripText(es.H); std::cout << "mouse on 9:00, above the axis: " << up << "\n"; CHECK(up.find("ONH 9:00 AM   Heavy Stop Run / ") == 0);
+        const int inv = es.H.invalidates; mouseAt(x, es.H, idx(K903 - 180), hx(K903 - 180), 250); CHECK(es.H.invalidates == inv + 1); cycle(x, es.H);   // crossing the axis on the same candle redraws
+        const std::string dn = stripText(es.H); std::cout << "mouse on 9:00, below the axis: " << dn << "\n";
+        CHECK(dn.find(" 9:00 AM   No Stop Run / ") != std::string::npos && dn.find("ONH") != 0 && dn != up); CHECK(barsOnly(es.H) == bars0); }
+      // a candle with no bars (8:45, 8:42): the strip of no mouse - it never comes and goes under the mouse, so the bars never jump
+      mouseAt(x, es.H, idx(K845), hx(K845), 100); cycle(x, es.H); CHECK(stripText(es.H) == sES); CHECK(barsOnly(es.H) == bars0);
+      mouseAt(x, es.H, idx(K845 - 180), hx(K845 - 180), 250); cycle(x, es.H); CHECK(stripText(es.H) == sES); CHECK(barsOnly(es.H) == bars0);
+      // the forming candle (and the empty space right of it, which IRT reports as the last bar): the newest sweep, as with no mouse
+      mouseAt(x, es.H, (long)es.H.bars.size() - 1, hx(K906 + 180) + 40, 100); cycle(x, es.H); CHECK(stripText(es.H) == sES);
+      // a hover event is read like a move; bad bar numbers and points outside the pane are no candle
+      mouseAt(x, es.H, idx(K851), hx(K851), 100, E_MOUSE_HOVER); cycle(x, es.H); CHECK(stripText(es.H).find("LonHI 8:51 AM") == 0);
+      mouseAt(x, es.H, -1, hx(K851), 100); cycle(x, es.H); CHECK(stripText(es.H) == sES);
+      mouseAt(x, es.H, 99999, hx(K851), 100); cycle(x, es.H); CHECK(stripText(es.H) == sES);
+      mouseAt(x, es.H, idx(K851), hx(K851), es.H.paneBottom + 40); cycle(x, es.H); CHECK(stripText(es.H) == sES);
+      { RTX_EVENT e; std::memset(&e, 0, sizeof e); e.type = E_MOUSE_UP; e.v.mouse.bar = idx(K851); mock::current = &es.H; CHECK(x->mouse(&e) == RTX_FAIL); CHECK(x->mouse(nullptr) == RTX_FAIL); cycle(x, es.H); CHECK(stripText(es.H) == sES); }
+      // the cursor position cannot be read: no candle
+      mouseAt(x, es.H, idx(K851), hx(K851), 100); pc::test_ok = false; { RTX_EVENT e; std::memset(&e, 0, sizeof e); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)hx(K851); e.v.mouse.v = 100; e.v.mouse.bar = idx(K851); mock::current = &es.H; x->mouse(&e); }
+      cycle(x, es.H); CHECK(stripText(es.H) == sES); pc::test_ok = true;
+      // the mouse LEAVES the pane (IRT sends no event): the next calc sees it and asks for a redraw; the strip is the newest sweep again
+      mouseAt(x, es.H, idx(K851), hx(K851), 100); cycle(x, es.H); CHECK(stripText(es.H).find("LonHI 8:51 AM") == 0);
+      { const int inv = es.H.invalidates; pc::test_cy = es.H.paneBottom + 50 + 80; mock::current = &es.H; x->calc(0); CHECK(es.H.invalidates == inv + 1); cycle(x, es.H); CHECK(stripText(es.H) == sES); CHECK(es.H.invalidates == inv + 1); }
+      // ... or moves over ANOTHER window at the same screen point (the other chart)
+      mouseAt(x, es.H, idx(K851), hx(K851), 100); cycle(x, es.H); CHECK(stripText(es.H).find("LonHI 8:51 AM") == 0);
+      turn_test_window = (void*)&gc.H; cycle(x, es.H); CHECK(stripText(es.H) == sES);
+      // two charts on one DLL: the mouse on the ES pane never changes the GC strip, and the other way round
+      mouseAt(x, es.H, idx(K851), hx(K851), 100); cycle(x, es.H); cycle(x, gc.H); CHECK(stripText(gc.H) == sGC && stripText(es.H).find("LonHI 8:51 AM") == 0);
+      mouseAt(x, gc.H, (long)((K845 - gc.k0) / 180), gc.H.barX0 + (int)((K845 - gc.k0) / 180) * gc.H.barW, 250); cycle(x, gc.H); cycle(x, es.H);
+      { const std::string g = stripText(gc.H); std::cout << "mouse on GC 8:45 (a named low): " << g << "\n"; CHECK(g.find(" 8:45 AM   ") != std::string::npos && g.find(" Stop Run / ") != std::string::npos && g != sGC); CHECK(stripText(es.H) == sES); }   // the window is GC's now: ES is back on its newest sweep
+      // scrolled so that the candle under the last known mouse bar is out of view: ignored
+      mouseAt(x, es.H, idx(K906), hx(K906), 100); { const int keep = es.H.vis1; es.H.vis1 = (int)idx(K851); cycle(x, es.H); CHECK(stripText(es.H).find("LonHI 8:51 AM") == 0); es.H.vis1 = keep; }
+      // nothing the mouse does decides, records or repaints anything
+      turn_test_window = nullptr; cycle(x, es.H); cycle(x, gc.H); CHECK(stripText(es.H) == sES && stripText(gc.H) == sGC); CHECK(barsOnly(es.H) == bars0); CHECK(get(P("TurnPane\\turn-ES-180.txt")) == rec0); }
+    // narrow candles: (1.0.1) ONE ratio per candle side, on its taller bar, in that bar's colour; the numbers also go into the strip; nothing overlaps
+    { es.H.barW = 22; es.H.barX0 = 1100; cycle(x, es.H); const std::string s = stripText(es.H); std::cout << "ES narrow (22 px, his zoom): " << s << "\n";
       CHECK(s.find("ONH 9:03 AM   Heavy Stop Run 5.2x / Heavy Effort ") == 0 && s.find("Heavy Answer 3/3") != std::string::npos);
-      int lab = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 35) ++lab; CHECK(lab == 0); noOverlap(es.H);
-      es.H.barW = 3; es.H.barX0 = 1340; cycle(x, es.H); noOverlap(es.H);
+      // at his zoom a 9 pt ratio (16 px + 2 on the mock) fits inside its own 22 px candle: every candle side keeps its label
+      cycle(x, es.H); const std::string st22 = get(P("TurnPane\\status-ES-180.txt")); std::cout << lineOf(st22, "DISPLAY|") << "\n";
+      int lab = barLabels(es.H, 22), sides = 0; { const std::string d = lineOf(st22, "DISPLAY|"); const size_t a = d.find("one per candle side "); CHECK(a != std::string::npos); int dr = -1, of = -1; if (a != std::string::npos) std::sscanf(d.c_str() + a, "one per candle side %d of %d", &dr, &of); sides = of; CHECK(dr == lab && of >= dr && dr >= 6); CHECK(dr == of); }
+      { const int x903 = es.H.barX0 + (int)((K903 - es.k0) / 180) * 22; bool up = false, down = false;   // the 9:03 sweep candle: "5.2" (its Stop Run, light green) above and one label of the turn below
+        for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 21 && (d.l + d.r) / 2 >= x903 - 2 && (d.l + d.r) / 2 <= x903 + 2) { if (d.text == "5.2" && d.color == trh::C_LGREEN && d.b < 161) up = true; if (d.t > 161 && (d.color == trh::C_LRED || d.color == trh::C_RED)) down = true; }
+        CHECK(up && down); }
+      noOverlap(es.H);
+      // the mouse on a narrow candle at a level: the strip gives BOTH numbers of that candle, with the x ("0.5x"); the bars keep their labels
+      { const std::string b22 = barsOnly(es.H); const long i906 = (long)((K906 - es.k0) / 180); mouseAt(x, es.H, i906, es.H.barX0 + (int)i906 * 22, 100); cycle(x, es.H);
+        const std::string s2 = stripText(es.H); std::cout << "mouse on 9:06, narrow: " << s2 << "\n";
+        CHECK(s2.find("ONH 9:06 AM   Light Stop Run 0.5x / ") == 0 && s2.back() == 'x' && s2.find(" Effort ") != std::string::npos); CHECK(barsOnly(es.H) == b22); noOverlap(es.H);
+        if (const char* dump = std::getenv("TURN_DUMP")) put(std::string(dump) + "_ES_narrow_mouse.txt", dumpDraws(es.H));   // the render check's picture
+        turn_test_window = nullptr; cycle(x, es.H); CHECK(stripText(es.H) == s); }
+      // closer candles: labels compete - fewer are drawn than offered, the taller bar keeps its label, nothing overlaps
+      es.H.barW = 12; es.H.barX0 = 1200; cycle(x, es.H); std::cout << "ES narrow (12 px): " << stripText(es.H) << "\n"; noOverlap(es.H);
+      { const int n12 = barLabels(es.H, 12); CHECK(n12 >= 2 && n12 < lab); (void)sides;
+        bool has52 = false; for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 21 && d.text == "5.2" && d.color == trh::C_LGREEN) has52 = true; CHECK(has52); }   // a full-height bar of the newest candle
+      es.H.barW = 3; es.H.barX0 = 1340; cycle(x, es.H); noOverlap(es.H); barLabels(es.H, 3);
       es.H.paneRight = 500; es.H.barX0 = 300; cycle(x, es.H); noOverlap(es.H); std::cout << "ES small pane: " << stripText(es.H) << "\n"; CHECK(stripText(es.H).find("UNCLEAR") != std::string::npos);
-      es.H.paneBottom = 60; cycle(x, es.H); CHECK(stripText(es.H).empty());                                  // too low for the strip: bars only, no crash
+      es.H.paneBottom = 60; cycle(x, es.H); CHECK(stripText(es.H).empty()); CHECK(barLabels(es.H, 3) == 0);   // too low for the strip and for labels: bars only, no crash
       es.H.paneBottom = 300; es.H.paneRight = 1400; es.H.barW = 60; es.H.barX0 = 600; cycle(x, es.H); CHECK(stripText(es.H) == sES); }
     const std::string drawsES = dumpDraws(es.H), drawsGC = dumpDraws(gc.H);
     // RESTART: the charts are removed and added again; no feed events this time -> the same strip and the same bars from the record (no repaint)

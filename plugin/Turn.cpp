@@ -1,5 +1,17 @@
 /*
- *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.0"  1.0.0  (2026-11-22)
+ *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.0"  1.0.1  (2026-11-22; 1.0.0 the same day)
+ *
+ *  (1.0.1) Rassul 2026-11-22 22:50-23:00 CT, on his CL chart: "indicator should update when my mouse hovers over different candles";
+ *  "top strip should be moved higher to the top of the pane, right now there is blackspace at the top . i cant see the ratios either";
+ *  "go" on the three fixes: (1) the strip is about the candle under the mouse while the mouse is in this pane (a sweep candle: its read;
+ *  a candle at a named level: its level, time, Stop Run and Effort; a candle with no bars, or the mouse outside the pane: the newest
+ *  sweep at or before the last candle in view, as before) - TRACK_MOUSE + PaneCursor.h, as lsVolRead 1.2.0;
+ *  (2) the strip sits at the top edge of the pane (the row above it was kept free for a pane title this pane does not have);
+ *  (3) candles too narrow for two ratio labels side by side (most zooms: two labels need about 58 px) show ONE ratio per candle side, on
+ *  its tallest bar, in that bar's colour; a label that would touch a neighbour's label or bar is left out, the taller bar first.
+ *  23:07 CT on the mockup: "the font for the ratio looks big , it may overlap on the other bar next to it, maybe get rid of the x and make it
+ *  smaller" - the ratio on a bar is 9 pt and has no x ("2.9", "14"): it fits inside its own 22 px candle. The strip keeps "2.9x".
+ *  Nothing else changes: the bars, the reads, the records, the files. Mockup turn-pane-mockup.html. Notes NOTES-TURN101.md.
  *
  *  Rassul 2026-11-22 CT: "Put the red bars below the green bars"; "I want you to sanity check and get independent sanity check , code and
  *  design review , no memory leaks and give me a final mockup before I approve to build"; "Let's rename the indicator to Turn since it
@@ -12,7 +24,7 @@
  *                                                 DOWN left Exhaustion (light red)   right Answer (red)        - the sweep candle only
  *    a swept LOW: the mirror (red down = what the sellers did, green up = the turn). Grey = the reading says No. Full height = 3.0x.
  *  The strip: "<level> <time>   Heavy Stop Run / Heavy Effort / Moderate Exhaustion / Moderate Answer   >> BEST ODDS ?" + the odds pill,
- *  for the newest sweep (lsRevRead's Sw) at or before the last candle in view.
+ *  for the newest sweep (lsRevRead's Sw) at or before the last candle in view - or (1.0.1) for the candle under the mouse.
  *  Stop Run, Exhaustion and the Answer come from the order-by-order feed while the pane is on the chart: decided once after the candle
  *  closes, recorded in lsFlexLevels\TurnPane\turn-<MKT>-<spb>.txt and never recomputed. Older sweeps: the nightly's SW rows in
  *  lsFlexLevels\LRA-TurnPane-<MKT>.csv (read from the order store, shown with "(nightly)"). Effort: IRT's volume at price.
@@ -37,6 +49,7 @@
 #include "PerfGuard.h"
 #include "HostSlot.h"
 #include "MarketKey.h"
+#include "PaneCursor.h"
 #include "TurnLogic.h"
 #include <chrono>
 #include <climits>
@@ -53,7 +66,10 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.0.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.0.1"   // = turn::VERSION = the setVersion literal
+#if defined(_WIN32) && defined(_MSC_VER)
+#pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
+#endif
 
 namespace trh {
 
@@ -79,6 +95,17 @@ static const long long WAIT_MS = 60000, SILENT_MS = 30000, RECONNECT_GAP_MS = 60
 static const long long CLOSE_QUIET_MS = 3000, DECIDE_WAIT_MS = TURN_DECIDE_WAIT_MS, NOSUM_WAIT_MS = TURN_NOSUM_WAIT_MS, BEHIND_WAIT_MS = 60000, BAR_RECHECK_MS = 5000;
 static const int COVER_MIN_PCT = 95;   // the candle's fills read must be >= this % of the chart's bar volume to decide live
 
+// (1.0.1) the window under the screen cursor: tells "the mouse is still over this pane" from "it left" (IRT sends no leave event)
+#if defined(TURN_TEST_WINDOW)
+}  // namespace trh
+extern void* turn_test_window;                                       // the host test's stand-in for WindowFromPoint
+namespace trh {
+inline void* cursorWindow(int, int) { return turn_test_window; }
+#elif defined(_WIN32)
+inline void* cursorWindow(int sx, int sy) { POINT p; p.x = sx; p.y = sy; return (void*)WindowFromPoint(p); }
+#else
+inline void* cursorWindow(int, int) { return nullptr; }
+#endif
 inline long long steadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 inline short coord(long long v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 
@@ -287,6 +314,9 @@ struct State {
     long long candMark = 0;                                           // candles at a level: closed bars up to here are decided (bars closed before the load never are)
     long long capSeen = 0, lowCover = 0, wrongContract = 0, lastCoverPct = -1; bool dirMade = false;
     long long statusMs = -100000; std::string lastStatus, lastRead; long long draws = 0, calcs = 0, lastClosedKey = 0, decidedLive = 0, candsLive = 0;
+    // (1.0.1) the mouse: the chart bar it is on while it is inside this pane (-1 = not in the pane), where it is, the axis row of the last draw
+    pc::Tracker cur; int hov = -1, hovY = 0, axisY = 0; long long mouseMoves = 0;
+    int stripKind = 0, labMode = 0, labOffered = 0, labDrawn = 0;      // what the last draw showed (the status file): strip 0 none / 1 a sweep / 2 a level candle
 };
 
 }  // namespace trh
@@ -314,13 +344,31 @@ public:
     }
     virtual int draw(void) {
         LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
-        pump();
+        pump(true);
         State* S = slot_.get(this, false); if (!S) return RTX_OK;
         if (S->busy) return RTX_OK;                                    // never draw inside a re-entered pump
         try { render(*S); ++S->draws; } catch (...) { S->note = "draw error"; }
         return RTX_OK;
     }
-    void calcHook() { pump(); }
+    void calcHook() { pump(false); }
+    // (1.0.1) the mouse: IRT sends move events only while the cursor is over this pane (TRACK_MOUSE: also when the indicator is not
+    // selected). The event names the chart bar it points at; where the pane sits on the screen is remembered so the pump can tell when
+    // the cursor has left (no event comes then) - the strip then goes back to the newest sweep. The event is never swallowed.
+    virtual int mouse(RTX_EVENT* ev) {
+        if (!ev || (ev->type != E_MOUSE_MOVE && ev->type != E_MOUSE_HOVER)) return RTX_FAIL;
+        State* S = slot_.get(this, false); if (!S || S->busy) return RTX_FAIL;
+        try {
+            int sx = 0, sy = 0; const bool ok = pc::cursorPos(sx, sy);
+            const int h = (int)ev->v.mouse.h, v = (int)ev->v.mouse.v;
+            S->cur.onEvent(ok ? cursorWindow(sx, sy) : nullptr, ok, sx, sy, h, v);
+            const long n = getBarCount(); const long b = (long)ev->v.mouse.bar;
+            const int hov = (ok && b >= 0 && b < n && S->cur.eventInside(h, v)) ? (int)b : -1;
+            const bool sideFlip = hov >= 0 && (v < S->axisY) != (S->hovY < S->axisY);   // a candle at a high AND a low level: which side the mouse is on
+            S->hovY = v;
+            if (hov != S->hov || sideFlip) { S->hov = hov; ++S->mouseMoves; invalidateChart(false); }
+        } catch (...) {}
+        return RTX_FAIL;
+    }
     void release() { State* S = slot_.get(this, false); if (S) { stopTimer(*S); persistStatus(*S, steadyMs(), true); } slot_.release(this); }
 private:
     HostSlot<State> slot_;
@@ -365,11 +413,19 @@ private:
         S.rec = turn::Rec(); S.recLoaded = false; S.recDirty = false; S.recSig = -2;
         S.closedSeen.clear(); S.barSeen.clear(); S.recheck.clear(); S.noLive.clear(); S.candMark = 0; S.capSeen = 0; S.fileCheckMs = -100000;
         S.lastStatus.clear(); S.statusMs = -100000;
+        S.hov = -1; S.cur = pc::Tracker();                              // (1.0.1) the bar numbers are another chart's now
     }
-    void pump() {
+    // (1.0.1) the cursor is no longer over this pane: back to the newest sweep (from calc: redraw; from draw: the draw that follows shows it)
+    void mouseLeft(State& S, bool fromDraw) {
+        if (S.hov < 0) return;
+        int sx = 0, sy = 0; const bool ok = pc::cursorPos(sx, sy);
+        if (!S.cur.inside(ok ? cursorWindow(sx, sy) : nullptr, ok, sx, sy)) { S.hov = -1; if (!fromDraw) invalidateChart(false); }
+    }
+    void pump(bool fromDraw) {
         State* P = slot_.get(this, true);
         if (!P || P->busy) return;
         State& S = *P; S.busy = true; struct Unbusy { State* s; ~Unbusy() { s->busy = false; } } ub = { P };
+        try { mouseLeft(S, fromDraw); } catch (...) {}
         try {
             identify(S); ++S.calcs;
             const long long now = steadyMs();
@@ -566,15 +622,17 @@ private:
     static COLOR toneColor(int tone, int dir, bool forFill) {
         return tone == turn::T_DIR ? (dir < 0 ? C_RED : C_GREEN) : tone == turn::T_AMBER ? C_AMBER : tone == turn::T_TEXT ? C_TEXT : (forFill ? C_AXIS : C_MUTED);
     }
-    std::string prefixOf(const turn::Read& r, long long lastKey) {
+    std::string prefixOf(const turn::Read& r, long long lastKey) { return prefixText(r.lv, r.stamp, r.src == 'N', lastKey); }
+    // "<level> <time>" (the date too when the candle is not of the last candle's day); (1.0.1) also for a candle at a named level
+    std::string prefixText(const std::string& lv, long long stamp, bool nightly, long long lastKey) {
         struct tm a, b; std::memset(&a, 0, sizeof a); std::memset(&b, 0, sizeof b);
-        std::string p = r.lv;
-        if (r.stamp > 0 && getLocaltime((RTDATE)r.stamp, &a)) {
+        std::string p = lv;
+        if (stamp > 0 && getLocaltime((RTDATE)stamp, &a)) {
             std::string d;
             if (lastKey > 0 && getLocaltime((RTDATE)lastKey, &b) && (a.tm_mday != b.tm_mday || a.tm_mon != b.tm_mon)) { char x[16]; std::snprintf(x, sizeof x, "%d-%02d ", (a.tm_mon + 1) % 100, a.tm_mday % 100); d = x; }
-            const std::string c = turn::clockText(a.tm_hour, a.tm_min); if (!c.empty()) p += " " + d + c;
+            const std::string c = turn::clockText(a.tm_hour, a.tm_min); if (!c.empty()) p += (p.empty() ? "" : " ") + d + c;
         }
-        if (r.src == 'N') p += " (nightly)";
+        if (nightly) p += " (nightly)";
         return p;
     }
     // a strip piece: its width with the spaces at its ends counted as fixed gaps (never left to how the host measures a trailing space);
@@ -591,71 +649,133 @@ private:
         for (const turn::Seg& g : st.segs) { setFont(g.bold ? fb : f); w += segWidth(g.text, core, lead); }
         return w;
     }
-    // one side of one candle: the pushing side's bars (Stop Run left, Effort right) and, on a sweep candle, the turn's bars on the other side
-    void drawSide(int x, int dir, const turn::BarSet& bs, int axis, int half, int bw, bool labels) {
+    // one side of one candle: the pushing side's bars (Stop Run left, Effort right) and, on a sweep candle, the turn's bars on the other side.
+    // (1.0.1) wide = room for two ratio labels side by side: every bar is labelled, as in 1.0.0. Else, with offer: each half of the candle
+    // (the bars going up, the bars going down) offers ONE label - its taller bar's ratio, centred on the candle - and turn::pickLabels
+    // decides which are drawn. Returns the labels it drew itself (wide).
+    struct LabText { std::string text; COLOR c; };
+    int drawSide(int owner, int x, int dir, const turn::BarSet& bs, int axis, int half, int bw, bool wide, bool offer, int padL, int padR,
+                 std::vector<turn::BarBox>& boxes, std::vector<turn::LabCand>& cands, std::vector<LabText>& texts) {
         const int gap = bw >= 12 ? 2 : bw >= 6 ? 1 : 0, w = std::max(1, std::min((bw - gap - 2) / 2, 20));
         const int xl = x - gap / 2 - w, xr = x + (gap - gap / 2);
         const bool pushUp = dir < 0;                                    // a swept high: the buyers' bars go up, the turn's bars down
         struct One { const turn::Bar1* b; int left; bool up; COLOR c; };
         const One all[4] = { { &bs.stop, xl, pushUp, pushUp ? C_LGREEN : C_LRED }, { &bs.eff, xr, pushUp, pushUp ? C_GREEN : C_RED },
                              { &bs.exh, xl, !pushUp, pushUp ? C_LRED : C_LGREEN }, { &bs.ans, xr, !pushUp, pushUp ? C_RED : C_GREEN } };
+        int drawn = 0, bestH[2] = { 0, 0 }; const One* best[2] = { nullptr, nullptr };   // [0] the bars going up, [1] the bars going down
         for (const One& o : all) {
             if (!o.b->show) continue;
             const int h = turn::barPx(o.b->v, half); if (h <= 0) continue;
             const COLOR c = o.b->on ? o.c : C_AXIS;
             if (o.up) fill(o.left, axis - h, o.left + w, axis, c); else fill(o.left, axis + 1, o.left + w, axis + 1 + h, c);
-            if (!labels || o.b->label.empty()) continue;
-            const int lw = (int)getTextWidth(o.b->label.c_str(), -1) + 2; int l = o.left + w / 2 - lw / 2;
-            if (o.left < x) { if (l + lw > x - 1) l = x - 1 - lw; } else if (l < x + 1) l = x + 1;   // the two labels of a candle never touch
-            if (o.up) text(o.b->label, l, axis - h - 13, l + lw, axis - h - 1, c, true); else text(o.b->label, l, axis + 1 + h + 1, l + lw, axis + 1 + h + 13, c, true);
+            turn::BarBox bb; bb.owner = owner; bb.box.l = o.left; bb.box.r = o.left + w; bb.box.t = o.up ? axis - h : axis + 1; bb.box.b = o.up ? axis : axis + 1 + h; boxes.push_back(bb);
+            if (o.b->label.empty()) continue;
+            if (wide) {
+                const int lw = (int)getTextWidth(o.b->label.c_str(), -1) + 2; int l = o.left + w / 2 - lw / 2;
+                if (o.left < x) { if (l + lw > x - 1) l = x - 1 - lw; } else if (l < x + 1) l = x + 1;   // the two labels of a candle never touch
+                if (o.up) text(o.b->label, l, axis - h - 12, l + lw, axis - h - 1, c, true); else text(o.b->label, l, axis + 1 + h + 1, l + lw, axis + 1 + h + 12, c, true);
+                ++drawn; continue;
+            }
+            if (!offer) continue;
+            const int k = o.up ? 0 : 1;                                 // the left bar of a half comes first: equal heights keep it (turn::tallerOf)
+            if (!best[k] || turn::tallerOf(bestH[k], h) == 1) { best[k] = &o; bestH[k] = h; }
         }
+        for (int k = 0; k < 2; ++k) {
+            if (!best[k]) continue;
+            const std::string& t = best[k]->b->label; const int lw = (int)getTextWidth(t.c_str(), -1) + 2;
+            int l = x - lw / 2; if (l + lw > padR) l = padR - lw; if (l < padL) l = padL;
+            turn::LabCand lc; lc.owner = owner; lc.h = bestH[k]; lc.box.l = l; lc.box.r = l + lw;
+            if (k == 0) { lc.box.t = axis - bestH[k] - 12; lc.box.b = axis - bestH[k] - 1; } else { lc.box.t = axis + 1 + bestH[k] + 1; lc.box.b = axis + 1 + bestH[k] + 12; }
+            cands.push_back(lc); LabText lt; lt.text = t; lt.c = best[k]->b->on ? best[k]->c : C_AXIS; texts.push_back(lt);
+        }
+        return drawn;
     }
     void render(State& S) {
         RCT pane; pane.getPaneRect(false);
-        const int L = pane.left, R = pane.right, T = pane.top, B = pane.bottom; if (B - T < 40 || R - L < 40) return;
+        const int L = pane.left, R = pane.right, T = pane.top, B = pane.bottom;
+        S.cur.pane.l = L; S.cur.pane.t = T; S.cur.pane.r = R; S.cur.pane.b = B;   // (1.0.1) where the pane is: is the mouse inside, has it left
+        S.stripKind = 0; S.labMode = 0; S.labOffered = 0; S.labDrawn = 0;
+        if (B - T < 40 || R - L < 40) return;
         FONT f10; f10.id = HELVETICA; f10.size = 10; f10.style = PLAIN; FONT f10b = f10; f10b.style = BOLD;
-        // nothing to read: say why in one grey line (the wrong kind of chart, or lsRevRead's sweep file is missing), never an empty pane
+        FONT f9b = f10b; f9b.size = 9;                                   // (1.0.1) the ratios on the bars
+        // nothing to read: say why in one grey line (the wrong kind of chart, or lsRevRead's sweep file is missing), never an empty pane.
+        // (1.0.1) on the pane's top row, and only when no strip is drawn there
         const std::string why = !S.note.empty() ? S.note : (S.sweeps.empty() && S.wyWhy != "ok") ? S.wyWhy : std::string();
-        if (!why.empty() && R - L >= 260) { setFont(f10); text("Turn: " + why, L + 8, T + 18, R - 8, T + 33, C_MUTED, false); }
-        if (!S.note.empty()) return;
-        const long count = getBarCount(); if (count < 2) return;
-        RTARRAYI times(barDateTime); if (times.count < count) return;
-        int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) return; v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1); if (v1 < v0) return;
+        const bool whyRoom = !why.empty() && R - L >= 260;
+        const auto sayWhy = [&]() { if (whyRoom) { setFont(f10); text("Turn: " + why, L + 8, T + 4, R - 8, T + 19, C_MUTED, false); } };
+        if (!S.note.empty()) { sayWhy(); return; }
+        const long count = getBarCount(); if (count < 2) { sayWhy(); return; }
+        RTARRAYI times(barDateTime); if (times.count < count) { sayWhy(); return; }
+        int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) { sayWhy(); return; } v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1); if (v1 < v0) { sayWhy(); return; }
         const int bw = std::max(1, (int)getPixelsPerBar());
         int xLast = R; { PNT p; p.set(v1, 0.0f, kBarCenter); xLast = std::min(R - 2, (int)p.h + bw / 2 + 2); }
-        setFont(f10b);
-        const bool labels = bw >= 2 * ((int)getTextWidth("9.9x", -1) + 2) + 6;   // room for two ratio labels side by side on one candle
-        // the strip (row below IRT's title row): the newest sweep at or before the last candle in view
-        const int sTop = T + 16, sBot = sTop + 18; int areaTop = T + 16;
-        const long long lastKey = std::min((long long)times[v1], S.lastClosedKey);
-        const turn::Sw* sw = nullptr; for (size_t k = S.sweeps.size(); k-- > 0;) if (S.sweeps[k].stamp <= lastKey) { sw = &S.sweeps[k]; break; }
-        if (sw && xLast - L >= 220 && B - T >= 90) {
-            const turn::Read rd = readFor(S, *sw);
-            const int l = L + 4, r = xLast;
-            turn::Strip st = turn::stripOf(rd, S.P.bestProven, !labels, prefixOf(rd, (long long)times[v1]));
+        setFont(f9b);
+        const bool wide = bw >= 2 * ((int)getTextWidth("9.9", -1) + 2) + 6;   // room for two ratio labels side by side on one candle
+        // the strip, (1.0.1) on the pane's top edge: the candle under the mouse while the mouse is in this pane, else the newest sweep at or
+        // before the last candle in view. A sweep candle: its read. A candle at a named level: what is drawn on it. No bars on the candle:
+        // the same strip as with no mouse (the strip never comes and goes while the mouse moves, so the bars never jump).
+        const int sTop = T + 2, sBot = sTop + 18; int areaTop = T + 2;
+        const long long viewKey = (long long)times[v1];
+        const long long atKey = std::min(viewKey, S.lastClosedKey);
+        int kind = 0; turn::Read rd; long long cStop = -1, cEff = -1; std::string cPrefix;
+        const int hv = (S.hov >= v0 && S.hov <= v1) ? S.hov : -1;
+        if (hv >= 0) {
+            const long long key = (long long)times[hv];
+            const std::map<long long, size_t>::const_iterator si = S.swAt.find(key);
+            const std::map<long long, turn::Cand>::const_iterator ci = S.rec.cands.find(key);
+            const bool isSw = si != S.swAt.end() && si->second < S.sweeps.size() && key <= S.lastClosedKey;
+            if (isSw) { rd = readFor(S, S.sweeps[si->second]); if (rd.src != '-' || ci == S.rec.cands.end()) kind = 1; }   // the same choice as the bars below
+            if (!kind && ci != S.rec.cands.end()) {
+                const turn::Cand& c = ci->second; const int side = turn::candSide(c, S.hovY < S.axisY);
+                if (side) {
+                    cStop = side < 0 ? c.hiX1000 : c.loX1000;
+                    const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
+                    if (bi != S.bars.end() && (side < 0 ? bi->second.b.topOk : bi->second.b.botOk)) cEff = turn::x1000(side < 0 ? bi->second.b.top : bi->second.b.bot);
+                    cPrefix = prefixText(turn::levelNameAt(S.levels, side < 0 ? c.hiL : c.loL), key, false, viewKey);
+                    kind = 2;
+                }
+            }
+        }
+        if (!kind) {
+            const turn::Sw* sw = nullptr; for (size_t k = S.sweeps.size(); k-- > 0;) if (S.sweeps[k].stamp <= atKey) { sw = &S.sweeps[k]; break; }
+            if (sw) { rd = readFor(S, *sw); kind = 1; }
+        }
+        bool stripDrawn = false;
+        if (kind && xLast - L >= 220 && B - T >= 90) {
+            const int l = L + 4, r = xLast, dir = kind == 1 ? rd.dir : 0;
+            const std::string px = kind == 1 ? prefixOf(rd, viewKey) : cPrefix;
+            const auto make = [&](bool numbers, bool withPrefix) {
+                return kind == 1 ? turn::stripOf(rd, S.P.bestProven, numbers, withPrefix ? px : std::string()) : turn::stripOfCand(cStop, cEff, numbers, withPrefix ? px : std::string()); };
+            turn::Strip st = make(!wide, true);                           // the ratios in words where not every bar carries its own
             setFont(f10b); const int pw = (int)getTextWidth(st.pill.c_str(), -1) + 14;
             const int tx0 = l + 10, avail = r - pw - 14 - tx0;
-            if (stripWidth(st, f10, f10b) > avail) st = turn::stripOf(rd, S.P.bestProven, false, prefixOf(rd, (long long)times[v1]));   // too long: without the numbers,
-            if (stripWidth(st, f10, f10b) > avail) st = turn::stripOf(rd, S.P.bestProven, false, std::string());                       // then without the level and time,
+            if (stripWidth(st, f10, f10b) > avail) st = make(false, true);    // too long: without the numbers,
+            if (stripWidth(st, f10, f10b) > avail) st = make(false, false);   // then without the level and time,
             size_t first = 0; if (stripWidth(st, f10, f10b) > avail && !st.segs.empty()) first = st.segs.size() - 1;                 // then the verdict alone
             fill(l, sTop, r, sBot, C_STRIP);
-            fill(l, sTop, l + 4, sBot, toneColor(st.edgeTone, rd.dir, true));
+            fill(l, sTop, l + 4, sBot, toneColor(st.edgeTone, dir, true));
             setFont(f10b);
-            fill(r - pw - 4, sTop + 2, r - 4, sBot - 2, toneColor(st.pillTone, rd.dir, true)); text(st.pill, r - pw - 4, sTop + 2, r - 4, sBot - 2, C_BLACK, true);
+            fill(r - pw - 4, sTop + 2, r - 4, sBot - 2, toneColor(st.pillTone, dir, true)); text(st.pill, r - pw - 4, sTop + 2, r - 4, sBot - 2, C_BLACK, true);
             int tx = tx0;
             for (size_t k = first; k < st.segs.size(); ++k) {
                 const turn::Seg& g = st.segs[k]; setFont(g.bold ? f10b : f10);
                 std::string core; int lead = 0; const int w = segWidth(g.text, core, lead); if (tx + w > r - pw - 8) break;
-                if (!core.empty()) text(core, tx + lead, sTop + 2, tx + lead + (int)getTextWidth(core.c_str(), -1), sBot - 1, toneColor(g.tone, rd.dir, false), false);
+                if (!core.empty()) text(core, tx + lead, sTop + 2, tx + lead + (int)getTextWidth(core.c_str(), -1), sBot - 1, toneColor(g.tone, dir, false), false);
                 tx += w;
             }
-            areaTop = sBot + 2;
+            areaTop = sBot + 2; stripDrawn = true; S.stripKind = kind;
         }
-        // the bars: one middle axis; a swept high's push goes up and its turn down, a swept low's the other way
-        const int top = areaTop + (labels ? 13 : 2), bot = B - (labels ? 13 : 2); if (bot - top < 20) return;
+        if (!stripDrawn && whyRoom) { sayWhy(); areaTop = T + 21; }
+        // the bars: one middle axis; a swept high's push goes up and its turn down, a swept low's the other way. (1.0.1) a row for the
+        // ratios above and below at every zoom; a pane too low for that keeps the bars alone
+        bool lab = true; int top = areaTop + 13, bot = B - 13;
+        if (bot - top < 40) { lab = false; top = areaTop + 2; bot = B - 2; }
+        if (bot - top < 20) return;
         const int axis = (top + bot) / 2, half = std::max(4, (bot - top) / 2 - 1);
+        S.axisY = axis;
         fill(L, axis, xLast, axis + 1, C_AXIS);
-        setFont(f10b);
+        setFont(f9b);
+        std::vector<turn::BarBox> boxes; std::vector<turn::LabCand> cands; std::vector<LabText> texts; int owner = 0, wideDrawn = 0;
         for (int i = v0; i <= v1; ++i) {
             const long long key = (long long)times[i];
             const std::map<long long, size_t>::const_iterator si = S.swAt.find(key);
@@ -665,13 +785,18 @@ private:
             PNT p; p.set(i, 0.0f, kBarCenter); const int x = p.h; if (x < L || x > R) continue;
             const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
             if (isSw) {
-                const turn::Sw& w = S.sweeps[si->second]; const turn::Read rd = readFor(S, w);
-                if (rd.src != '-' || ci == S.rec.cands.end()) { drawSide(x, w.dir, turn::barsOf(rd), axis, half, bw, labels); continue; }
+                const turn::Sw& w = S.sweeps[si->second]; const turn::Read sr = readFor(S, w);
+                if (sr.src != '-' || ci == S.rec.cands.end()) { wideDrawn += drawSide(owner++, x, w.dir, turn::barsOf(sr), axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); continue; }
             }
             const turn::Cand& c = ci->second;                           // a candle at a named level: Stop Run + Effort of the side(s) it traded at
-            if (c.hiL) { turn::BarSet bs; bs.stop = turn::ratioBar(c.hiX1000, 50); if (bi != S.bars.end() && bi->second.b.topOk) bs.eff = turn::ratioBar(turn::x1000(bi->second.b.top), 0); drawSide(x, -1, bs, axis, half, bw, labels); }
-            if (c.loL) { turn::BarSet bs; bs.stop = turn::ratioBar(c.loX1000, 50); if (bi != S.bars.end() && bi->second.b.botOk) bs.eff = turn::ratioBar(turn::x1000(bi->second.b.bot), 0); drawSide(x, 1, bs, axis, half, bw, labels); }
+            if (c.hiL) { turn::BarSet bs; bs.stop = turn::ratioBar(c.hiX1000, 50); if (bi != S.bars.end() && bi->second.b.topOk) bs.eff = turn::ratioBar(turn::x1000(bi->second.b.top), 0);
+                         wideDrawn += drawSide(owner++, x, -1, bs, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); }
+            if (c.loL) { turn::BarSet bs; bs.stop = turn::ratioBar(c.loX1000, 50); if (bi != S.bars.end() && bi->second.b.botOk) bs.eff = turn::ratioBar(turn::x1000(bi->second.b.bot), 0);
+                         wideDrawn += drawSide(owner++, x, 1, bs, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); }
         }
+        const std::vector<size_t> keep = turn::pickLabels(cands, boxes);
+        for (size_t q = 0; q < keep.size(); ++q) { const size_t k = keep[q]; text(texts[k].text, cands[k].box.l, cands[k].box.t, cands[k].box.r, cands[k].box.b, texts[k].c, true); }
+        S.labMode = !lab ? 0 : wide ? 2 : 1; S.labOffered = wide ? wideDrawn : (int)cands.size(); S.labDrawn = wide ? wideDrawn : (int)keep.size();
     }
     // ---- status: lsFlexLevels\TurnPane\status-<MKT>-<spb>.txt, on change or every 30 s ----
     void persistStatus(State& S, long long now, bool force) {
@@ -692,6 +817,9 @@ private:
         o << "RECORD|reads " << S.rec.reads.size() << "|level candles " << S.rec.cands.size() << "|writes " << S.recWrites << "|fails " << S.recFails << "|decided live " << S.decidedLive << "|candles live " << S.candsLive << "\n";
         o << "BARS|" << S.bars.size() << "|vap missing " << S.vapMissing << (S.vapFault ? "|VAP FAULT" : "") << "\n";
         if (!S.lastRead.empty()) o << "LAST|T|" << S.lastRead << "\n";
+        o << "DISPLAY|" << TURN_VERSION << "|strip on the pane top: " << (S.stripKind == 1 ? "a sweep" : S.stripKind == 2 ? "a candle at a level" : "none")
+          << "|ratios " << (S.labMode == 2 ? "on every bar (wide candles)" : S.labMode == 1 ? "one per candle side" : "none") << " " << S.labDrawn << " of " << S.labOffered
+          << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "\n";
         const std::string t = o.str();
         S.statusMs = now;
         if (t == S.lastStatus && !force) return;
@@ -709,9 +837,9 @@ int cppExtension::calc(int)     { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); try { sta
 extern "C" cppExtension* CreateExtension(void) {
     TurnPane* p = new TurnPane();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);                 // its own pane, draws itself, IRT's volume at price
+    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Turn v1.0 - the process of a turn at a swept key level (lsRevRead Sw). Two columns per candle at a named level: Stop Run and Effort of the pushing side; on the sweep candle also Exhaustion and the Answer of the other side. Strip: the read (STAND ASIDE / WAIT / BEST ODDS ? / UNCLEAR) and the measured odds.");
-    p->setVersion("1.0.0");
+    p->setDescription("LRA Turn v1.0 - the process of a turn at a swept key level (lsRevRead Sw). Two columns per candle at a named level: Stop Run and Effort of the pushing side; on the sweep candle also Exhaustion and the Answer of the other side. Strip: the read (STAND ASIDE / WAIT / BEST ODDS ? / UNCLEAR) and the measured odds, for the candle under the mouse or the newest sweep.");
+    p->setVersion("1.0.1");
     return p;
 }

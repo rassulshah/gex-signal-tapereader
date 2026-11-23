@@ -1,8 +1,9 @@
-// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.0.0). g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror
+// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.0.1; 1.0.1: labelText, stripOfCand, levelNameAt, candSide, pickLabels). g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror
 #include "../TurnLogic.h"
 #include <cassert>
 #include <cstdio>
 #include <iostream>
+#include <random>
 static int fails = 0, checks = 0;
 #define CHECK(c) do { ++checks; if (!(c)) { ++fails; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
 static bool near(double a, double b, double e = 1e-9) { return std::fabs(a - b) <= e; }
@@ -310,9 +311,9 @@ static void record() {
 static void drawing() {
     Read a; CHECK(readParse(split(sampleRead(3878010180LL, 'L'), ','), 0, a));
     const BarSet bs = barsOf(a);
-    CHECK(bs.stop.show && bs.stop.on && bs.stop.label == "5.2x" && near(bs.stop.v, 5.209));
-    CHECK(bs.eff.show && bs.eff.on && bs.eff.label == "1.8x");
-    CHECK(bs.exh.show && bs.exh.on && bs.exh.label == "1.1x" && near(bs.exh.v, (1 - 0.4667) / 0.5));
+    CHECK(bs.stop.show && bs.stop.on && bs.stop.label == "5.2" && near(bs.stop.v, 5.209));
+    CHECK(bs.eff.show && bs.eff.on && bs.eff.label == "1.8");
+    CHECK(bs.exh.show && bs.exh.on && bs.exh.label == "1.1" && near(bs.exh.v, (1 - 0.4667) / 0.5));
     CHECK(bs.ans.show && bs.ans.on && bs.ans.label == "2/3" && near(bs.ans.v, 2.0));
     Strip s = stripOf(a, false, false, "ONH 9:03 AM");
     CHECK(s.flat == "ONH 9:03 AM   Heavy Stop Run / Heavy Effort / Moderate Exhaustion / Moderate Answer   \xBB BEST ODDS ?");
@@ -336,8 +337,79 @@ static void drawing() {
     Read t = a; t.stopX1000 = 49; t.ansOk = 0; const BarSet bt = barsOf(t); CHECK(!bt.stop.show && !bt.ans.show); CHECK(stripOf(t, false, false, "").flat.find("\x96 Answer") != std::string::npos);
     CHECK(ratioBar(-1, 0).show == false && ratioBar(0, 0).show && !ratioBar(0, 0).on && ratioBar(500, 0).on);
 }
+// (1.0.1) the ratio on a bar, the strip of a candle at a named level, and which labels narrow candles keep
+static void mouseAndLabels() {
+    CHECK(std::string(VERSION) == "1.0.1");
+    // the ratio ON a bar: no x, one decimal under 10, none from 10 up, 99+ cap; the strip's ratioText is unchanged
+    CHECK(labelText(0) == "0.0" && labelText(0.522) == "0.5" && labelText(2.435) == "2.4" && labelText(2.87) == "2.9" && labelText(9.94) == "9.9" && labelText(9.95) == "10" && labelText(13.652) == "14");
+    CHECK(labelText(99.4) == "99" && labelText(99.5) == "99+" && labelText(1e9) == "99+" && labelText(-1).empty() && labelText(std::nan("")).empty() && labelText(1.0 / 0.0).empty());
+    CHECK(ratioText(2.87) == "2.9x" && ratioText(13.652) == "13.7x");
+    for (double v = 0; v < 120; v += 0.013) { const std::string t = labelText(v); CHECK(!t.empty() && t.size() <= 3 && t.find('x') == std::string::npos); }   // never wider than three characters
+    // the level's name
+    std::vector<Level> lv; { Level a; a.tick = 8328; a.name = "VAH"; a.hi = true; lv.push_back(a); Level b; b.tick = 8359; b.name = "PDH"; b.hi = true; lv.push_back(b); Level c; c.tick = 8078; c.name = "PFL/PWL"; c.lo = true; lv.push_back(c); }
+    CHECK(levelNameAt(lv, 8328) == "VAH" && levelNameAt(lv, 8359) == "PDH" && levelNameAt(lv, 8078) == "PFL/PWL" && levelNameAt(lv, 8329).empty() && levelNameAt(lv, 0).empty() && levelNameAt(lv, -5).empty() && levelNameAt(std::vector<Level>(), 8328).empty());
+    // which side of the candle: the one it has; both: the side the mouse is on
+    { Cand h; h.hiL = 8328; Cand l; l.loL = 8078; Cand b; b.hiL = 8328; b.loL = 8078; Cand n;
+      CHECK(candSide(h, true) == -1 && candSide(h, false) == -1 && candSide(l, true) == 1 && candSide(l, false) == 1 && candSide(b, true) == -1 && candSide(b, false) == 1 && candSide(n, true) == 0 && candSide(n, false) == 0); }
+    // the strip of a candle at a level: his CL chart 2026-11-22 (VAH / PDH, the record's Stop Run and the Effort read off his screenshot)
+    { const Strip a = stripOfCand(2435, 160, true, "VAH 9:36 PM"); CHECK(a.flat == "VAH 9:36 PM   Moderate Stop Run 2.4x / No Effort 0.2x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
+      CHECK(a.segs.size() == 4 && a.segs[0].tone == T_MUTED && !a.segs[0].bold && a.segs[1].tone == T_TEXT && a.segs[1].bold && a.segs[2].tone == T_MUTED && a.segs[3].tone == T_MUTED && a.segs[3].bold);   // what reads No is grey
+      CHECK(stripOfCand(13652, 440, true, "VAH 9:57 PM").flat == "VAH 9:57 PM   Heavy Stop Run 13.7x / No Effort 0.4x");
+      CHECK(stripOfCand(2870, 2780, true, "VAH 10:00 PM").flat == "VAH 10:00 PM   Moderate Stop Run 2.9x / Heavy Effort 2.8x");
+      CHECK(stripOfCand(522, 1640, true, "PDH 10:12 PM").flat == "PDH 10:12 PM   Light Stop Run 0.5x / Heavy Effort 1.6x");
+      CHECK(stripOfCand(522, 1640, false, "PDH 10:12 PM").flat == "PDH 10:12 PM   Light Stop Run / Heavy Effort");                 // wide candles: the bars carry the numbers
+      CHECK(stripOfCand(522, 1640, false, "").flat == "Light Stop Run / Heavy Effort" && stripOfCand(522, 1640, false, "").segs.size() == 3);
+      CHECK(stripOfCand(-1, -1, true, "PDL 9:00 AM").flat == "PDL 9:00 AM   \x96 Stop Run / \x96 Effort");                       // not known: a dash, never a number
+      CHECK(stripOfCand(0, 0, true, "").flat == "No Stop Run 0.0x / No Effort 0.0x");
+      for (const Strip& q : { stripOfCand(2435, 160, true, "VAH"), stripOfCand(-1, 900, false, "") }) { CHECK(q.flat.find("Exhaustion") == std::string::npos && q.flat.find("Answer") == std::string::npos && q.flat.find("\xBB") == std::string::npos);
+          std::string f; for (const Seg& g : q.segs) { CHECK(g.tone == T_TEXT || g.tone == T_MUTED); f += g.text; } CHECK(f == q.flat); } }   // never a turn colour, never a verdict
+    // which bar of a candle side carries the label
+    CHECK(tallerOf(10, 11) == 1 && tallerOf(11, 10) == 0 && tallerOf(10, 10) == 0 && tallerOf(0, 0) == 0);
+    // labels: boxes are [l, r) x [t, b)
+    { LabBox a; a.l = 0; a.r = 10; a.t = 0; a.b = 10; LabBox b = a; b.l = 10; b.r = 20; CHECK(!boxesTouch(a, b, 0) && boxesTouch(a, b, 1) && boxesTouch(b, a, 1)); b.l = 9; CHECK(boxesTouch(a, b, 0));
+      LabBox c = a; c.t = 10; c.b = 20; CHECK(!boxesTouch(a, c, 0) && !boxesTouch(a, c, 5)); }
+    const auto bar = [](int x, int w, int h, int axis, int owner) { BarBox b; b.owner = owner; b.box.l = x; b.box.r = x + w; b.box.t = axis - h; b.box.b = axis; return b; };
+    const auto lab = [](int cx, int lw, int h, int axis, int owner) { LabCand c; c.owner = owner; c.h = h; c.box.l = cx - lw / 2; c.box.r = c.box.l + lw; c.box.t = axis - h - 12; c.box.b = axis - h - 1; return c; };
+    // his CL chart at 22 px a candle, axis 87, half 51: bars 9 px wide left / right of the centre. Labels of 9 pt without the x are 18 px:
+    // each stays inside its own candle, all four are kept (the mockup after "get rid of the x and make it smaller")
+    { const int ax = 87; std::vector<BarBox> bars; std::vector<LabCand> c; const int X[4] = { 121, 275, 297, 385 }, HS[4] = { 41, 51, 49, 9 }, HE[4] = { 3, 7, 47, 28 };
+      for (int i = 0; i < 4; ++i) { bars.push_back(bar(X[i] - 10, 9, HS[i], ax, i)); bars.push_back(bar(X[i] + 1, 9, HE[i], ax, i)); c.push_back(lab(X[i], 18, tallerOf(HS[i], HE[i]) ? HE[i] : HS[i], ax, i)); }
+      const std::vector<size_t> k = pickLabels(c, bars); CHECK(k.size() == 4 && k[0] == 0 && k[1] == 1 && k[2] == 2 && k[3] == 3);
+      // with the 10 pt "13.7x" / "2.9x" labels of the first mockup (33 / 26 px) the two neighbours collide: the taller bar (9:57) keeps its label
+      std::vector<LabCand> w; const int LW[4] = { 26, 33, 26, 26 }; for (int i = 0; i < 4; ++i) w.push_back(lab(X[i], LW[i], tallerOf(HS[i], HE[i]) ? HE[i] : HS[i], ax, i));
+      const std::vector<size_t> kw = pickLabels(w, bars); CHECK(kw.size() == 3 && kw[0] == 0 && kw[1] == 1 && kw[2] == 3); }
+    // a label is never drawn over a bar of ANOTHER candle: the short candle next to a tall one loses its label, the tall one keeps it
+    { const int ax = 100; std::vector<BarBox> bars; bars.push_back(bar(40, 9, 60, ax, 0)); bars.push_back(bar(62, 9, 20, ax, 1));
+      std::vector<LabCand> c; c.push_back(lab(45, 18, 60, ax, 0)); c.push_back(lab(55, 30, 20, ax, 1));       // candle 1's label box reaches under candle 0's bar top
+      const std::vector<size_t> k = pickLabels(c, bars); CHECK(k.size() == 1 && k[0] == 0);
+      std::vector<LabCand> own; own.push_back(lab(45, 18, 30, ax, 0)); CHECK(pickLabels(own, bars).size() == 1);   // its own bars never block it (here: a label inside its own taller bar's column)
+      std::vector<LabCand> other = own; other[0].owner = 7; CHECK(pickLabels(other, bars).empty()); }
+    // equal heights: the newer candle is asked first; an empty box is never kept; no candidates, no labels
+    { const int ax = 100; std::vector<BarBox> none; std::vector<LabCand> c; c.push_back(lab(50, 30, 40, ax, 0)); c.push_back(lab(60, 30, 40, ax, 1));
+      const std::vector<size_t> k = pickLabels(c, none); CHECK(k.size() == 1 && k[0] == 1);
+      LabCand e = lab(200, 0, 40, ax, 2); c.push_back(e); CHECK(pickLabels(c, none).size() == 1); CHECK(pickLabels(std::vector<LabCand>(), none).empty()); }
+    // property (20,000 random panes): kept labels touch no kept label and no foreign bar; every label left out touches a kept TALLER-or-equal
+    // label or a foreign bar (nothing is dropped without a reason); the answer does not depend on the order the candidates come in
+    std::mt19937 rng(20261122);
+    for (int rep = 0; rep < 20000; ++rep) {
+        const int ax = 150, n = 1 + (int)(rng() % 12), bw = 3 + (int)(rng() % 40), w = std::max(1, std::min((bw - 4) / 2, 20)), lw = 14 + (int)(rng() % 22);
+        std::vector<BarBox> bars; std::vector<LabCand> c; int x = 30;
+        for (int i = 0; i < n; ++i) { x += bw * (1 + (int)(rng() % 3)); const int hs = 2 + (int)(rng() % 120), he = 2 + (int)(rng() % 120);
+            bars.push_back(bar(x - 1 - w, w, hs, ax, i)); bars.push_back(bar(x + 1, w, he, ax, i)); c.push_back(lab(x, lw, tallerOf(hs, he) ? he : hs, ax, i)); }
+        const std::vector<size_t> k = pickLabels(c, bars); std::vector<bool> in(c.size(), false); for (size_t q : k) in[q] = true;
+        for (size_t a = 0; a < k.size(); ++a) { CHECK(a == 0 || k[a - 1] < k[a]);
+            for (size_t b = a + 1; b < k.size(); ++b) CHECK(!boxesTouch(c[k[a]].box, c[k[b]].box, 1));
+            for (const BarBox& bb : bars) CHECK(bb.owner == c[k[a]].owner || !boxesTouch(c[k[a]].box, bb.box, 0)); }
+        for (size_t a = 0; a < c.size(); ++a) { if (in[a]) continue; bool why = false;
+            for (size_t q : k) if (boxesTouch(c[a].box, c[q].box, 1) && c[q].h >= c[a].h) why = true;
+            for (const BarBox& bb : bars) if (bb.owner != c[a].owner && boxesTouch(c[a].box, bb.box, 0)) why = true;
+            CHECK(why); }
+        std::vector<LabCand> r(c.rbegin(), c.rend()); const std::vector<size_t> kr = pickLabels(r, bars); CHECK(kr.size() == k.size());
+        for (size_t a = 0; a < kr.size(); ++a) CHECK(in[c.size() - 1 - kr[a]]);
+    }
+}
 int main() {
-    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing();
+    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing(); mouseAndLabels();
     std::printf("%d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

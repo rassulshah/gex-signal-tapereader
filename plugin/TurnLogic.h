@@ -1,4 +1,8 @@
-// TurnLogic.h 1.0.0 (2026-11-22) -- the logic of lsTurn "Turn v1.0" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// TurnLogic.h 1.0.1 (2026-11-22; 1.0.0 the same day) -- the logic of lsTurn "Turn v1.0" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// (1.0.1, Rassul 22:50-23:00 CT "indicator should update when my mouse hovers over different candles"; "top strip should be moved higher to the
+// top of the pane, right now there is blackspace at the top . i cant see the ratios either"; "go"): the strip of a candle at a named level
+// (stripOfCand, levelNameAt, candSide) and one ratio label per candle side when the candles are too narrow for two (pickLabels); the
+// ratio on a bar is written without the x (labelText; 23:07 CT "get rid of the x and make it smaller").
 // Rassul 2026-11-22 CT: "Put the red bars below the green bars"; "sanity check and get independent sanity check , code and design review ,
 // no memory leaks and give me a final mockup before I approve to build"; "Let's rename the indicator to Turn since it describes the process
 // of a turn"; "build". Spec: SPEC-TURN-1.0.md; mockup turn-final.html; reference calculation turnref.py (whole-second mode); the golden
@@ -45,7 +49,7 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 static const size_t FILL_CAP = 150000;      // fills of one candle (more = the candle is not decided live)
 static const size_t SHOWN_CAP = 50000;      // resting orders tracked (is the aggressor a known resting order?)
 static const long long NEAR_TICKS = 64;     // only orders within this many ticks of the last trade are tracked
@@ -93,6 +97,13 @@ inline std::string ratioText(double x) {            // "1.7x"; 99x cap
     if (!std::isfinite(x) || x < 0) return std::string();
     char b[24]; if (x >= 99.95) return "99x+";
     std::snprintf(b, sizeof b, "%.1fx", x); return b;
+}
+// (1.0.1, Rassul 23:07 CT on the mockup: "the font for the ratio looks big , it may overlap on the other bar next to it, maybe get rid of the x
+// and make it smaller") the ratio ON a bar: no x, one decimal under 10, none from 10 up ("2.9", "14"; 99+ cap). The strip keeps ratioText.
+inline std::string labelText(double x) {
+    if (!std::isfinite(x) || x < 0) return std::string();
+    char b[24]; if (x >= 99.5) return "99+";
+    std::snprintf(b, sizeof b, x >= 9.95 ? "%.0f" : "%.1f", x); return b;
 }
 inline const char* word4(int k) { static const char* const W[] = { "No", "Light", "Moderate", "Heavy" }; return W[k < 0 ? 0 : k > 3 ? 3 : k]; }
 inline int stopClass(double x) { return (!std::isfinite(x) || x < 0.5) ? 0 : x < 1.0 ? 1 : x < 3.0 ? 2 : 3; }
@@ -659,13 +670,13 @@ struct Bar1 { bool show = false, on = false; double v = 0; std::string label; };
 struct BarSet { Bar1 stop, eff, exh, ans; };
 inline Bar1 ratioBar(long long v1000, long long minShow1000) {
     Bar1 b; if (v1000 < 0 || v1000 < minShow1000) return b;
-    b.show = true; b.v = (double)v1000 / 1000.0; b.on = b.v >= 0.5; b.label = ratioText(b.v); return b;
+    b.show = true; b.v = (double)v1000 / 1000.0; b.on = b.v >= 0.5; b.label = labelText(b.v); return b;
 }
 inline BarSet barsOf(const Read& r) {
     BarSet s;
     s.stop = ratioBar(r.stopX1000, 50);                                   // under 0.05x: nothing to draw
     s.eff = ratioBar(r.eff1000, 0);
-    if (r.dem1e4 >= 0) { s.exh.show = true; s.exh.v = exhBar((double)r.dem1e4 / 1e4); s.exh.on = r.exh > 0; s.exh.label = ratioText(s.exh.v); }
+    if (r.dem1e4 >= 0) { s.exh.show = true; s.exh.v = exhBar((double)r.dem1e4 / 1e4); s.exh.on = r.exh > 0; s.exh.label = labelText(s.exh.v); }
     if (r.marks >= 0 && r.ansOk) { s.ans.show = true; s.ans.v = r.marks > 0 ? (double)r.marks : 0.06; s.ans.on = r.marks >= 1; s.ans.label = std::to_string(r.marks) + "/3"; }
     return s;
 }
@@ -709,6 +720,60 @@ inline Strip stripOf(const Read& r, bool bestProven, bool numbers, const std::st
     else if (r.verdict == V_BEST) s.pill = "?";
     else s.pill = "\x96";
     return s;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// (1.0.1) THE CANDLE UNDER THE MOUSE and the ratio labels of narrow candles
+// ---------------------------------------------------------------------------------------------------------------------------------
+// the name of the named level at this tick ("" = not in the list any more)
+inline std::string levelNameAt(const std::vector<Level>& lv, long long tick) {
+    if (tick <= 0) return std::string();
+    for (const Level& x : lv) if (x.tick == tick) return x.name;
+    return std::string();
+}
+// which side of a candle at a named level the strip is about: -1 = the high it pushed into (bars up), 1 = the low (bars down), 0 = none.
+// Both sides at a level: the side the mouse is on (above the axis = the high).
+inline int candSide(const Cand& c, bool mouseAboveAxis) {
+    if (c.hiL && c.loL) return mouseAboveAxis ? -1 : 1;
+    return c.hiL ? -1 : c.loL ? 1 : 0;
+}
+// the strip of a candle at a named level that is not a sweep: what is drawn on it - its Stop Run and its Effort, nothing else (no
+// Exhaustion, no Answer, no verdict: those are read on a sweep candle only). -1 = not known. prefix = "VAH 9:57 PM".
+inline Strip stripOfCand(long long stopX1000, long long eff1000, bool numbers, const std::string& prefix) {
+    Strip s;
+    struct Add { Strip& s; void operator()(const std::string& t, int tone, bool bold) const { Seg g; g.text = t; g.tone = tone; g.bold = bold; s.segs.push_back(g); s.flat += t; } } add = { s };
+    if (!prefix.empty()) add(prefix + "   ", T_MUTED, false);
+    if (stopX1000 >= 0) { const double x = (double)stopX1000 / 1000.0; const int k = stopClass(x);
+        add(std::string(word4(k)) + " Stop Run" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_TEXT, true); }
+    else add("\x96 Stop Run", T_MUTED, true);
+    add(" / ", T_MUTED, false);
+    if (eff1000 >= 0) { const double x = (double)eff1000 / 1000.0; const int k = effClass(x);
+        add(std::string(word4(k)) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_TEXT, true); }
+    else add("\x96 Effort", T_MUTED, true);
+    s.pill = "\x96"; s.pillTone = T_MUTED; s.edgeTone = T_MUTED;
+    return s;
+}
+// Ratio labels when a candle is too narrow for two labels side by side: each candle side offers ONE label (its tallest bar's ratio,
+// centred on the candle). A label is kept when it touches no label already kept and no bar of another candle; the taller bar is asked
+// first (then the newer candle), so of two neighbours the bigger keeps its label. Rectangles are [l, r) x [t, b).
+struct LabBox { int l = 0, t = 0, r = 0, b = 0; };
+struct LabCand { LabBox box; int h = 0, owner = 0; };                    // h = its bar's height in pixels; owner = which candle side it belongs to
+struct BarBox { LabBox box; int owner = 0; };
+inline bool boxesTouch(const LabBox& a, const LabBox& b, int padX) { return a.l < b.r + padX && b.l < a.r + padX && a.t < b.b && b.t < a.b; }
+// of two bars on one candle side the taller carries the label; equal heights: the left one (Stop Run / Exhaustion)
+inline int tallerOf(int hLeft, int hRight) { return hRight > hLeft ? 1 : 0; }
+inline std::vector<size_t> pickLabels(const std::vector<LabCand>& c, const std::vector<BarBox>& bars) {
+    std::vector<size_t> order(c.size()); for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&c](size_t a, size_t b) { return c[a].h != c[b].h ? c[a].h > c[b].h : c[a].owner > c[b].owner; });
+    std::vector<size_t> kept;
+    for (size_t k = 0; k < order.size(); ++k) {
+        const LabCand& x = c[order[k]]; bool ok = x.box.r > x.box.l && x.box.b > x.box.t;
+        for (size_t j = 0; ok && j < kept.size(); ++j) if (boxesTouch(x.box, c[kept[j]].box, 1)) ok = false;
+        for (size_t j = 0; ok && j < bars.size(); ++j) if (bars[j].owner != x.owner && boxesTouch(x.box, bars[j].box, 0)) ok = false;
+        if (ok) kept.push_back(order[k]);
+    }
+    std::sort(kept.begin(), kept.end());
+    return kept;
 }
 
 }  // namespace turn
