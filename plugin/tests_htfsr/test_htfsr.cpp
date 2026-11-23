@@ -71,5 +71,25 @@ int main(int argc, char** argv)
         { hsr::View w = v; w.last = 7; int ln = 0; for (const hsr::Prim& p : hsr::layout(hs, 0.25, w)) if (p.line) ++ln; CHECK(ln == 2); }   // bar 7: R1 broken -> R2 and S1 only
         CHECK(std::isnan(hsr::shown(hs[7], 0, 0.25))); CHECK(hsr::shown(hs[7], 1, 0.25) == 110); CHECK(std::isnan(hsr::shown(hs[0], 1, 0.25))); CHECK(std::isnan(hsr::shown(hs[0], 3, 0.25)));
         v.first = 20; CHECK(hsr::layout(hs, 0.25, v).empty()); v.first = 0; CHECK(hsr::layout(hs, 0, v).empty()); }
+    // 8. (1.0.2, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A")
+    //    R1 / R2 red, S1 / S2 green - the line and its name; rsSide / rsColour, which the Limit Profile uses for a key-level line that carries R / S
+    {   std::vector<hsr::Snap> hs(10); for (int i = 0; i < 10; ++i) { hs[i].r1 = 108; hs[i].r1ok = true; hs[i].r2 = 110; hs[i].r2ok = true; hs[i].s1 = 100; hs[i].s1ok = true; hs[i].s2 = 97; hs[i].s2ok = true; }
+        hsr::View v; v.l = 0; v.t = 0; v.r = 200; v.b = 200; v.first = 0; v.last = 9; v.X = [](int j) { return 5.0 + j * 10.0; }; v.Y = [](double p) { return 200.0 - (p - 95.0) * 10.0; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
+        const std::vector<hsr::Prim> P = hsr::layout(hs, 0.25, v); int red = 0, green = 0, other = 0, namesOk = 0, names = 0; unsigned long lastLine = 0;
+        for (const hsr::Prim& p : P) {
+            if (p.line) { lastLine = p.col; if (p.col == hsr::C_RES) ++red; else if (p.col == hsr::C_SUP) ++green; else ++other; }
+            else { ++names; if (!p.text.empty() && p.col == lastLine && p.col == (p.text[0] == 'R' ? hsr::C_RES : hsr::C_SUP)) ++namesOk; } }
+        std::printf("colours: red lines %d green lines %d other %d names %d (right colour %d)\n", red, green, other, names, namesOk);
+        CHECK(red == 2); CHECK(green == 2); CHECK(other == 0); CHECK(names == 4); CHECK(namesOk == 4);
+        { int yR = -1, yS = 1000; for (const hsr::Prim& p : P) if (p.line) { if (p.col == hsr::C_RES) yR = std::max(yR, p.y0); else yS = std::min(yS, p.y0); } CHECK(yR < yS); }   // resistance above support
+        CHECK(hsr::C_RES == 0x00EF4444UL); CHECK(hsr::C_SUP == 0x0022C55EUL);
+        CHECK(hsr::rsSide("R1") == 1); CHECK(hsr::rsSide("R2") == 1); CHECK(hsr::rsSide("S1") == -1); CHECK(hsr::rsSide("S2") == -1);
+        CHECK(hsr::rsSide("PFH/PDH/R2") == 1); CHECK(hsr::rsSide("ONH/AsiaHI/R1") == 1); CHECK(hsr::rsSide("ONL/S1") == -1); CHECK(hsr::rsSide("S2/PDL") == -1);
+        CHECK(hsr::rsSide("PDH") == 0); CHECK(hsr::rsSide("") == 0); CHECK(hsr::rsSide("VWAP") == 0); CHECK(hsr::rsSide("PFH/PDH") == 0);
+        CHECK(hsr::rsSide("R10") == 0); CHECK(hsr::rsSide("S1x") == 0); CHECK(hsr::rsSide("PR1") == 0); CHECK(hsr::rsSide("CR0") == 0); CHECK(hsr::rsSide("PS0") == 0); CHECK(hsr::rsSide("r1") == 0);
+        CHECK(hsr::rsSide("R1/S2") == 1); CHECK(hsr::rsSide("S2/R1") == -1);   // both on one price: the first R / S name decides
+        CHECK(hsr::rsSide("/R1/") == 1); CHECK(hsr::rsSide("//") == 0);
+        CHECK(hsr::rsColour(1, 0x123456UL) == hsr::C_RES); CHECK(hsr::rsColour(-1, 0x123456UL) == hsr::C_SUP); CHECK(hsr::rsColour(0, 0x123456UL) == 0x123456UL);
+        CHECK(std::string(hsr::VERSION) != "1.0.0" && std::string(hsr::VERSION) != "1.0.1"); }
     std::printf("%d passed, %d failed\n", ok, bad); return bad ? 1 : 0;
 }

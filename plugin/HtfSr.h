@@ -17,7 +17,7 @@
 #include <vector>
 
 namespace hsr {
-static const char* const VERSION = "1.0.1";   // = the lsHtfSR setVersion literal
+static const char* const VERSION = "1.0.2";   // = the lsHtfSR setVersion literal   // (1.0.2, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2) R1 / R2 red, S1 / S2 green (line and name); rsSide / rsColour for the Limit Profile   // was "1.0.1"
 static const int SECS = 10800;
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 struct Bar { long long t = 0; double h = 0, l = 0, c = 0; };   // t = the bar END, local wall-clock seconds (any epoch that starts on a local midnight)
@@ -88,6 +88,24 @@ inline bool hasHtf(const std::string& name)
     while (a <= name.size()) { size_t b = name.find('/', a); if (b == std::string::npos) b = name.size(); if (isName(name.substr(a, b - a))) return true; a = b + 1; }
     return false;
 }
+// (1.0.2, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2) THE R / S COLOURS, one place for lsHtfSR and the Limit Profile (lsCobSignal has the same two in
+// CobSignalLogic.h): resistance red, support green (0x00RRGGBB, his standard red / green).
+static const unsigned long C_RES = 0x00EF4444, C_SUP = 0x0022C55E;
+// the side of a level name ("R1", "PFH/PDH/R2", "ONL/S1"): +1 = it carries R1 / R2, -1 = S1 / S2, 0 = neither. The first R / S name decides.
+inline int rsSide(const std::string& name)
+{
+    size_t a = 0;
+    while (a <= name.size()) {
+        size_t b = name.find('/', a); if (b == std::string::npos) b = name.size();
+        const std::string t = name.substr(a, b - a);
+        if (t == "R1" || t == "R2") return 1;
+        if (t == "S1" || t == "S2") return -1;
+        a = b + 1;
+    }
+    return 0;
+}
+// the colour of a level's line: the R / S colour when its name carries one, else the colour it had
+inline unsigned long rsColour(int side, unsigned long other) { return side > 0 ? C_RES : side < 0 ? C_SUP : other; }
 // into a level list M{name, price, pivotOnly}: a level on the exact tick of a named level joins its name last ("ONH/R1"), never the VWAP's;
 // otherwise it is its own level. Returns how many were added or joined.
 template <class M> inline int addTo(std::vector<M>& V, const std::vector<Lv>& L, double tick)
@@ -116,10 +134,11 @@ inline std::string statusText(const Snap& s, double tick, int bars, int perSec)
 }
 
 // ---- lsHtfSR: the standing levels as stepped lines over the chart's bars (each closed bar's value as it stood at its close - decided once;
-// the forming bar's value is live), one colour, the name at the right end of the newest piece; R2 / S2 only where they differ from R1 / S1
+// the forming bar's value is live), R1 / R2 red and S1 / S2 green (1.0.2; one orange before), the name at the right end of the newest piece;
+// R2 / S2 only where they differ from R1 / S1
 struct Prim { bool line = false; int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; std::string text; };
 struct View { int l = 0, t = 0, r = 0, b = 0, first = 0, last = 0; std::function<double(int)> X; std::function<double(double)> Y; std::function<int(const std::string&)> textW; int textH = 12; };
-static const unsigned long C_LINE = 0x00FF9F1A;     // the orange lsCobSignal draws its 3-hour lines in
+// was (1.0.0 - 1.0.1): static const unsigned long C_LINE = 0x00FF9F1A;   // one orange for all four
 inline double shown(const Snap& h, int q, double tick)
 {
     const double x = q == 0 ? h.r1 : q == 1 ? h.r2 : q == 2 ? h.s1 : h.s2; const bool ok = q == 0 ? h.r1ok : q == 1 ? h.r2ok : q == 2 ? h.s1ok : h.s2ok;
@@ -139,9 +158,10 @@ inline std::vector<Prim> layout(const std::vector<Snap>& hs, double tick, const 
         const double x = shown(hs[(size_t)b], q, tick); if (!std::isfinite(x)) continue;
         const int y = (int)std::lround(v.Y(x)); if (y < v.t || y > v.b) continue;
         const int x0 = v.l, x1 = std::min(v.r, (int)std::lround(v.X(b) + bw / 2)); if (x1 <= x0) continue;
-        Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = C_LINE; P.push_back(L);
+        const unsigned long lc = q < 2 ? C_RES : C_SUP;   // (1.0.2) R1 / R2 red, S1 / S2 green
+        Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = lc; P.push_back(L);
         const std::string s = NM[q]; const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = v.textH;
-        Prim T; T.col = C_LINE; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
+        Prim T; T.col = lc; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
         if (T.x1 > v.r) { T.x1 = x1 - 2; T.x0 = T.x1 - w; T.y1 = y - 1; T.y0 = T.y1 - h; }
         if (T.x0 >= v.l && T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T);
     }

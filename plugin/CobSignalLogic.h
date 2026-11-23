@@ -50,7 +50,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.11.0";   // (1.11.0, the Cob tag and Cob Rev strength line from 10 up (Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20))   // was "1.10.0"   // (1.10.0, Rassul 2026-11-19 15:56-16:58 CT, price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Cob, Lvp and Rev drawn as BADGES (green / red fill, black text) at the same places; the Cob badge carries its ZZO count and, from 20 up, the Cob candle's strength (his BVMax / BRMax, V / R); the Rev badge its strength; only the 38.2% entry line is drawn (Stop / BE / 1.272 / 1.618 / 2.0 gone - "only keep the 38.2"); a Rev label is posted to SignalBoard K with flag 7 so lsRevReadMarks does not draw a 2nd Rev on that candle. The Cob Rev rule is unchanged (the 16:21 test: current rule 89% reached the Cob high / +0.03R on 103 Revs vs the PB Rev candle rule 87% / +0.00R)
+static const char* const VERSION = "1.11.1";   // (1.11.1, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2: the 3-hour R1 / R2 lines and names red, S1 / S2 green - was one orange)   // was "1.11.0"   // (1.11.0, the Cob tag and Cob Rev strength line from 10 up (Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20))   // was "1.10.0"   // (1.10.0, Rassul 2026-11-19 15:56-16:58 CT, price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Cob, Lvp and Rev drawn as BADGES (green / red fill, black text) at the same places; the Cob badge carries its ZZO count and, from 20 up, the Cob candle's strength (his BVMax / BRMax, V / R); the Rev badge its strength; only the 38.2% entry line is drawn (Stop / BE / 1.272 / 1.618 / 2.0 gone - "only keep the 38.2"); a Rev label is posted to SignalBoard K with flag 7 so lsRevReadMarks does not draw a 2nd Rev on that candle. The Cob Rev rule is unchanged (the 16:21 test: current rule 89% reached the Cob high / +0.03R on 103 Revs vs the PB Rev candle rule 87% / +0.00R)
 // was VERSION = "1.9.0";   // (1.9.0, 2026-11-16 Rassul 19:06-19:07 CT "i had replaced cob key levels with 3 hr levels, i am reconsidering so that we can use both", "eigher": the sweep = a 3-hour S1 / S2 / R1 / R2 OR a named key level (ONL, PDL, PFL, LonLO, PWL, AsiaLO, PHL and the highs; RTH only, as 1.6.x); the record names both)   // was "1.8.3";   // (1.8.3, 2026-11-16: host only - the accumulation boxes of lsRevRead 0.9.0 are drawn; no rule change)   // was "1.8.2";   // (1.8.2, 2026-11-16: the 3-hour R1 / R2 / S1 / S2 are drawn as ONE line each across the chart at where they stand now - no past steps)   // was "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
@@ -725,9 +725,9 @@ inline std::string fibStatus(const Engine& E)
     return o;
 }
 
-// ---- (1.7.0) the 3-hour R1 / R2 / S1 / S2 as stepped lines (each bar's value as it stood at that bar's close), one colour, the name at the
+// ---- (1.7.0) the 3-hour R1 / R2 / S1 / S2 as stepped lines (each bar's value as it stood at that bar's close), R red / S green (1.11.1), the name at the
 // right end of the newest piece; R2 / S2 only where they differ from R1 / S1
-static const unsigned C_HTF = 0x00FF9F1A;
+static const unsigned C_HTF_R = C_BEAR, C_HTF_S = C_BULL;   // (1.11.1) R1 / R2 red, S1 / S2 green   // was (1.7.0 - 1.11.0): C_HTF = 0x00FF9F1A, one orange
 inline std::vector<Prim> htfLayout(const Engine& E, const View& v)
 {
     std::vector<Prim> P; const int n = (int)std::min(E.hs.size(), E.B.size());
@@ -743,9 +743,10 @@ inline std::vector<Prim> htfLayout(const Engine& E, const View& v)
         const double x = val(b); if (!std::isfinite(x)) continue;
         const int y = (int)std::lround(v.Y(x)); if (y < v.t || y > v.b) continue;
         const int x0 = v.l, x1 = (int)std::lround(v.X(b) + bw / 2); if (x1 <= x0) continue;
-        Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = C_HTF; P.push_back(L);
+        const unsigned hc = q < 2 ? C_HTF_R : C_HTF_S;
+        Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = hc; P.push_back(L);
         const std::string s = NM[q]; const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = 12;
-        Prim T; T.tiny = true; T.col = C_HTF; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
+        Prim T; T.tiny = true; T.col = hc; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
         if (T.x1 > v.r) { T.x1 = x1 - 2; T.x0 = T.x1 - w; T.y1 = y - 1; T.y0 = T.y1 - h; }
         if (T.x0 >= v.l && T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T);
     }

@@ -63,8 +63,16 @@ int main(int argc, char** argv) {
         double lo = 1e300, hi = -1e300; for (int i = v.first; i <= v.last; ++i) { lo = std::min(lo, E.B[(size_t)i].l); hi = std::max(hi, E.B[(size_t)i].h); }
         const int f0 = v.first; v.X = [f0](int j) { return 10.0 + (j - f0) * 4.0; }; v.Y = [lo, hi](double p) { return 780.0 - (p - lo) / (hi - lo) * 760.0; };
         const std::vector<cobs::Prim> P = cobs::htfLayout(E, v); int lines = 0, names = 0; bool col = true, in = true; std::string nm;
-        for (const cobs::Prim& p : P) { col = col && p.col == cobs::C_HTF; if (p.line) { ++lines; in = in && p.x1 > p.x0 && p.y0 >= v.t && p.y0 <= v.b; } else { ++names; nm += p.text + " "; in = in && p.x0 >= v.l && p.x1 <= v.r && p.tiny; } }
-        CHECK(lines > 0 && col && in, "3-hour lines drawn in one colour inside the pane (" << lines << " pieces)");
+        // (1.11.1, Rassul 2026-11-22 19:41 CT "R should be red and S should be green", 20:22 "A") R1 / R2 red, S1 / S2 green: every piece is one of the
+        // two, a name has its line's colour (the name follows its line) and the colour its letter says; no resistance line under a support line
+        unsigned lastLine = 0; int red = 0, green = 0, yRedMax = -1000000, yGreenMin = 1000000; bool byName = true;
+        for (const cobs::Prim& p : P) { col = col && (p.col == cobs::C_HTF_R || p.col == cobs::C_HTF_S);
+            if (p.line) { ++lines; lastLine = p.col; if (p.col == cobs::C_HTF_R) { ++red; yRedMax = std::max(yRedMax, p.y0); } else { ++green; yGreenMin = std::min(yGreenMin, p.y0); } in = in && p.x1 > p.x0 && p.y0 >= v.t && p.y0 <= v.b; }
+            else { ++names; nm += p.text + " "; byName = byName && !p.text.empty() && p.col == lastLine && p.col == (p.text[0] == 'R' ? cobs::C_HTF_R : cobs::C_HTF_S); in = in && p.x0 >= v.l && p.x1 <= v.r && p.tiny; } }
+        CHECK(lines > 0 && col && in, "3-hour lines drawn in red / green inside the pane (" << lines << " pieces)");
+        CHECK(byName && names > 0, "each name in its line's colour: R red, S green (" << nm << ")");
+        CHECK(red + green == lines && (red == 0 || green == 0 || yRedMax < yGreenMin), "resistance lines (red " << red << ") sit above support lines (green " << green << ")");
+        CHECK(cobs::C_HTF_R == 0x00EF4444u && cobs::C_HTF_S == 0x0022C55Eu && cobs::C_HTF_R == cobs::C_BEAR && cobs::C_HTF_S == cobs::C_BULL, "his standard red / green");
         CHECK(names <= 4 && nm.find("Cob") == std::string::npos, "at most one name per line, at its newest piece (" << nm << ")");
         cobs::View w = v; w.first = 5; w.last = 2; CHECK(cobs::htfLayout(E, w).empty(), "an empty view draws nothing"); }
     {   int nh = 0; bool okh = true; for (const std::string& l : E.out) if (l.rfind("HTF,", 0) == 0) { ++nh; bool f = false; for (const cobs::Mark& m : E.marks) f = f || (l.find("HTF," + std::to_string(m.t) + (m.side > 0 ? ",BULL," : ",BEAR,") + m.levels.substr(0, 2) + ",") == 0); okh = okh && f; }
@@ -94,7 +102,7 @@ int main(int argc, char** argv) {
         CHECK(badge, "(1.10.0) every Rev is a badge posted with flag 7 (one Rev per candle with lsRevReadMarks)");
         { int cb = 0; bool ok = true; for (const cobs::Prim& p : cobs::layout(E, v)) if (p.text.rfind("Cob", 0) == 0) { ++cb; ok = ok && p.badge && !p.text2.empty() && std::isdigit((unsigned char)p.text2[0]); } CHECK(cb > 0 && ok, "(1.10.0) every Cob is a badge with its ZZO count on line 2 (" << cb << ")"); }
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nREV_RULES,1.8.0") != std::string::npos && st.find("\nREVS," + std::to_string(n) + "\n") != std::string::npos, "status: Rev rule + count"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.11.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind(std::string("VERSION,") + cobs::VERSION + "\n", 0) == 0 /* (1.11.1) version-agnostic: was pinned to "VERSION,1.11.0" and failed on the bump */ && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     {   // (1.8.1, independent review) every drawn CoB starts its pullback look exactly once (revOn); finished looks are pruned without a second
         // walk: no (bar, CoB) has two Rev marks; the 3-hour lines never draw a broken level
         std::map<std::pair<long long, long long>, int> seen; int dup = 0; for (const cobs::RevMark& r : E.revs) if (++seen[std::make_pair(r.t, r.cobT)] > 1) ++dup;

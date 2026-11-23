@@ -1,8 +1,8 @@
 /********************************************************************************
- *  HtfSR.cpp  --  Investor/RT RTX extension  lsHtfSR  "3-Hour S / R"  1.0.1  (2026-11-16: one line per level across the chart, no past steps; 1.0.0 2026-11-15)
+ *  HtfSR.cpp  --  Investor/RT RTX extension  lsHtfSR  "3-Hour S / R"  1.0.2  (2026-11-22: R1 / R2 red, S1 / S2 green - Rassul 19:41 CT "R should be red and S should be green", 20:22 "A"; 1.0.1 2026-11-16: one line per level across the chart, no past steps; 1.0.0 2026-11-15)
  *
  *  Rassul 2026-11-15 20:33 CT "did you build any indicator for s1 s2 r1 and r2 for the hourly"; 20:55 "just build them".
- *  On the PRICE pane of any chart of 3 hours or less: the standing 3-hour R1 / R2 / S1 / S2 as stepped orange lines with the name at the
+ *  On the PRICE pane of any chart of 3 hours or less: the standing 3-hour R1 / R2 / S1 / S2 as lines (R red, S green; orange until 1.0.1) with the name at the
  *  right end - the same levels lsCobSignal sweeps and the Limit Profile lists (HtfSr.h: 3-hour bars from 5:00 PM CT built from the chart's
  *  own bars, his 1-bar High / Low ZigZag, R1 = the last pivot high, R2 = the higher of the last two, S1 / S2 the mirror; a level a
  *  completed 3-hour bar closed beyond is broken and no longer drawn). Each closed bar keeps the value it had at its close (never
@@ -46,7 +46,7 @@
 #else
 #define HS_SEP "/"
 #endif
-static const char* HS_VERSION = "1.0.1";   // = hsr::VERSION = the setVersion literal
+static const char* HS_VERSION = "1.0.2";   // = hsr::VERSION = the setVersion literal
 static const int HS_MAX_BARS = 40000;
 
 static long long hsMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -193,7 +193,7 @@ extern "C" cppExtension* CreateExtension(void) {
     HtfSR* p = new HtfSR();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);       // on the price pane, on the instrument's scale; no hovers, no settings
-    p->setDescription("LRA 3-Hour S / R v1.0.1 - on the price pane of a chart of 3 hours or less: the standing 3-hour R1 / R2 / S1 / S2 as orange lines across the chart, named at the right, at where they stand now (3-hour bars from 5:00 PM CT built from the chart's bars; 1-bar High / Low ZigZag; R1 = the last pivot high, R2 = the higher of the last two, S1 / S2 the mirror; a level a completed 3-hour bar closed beyond is dropped). The same levels lsCobSignal sweeps and the Limit Profile lists - use it on charts without lsCobSignal. No settings.");
-    p->setVersion("1.0.1");   // = HS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA 3-Hour S / R v1.0.2 - on the price pane of a chart of 3 hours or less: the standing 3-hour R1 / R2 (red) / S1 / S2 (green) as lines across the chart, named at the right, at where they stand now (3-hour bars from 5:00 PM CT built from the chart's bars; 1-bar High / Low ZigZag; R1 = the last pivot high, R2 = the higher of the last two, S1 / S2 the mirror; a level a completed 3-hour bar closed beyond is dropped). The same levels lsCobSignal sweeps and the Limit Profile lists - use it on charts without lsCobSignal. No settings.");
+    p->setVersion("1.0.2");   // = HS_VERSION (gex-build reads this literal)
     return p;
 }
