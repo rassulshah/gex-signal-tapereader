@@ -2,6 +2,10 @@
 // (ES / GC, Databento -> IRT event form, tests_turn/mk_events.py) arrive candle by candle on two charts of one DLL while the charts grow.
 // Checks: the sweep reads and the level candles are decided once and recorded, the strip and the bars, scrolling back, a restart without
 // repaint, the nightly's rows, garbled / foreign files, symbol change, backlog cap, a faulting feed, no leaks.
+// (1.2.0) THE DEFAULT IS JUST EFFORT (no display file): one centred bar a side on every closed candle, green / red only when the number on
+// it is 1.5 or more; the top line = the candle under the mouse, else the last closed candle; nothing of the turn read is drawn, all of it
+// is still decided and recorded. The saved full setting (display.txt with every piece on, coloured from 0.5) brings the 1.1.0 pane back
+// draw for draw - the whole test below runs with it, and switches to the default and back in the middle. One piece on; a garbled file.
 // (1.1.0) Effort on EVERY closed candle (buyers up / sellers down, the right-hand column) against an independent calculation of Friday's
 // candles; the forming candle carries nothing; a sweep candle with a read is drawn as before; the strip of a plain candle and of the half
 // of a level candle that has no level; a candle whose volume at price cannot be read.
@@ -122,6 +126,8 @@ int main() {
     const long long K845 = 1795164300LL, K851 = 1795164660LL, K903 = 1795165380LL, K906 = K903 + 180;   // bar ends, CT clock
     put(P("LRA-TurnPane-ES.csv"), get(data + "/LRA-Turn-ES.csv")); put(P("LRA-TurnPane-GC.csv"), get(data + "/LRA-Turn-GC.csv"));
     put(P("RevRead\\wy-ES-180.txt"), get(data + "/wy-ES.txt")); put(P("RevRead\\wy-GC-180.txt"), get(data + "/wy-GC.txt"));
+    const std::string FULL = "TURNSHOW|1\nstop|1\nexhaustion|1\nanswer|1\nread|1\neffort_from|0.5\nEND\n";   // (1.2.0) the saved full setting = display-full.txt
+    put(P("TurnPane\\display.txt"), FULL);
     Sim es, gc; es.tick = 0.25; gc.tick = 0.1; es.k0 = gc.k0 = K845 - 180;
     es.load(data + "/ev_ES.txt", K845 - 360, K906 + 30); gc.load(data + "/ev_GC.txt", K845 - 360, K906 + 30);
     CHECK(es.ev.size() > 100000 && gc.ev.size() > 10000);
@@ -171,23 +177,24 @@ int main() {
     noOverlap(es.H); noOverlap(gc.H);
     if (const char* dump = std::getenv("TURN_DUMP")) { put(std::string(dump) + "_ES.txt", dumpDraws(es.H)); put(std::string(dump) + "_GC.txt", dumpDraws(gc.H)); }
     const std::string stES = get(P("TurnPane\\status-ES-180.txt")); std::cout << stES;
-    CHECK(stES.find("VERSION|1.1.0") == 0 && stES.find("PARAMS|ok") != std::string::npos && stES.find("SWEEPS|ok|2|levels 16") != std::string::npos && stES.find("COVER|last 100%") != std::string::npos);
+    CHECK(stES.find("VERSION|1.2.0") == 0 && stES.find("PARAMS|ok") != std::string::npos && stES.find("SWEEPS|ok|2|levels 16") != std::string::npos && stES.find("COVER|last 100%") != std::string::npos);
     CHECK(stES.find("FEED|ready") != std::string::npos && stES.find("|faults 0|") != std::string::npos && stES.find("RECORD|reads 2|") != std::string::npos);
-    CHECK(stES.find("DISPLAY|1.1.0|strip on the pane top: a sweep|ratios on every bar (wide candles) ") != std::string::npos && stES.find("|mouse not in this pane|mouse moves 0|effort on plain candles ") != std::string::npos);
+    CHECK(stES.find("DISPLAY|1.2.0|strip on the pane top: a sweep|ratios on every bar (wide candles) ") != std::string::npos && stES.find("|mouse not in this pane|mouse moves 0|effort candles ") != std::string::npos);
+    CHECK(stES.find("SHOW|ok|effort stop exhaustion answer read|effort coloured from 0.5\n") != std::string::npos);
     // (1.1.0) EFFORT ON EVERY CLOSED CANDLE. Friday's ES candles 8:42 - 9:06 AM against a calculation made apart from the plugin (pandas, from
     // the same order events: data/eff_ref_ES.csv): buyers' Effort at the top / sellers' at the bottom. At 60 px a candle every bar is 20 px
     // wide (left column x-21..x-1 = Stop Run / Exhaustion, right column x+1..x+21 = Effort / the Answer) and carries its ratio.
     { struct Ref { long long key; double top, bot; }; const Ref REF[] = { { 1795164120LL, 0.4619, 0.7872 }, { 1795164300LL, 0.4566, 0.6958 }, { 1795164480LL, 0.5630, 0.2552 }, { 1795164660LL, 0.6574, 1.1686 },
           { 1795164840LL, 0.8703, 0.2669 }, { 1795165020LL, 1.2085, 0.1707 }, { 1795165200LL, 0.7649, 0.2482 }, { 1795165380LL, 1.7001, 1.8336 }, { 1795165560LL, 0.2815, 1.0529 } };
       int axis = -1; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.b - d.t == 1 && d.r - d.l > 200 && d.t > 21) axis = d.t;
-      CHECK(axis == 161); const int half = 125; int plain = 0, seen = 0;
+      CHECK(axis == 161); const int half = 125; int plain = 0, seen = 0, effN = 0;
       const turn::Rec rec = [&]() { turn::Rec r; turn::parseRecFile(recES, "ES", 180, r); return r; }();
       const auto boxAt = [&](int l, bool up) -> const mock::Draw* { for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.l == l && d.r == l + 20 && (up ? d.b == axis : d.t == axis + 1)) return &d; return nullptr; };
       const auto labelOf = [&](const mock::Draw& b, bool up) -> std::string { for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 21 && (d.l + d.r) / 2 >= b.l + 6 && (d.l + d.r) / 2 <= b.r - 6 && (up ? d.b == b.t - 1 : d.t == b.b + 1)) return d.text; return std::string(); };
       for (size_t i = 0; i + 1 < es.H.bars.size(); ++i) {                    // every closed candle of the chart
           const long long key = (long long)es.H.bars[i].time; const int cx = es.H.barX0 + (int)i * es.H.barW; const CandleVap& cv = es.vap[key];
           std::vector<turn::Row> rows; for (const auto& r : cv.rows) { turn::Row q; q.tick = r.first; q.buy = r.second.first; q.sell = r.second.second; rows.push_back(q); }
-          const turn::Bars br = turn::barRatios(rows, cv.lo, cv.hi); const turn::EffPair e = turn::effOf(br);
+          const turn::Bars br = turn::barRatios(rows, cv.lo, cv.hi); const turn::EffPair e = turn::effOf(br, 5);
           for (const Ref& rf : REF) if (rf.key == key) { ++seen; CHECK(br.topOk && br.botOk && std::fabs(br.top - rf.top) < 0.0002 && std::fabs(br.bot - rf.bot) < 0.0002); }   // = the independent calculation
           const mock::Draw *ru = boxAt(cx + 1, true), *rd = boxAt(cx + 1, false), *lu = boxAt(cx - 21, true), *ld = boxAt(cx - 21, false);
           const bool sweep = key == K851 || key == K903;
@@ -206,15 +213,86 @@ int main() {
           if (lu) CHECK(lu->color == trh::C_LGREEN || lu->color == trh::C_AXIS);
           if (ld) CHECK(ld->color == trh::C_LRED || ld->color == trh::C_AXIS);
           if (ci == rec.cands.end()) ++plain;
+          ++effN;
       }
       CHECK(seen == 9 && plain >= 2);
-      { const std::string d = lineOf(stES, "DISPLAY|"); const size_t a = d.find("|effort on plain candles "); int n = -1; if (a != std::string::npos) std::sscanf(d.c_str() + a, "|effort on plain candles %d", &n); std::printf("plain candles with Effort: %d (status %d)\n", plain, n); CHECK(n == plain); }
-      // 8:45 AM, a plain candle: buyers 0.46 (grey, "0.5"), sellers 0.70 (red, "0.7"); 8:57: buyers 1.21 (green, "1.2")
+      { const std::string d = lineOf(stES, "DISPLAY|"); const size_t a = d.find("|effort candles "); int n = -1; if (a != std::string::npos) std::sscanf(d.c_str() + a, "|effort candles %d", &n); std::printf("candles with Effort bars and no sweep read: %d, of them with no level %d (status %d)\n", effN, plain, n); CHECK(n == effN); }
+      // 8:45 AM, a plain candle: buyers 0.46 (reads "0.5": green with the full setting's "from 0.5"), sellers 0.70 (red, "0.7"); 8:57: buyers 1.21 (green, "1.2")
       { const int cx = es.H.barX0 + (int)((K845 - es.k0) / 180) * es.H.barW; const mock::Draw *u = boxAt(cx + 1, true), *d = boxAt(cx + 1, false);
-        CHECK(u && d && u->color == trh::C_AXIS && labelOf(*u, true) == "0.5" && d->color == trh::C_RED && labelOf(*d, false) == "0.7" && !boxAt(cx - 21, true) && !boxAt(cx - 21, false)); }
+        CHECK(u && d && u->color == trh::C_GREEN && labelOf(*u, true) == "0.5" && d->color == trh::C_RED && labelOf(*d, false) == "0.7" && !boxAt(cx - 21, true) && !boxAt(cx - 21, false)); }
       { const int cx = es.H.barX0 + (int)((K903 - 360 - es.k0) / 180) * es.H.barW; const mock::Draw* u = boxAt(cx + 1, true); CHECK(u && u->color == trh::C_GREEN && labelOf(*u, true) == "1.2"); }
       // the forming candle: nothing (its Effort is not final)
       { const int cx = es.H.barX0 + (int)(es.H.bars.size() - 1) * es.H.barW; for (const mock::Draw& d : es.H.draws) if (d.t > 21 && d.b - d.t > 1) CHECK(d.r <= cx - 22 || d.type != "box"); for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 21) CHECK(d.r <= cx - 20); } }
+    // (1.2.0) THE DEFAULT: NO DISPLAY FILE = JUST EFFORT. The file goes away while the pane runs: the next calc asks for a redraw and the
+    // pane draws ONE centred bar a side on every closed candle (40 px wide at 60 px a candle), green / red only when the number written on
+    // it is 1.5 or more, with that number; nothing else - no Stop Run, no Exhaustion, no Answer, no level, no verdict, no pill.
+    { const std::string fullDraws = dumpDraws(es.H), rec0 = get(P("TurnPane\\turn-ES-180.txt")); CHECK(countLines(rec0, "T|") == 2);
+      std::remove(P("TurnPane\\display.txt").c_str());
+      { const int inv = es.H.invalidates; mock::current = &es.H; x->calc(0); CHECK(es.H.invalidates == inv + 1); x->calc(0); CHECK(es.H.invalidates == inv + 1); }   // the switch is shown at once, asked for once
+      cycle(x, es.H); cycle(x, es.H);
+      const auto justEffort = [&](int bw, int wBar, int half) {            // every box and number under the top line against the independent calculation
+          int axis = -1; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.b - d.t == 1 && d.r - d.l > 200 && d.t > 21) axis = d.t;
+          CHECK(axis == 161); int bars = 0, coloured = 0, expected = 0;
+          for (size_t i = 0; i + 1 < es.H.bars.size(); ++i) {
+              const long long key = (long long)es.H.bars[i].time; const int cx = es.H.barX0 + (int)i * bw; const CandleVap& cv = es.vap[key];
+              std::vector<turn::Row> rows; for (const auto& r : cv.rows) { turn::Row q; q.tick = r.first; q.buy = r.second.first; q.sell = r.second.second; rows.push_back(q); }
+              const turn::EffPair e = turn::effOf(turn::barRatios(rows, cv.lo, cv.hi), 15);
+              for (int side = 0; side < 2; ++side) { const turn::Bar1& b = side ? e.dn : e.up; if (!b.show) continue; ++expected;
+                  const mock::Draw* box = nullptr; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.l == cx - wBar / 2 && d.r == cx - wBar / 2 + wBar && (side ? d.t == axis + 1 : d.b == axis) && d.b - d.t >= 2) box = &d;
+                  CHECK(box != nullptr); if (!box) continue;
+                  const bool on = turn::shown10(b.label) >= 15; CHECK(on == b.on);
+                  CHECK(box->b - box->t == turn::barPx(b.v, half)); CHECK(box->color == (on ? (side ? trh::C_RED : trh::C_GREEN) : trh::C_AXIS)); if (on) ++coloured;
+                  if (bw >= 22) { bool lab = false; for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 21 && d.text == b.label && std::abs((d.l + d.r) / 2 - cx) <= 1 && (side ? d.t == box->b + 1 : d.b == box->t - 1) && d.color == box->color && d.fsize == 9) lab = true; CHECK(lab); } } }
+          for (const mock::Draw& d : es.H.draws) { if (d.t <= 21 || d.type != "box" || d.b - d.t == 1) continue; ++bars;      // nothing but those bars: one width, three colours
+              CHECK(d.r - d.l == wBar); CHECK(d.color == trh::C_GREEN || d.color == trh::C_RED || d.color == trh::C_AXIS); }
+          CHECK(bars == expected && expected >= 2 * ((int)es.H.bars.size() - 2)); CHECK(coloured >= 2);
+          for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 21) CHECK(isRatio(d.text));              // no "3/3" marks
+          return coloured; };
+      const int col60 = justEffort(60, 40, 125);
+      { const std::string s = stripText(es.H); std::cout << "JUST EFFORT, no mouse: " << s << " | pill '" << pillText(es.H) << "'\n";
+        CHECK(s == "9:06 AM   Buyers No Effort 0.3x / Sellers Moderate Effort 1.1x" && pillText(es.H).empty()); noOverlap(es.H); }   // the last closed candle; both under 1.5: grey
+      for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t == es.H.paneTop + 4) CHECK(d.color == trh::C_MUTED);
+      cycle(x, es.H);
+      { const std::string st = get(P("TurnPane\\status-ES-180.txt")); std::cout << lineOf(st, "SHOW|") << "\n" << lineOf(st, "DISPLAY|") << "\n";
+        CHECK(st.find("SHOW|no display file (Effort only)|effort|effort coloured from 1.5\n") != std::string::npos && lineOf(st, "DISPLAY|").find("strip on the pane top: a candle|ratios one per candle side ") != std::string::npos);
+        int n = -1; const std::string d = lineOf(st, "DISPLAY|"); const size_t a = d.find("|effort candles "); if (a != std::string::npos) std::sscanf(d.c_str() + a, "|effort candles %d", &n); CHECK(n == (int)es.H.bars.size() - 1); }
+      const std::string bars0 = barsOnly(es.H);
+      const auto idx = [&](long long key) { return (long)((key - es.k0) / 180); }; const auto hx = [&](long long key) { return es.H.barX0 + (int)idx(key) * es.H.barW; };
+      // the mouse: the candle under it - a sweep candle is a candle like any other; 9:03 has both sides at 1.5+ (green and red words)
+      mouseAt(x, es.H, idx(K851), hx(K851), 100); cycle(x, es.H); CHECK(stripText(es.H) == "8:51 AM   Buyers Light Effort 0.7x / Sellers Moderate Effort 1.2x"); CHECK(barsOnly(es.H) == bars0);
+      mouseAt(x, es.H, idx(K903), hx(K903), 250); cycle(x, es.H);
+      { std::cout << "JUST EFFORT, mouse on 9:03: " << stripText(es.H) << "\n"; CHECK(stripText(es.H) == "9:03 AM   Buyers Heavy Effort 1.7x / Sellers Heavy Effort 1.8x"); CHECK(barsOnly(es.H) == bars0);
+        bool g = false, r = false; for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t == es.H.paneTop + 4) { if (d.text == "Buyers Heavy Effort 1.7x" && d.color == trh::C_GREEN) g = true; if (d.text == "Sellers Heavy Effort 1.8x" && d.color == trh::C_RED) r = true; }
+        CHECK(g && r); noOverlap(es.H); }
+      mouseAt(x, es.H, (long)es.H.bars.size() - 1, hx(K906 + 180), 100); cycle(x, es.H); CHECK(stripText(es.H) == "9:06 AM   Buyers No Effort 0.3x / Sellers Moderate Effort 1.1x");   // the forming candle: the last closed one
+      turn_test_window = nullptr; cycle(x, es.H); CHECK(stripText(es.H) == "9:06 AM   Buyers No Effort 0.3x / Sellers Moderate Effort 1.1x"); CHECK(barsOnly(es.H) == bars0);
+      { const int keep = es.H.vis1; es.H.vis1 = (int)idx(K851); cycle(x, es.H); CHECK(stripText(es.H) == "8:51 AM   Buyers Light Effort 0.7x / Sellers Moderate Effort 1.2x"); es.H.vis1 = keep; cycle(x, es.H); }   // scrolled back: the last candle in view
+      // his zoom (22 px): the bar is 16 px, every bar has its number, nothing overlaps; 12 / 3 px and a small pane: no crash, no overlap
+      es.H.barW = 22; es.H.barX0 = 1100; cycle(x, es.H); CHECK(justEffort(22, 16, 125) == col60); noOverlap(es.H);
+      { cycle(x, es.H); const std::string d = lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|"); int dr = -1, of = -1; const size_t a = d.find("one per candle side "); if (a != std::string::npos) std::sscanf(d.c_str() + a, "one per candle side %d of %d", &dr, &of); CHECK(dr == of && dr >= 16); }
+      es.H.barW = 12; es.H.barX0 = 1200; cycle(x, es.H); noOverlap(es.H); barLabels(es.H, 12); es.H.barW = 3; es.H.barX0 = 1340; cycle(x, es.H); noOverlap(es.H);
+      es.H.paneRight = 500; es.H.barX0 = 300; cycle(x, es.H); noOverlap(es.H); es.H.paneBottom = 60; cycle(x, es.H); CHECK(stripText(es.H).empty());
+      es.H.paneBottom = 300; es.H.paneRight = 1400; es.H.barW = 60; es.H.barX0 = 600; cycle(x, es.H); CHECK(barsOnly(es.H) == bars0);
+      // nothing of the turn read is drawn - all of it is still there: the record is untouched
+      CHECK(get(P("TurnPane\\turn-ES-180.txt")) == rec0);
+      // a garbled / half-written display file: Effort only, with the reason
+      put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|1\nexhaustion|maybe\nEND\n"); cycle(x, es.H); cycle(x, es.H); CHECK(barsOnly(es.H) == bars0);
+      CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|display line 3 garbled (Effort only)|effort|effort coloured from 1.5\n") != std::string::npos);
+      put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|1\nexhaustion|1\nanswer|1\nread|1\n"); cycle(x, es.H); cycle(x, es.H); CHECK(barsOnly(es.H) == bars0);
+      CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|display file not whole (Effort only)|") != std::string::npos);
+      // ONE PIECE back (the Stop Run): two columns again - the Stop Run left where the record has one, Effort right on both halves of
+      // every candle (a sweep candle too: its turn half holds the sellers' Effort, no Exhaustion, no Answer); the top line stays Effort
+      put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|1\nEND\n"); cycle(x, es.H); cycle(x, es.H);
+      { int axis = 161, stops = 0; const int cx = hx(K903);
+        const auto boxAt = [&](int l, bool up) -> const mock::Draw* { for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.l == l && d.r == l + 20 && (up ? d.b == axis : d.t == axis + 1)) return &d; return nullptr; };
+        const mock::Draw *lu = boxAt(cx - 21, true), *ru = boxAt(cx + 1, true), *ld = boxAt(cx - 21, false), *rd = boxAt(cx + 1, false);
+        CHECK(lu && lu->color == trh::C_LGREEN && ru && ru->color == trh::C_GREEN && !ld && rd && rd->color == trh::C_RED);                       // 9:03: Stop Run 5.2x + buyers 1.7 up; sellers 1.8 down
+        for (const mock::Draw& d : es.H.draws) { if (d.type == "text" && d.t > 21) CHECK(isRatio(d.text)); if (d.type == "box" && d.t > 21 && d.b - d.t > 1) { CHECK(d.r - d.l == 20); if (d.color == trh::C_LGREEN || d.color == trh::C_LRED) ++stops; } }
+        CHECK(stops >= 3); CHECK(stripText(es.H) == "9:06 AM   Buyers No Effort / Sellers Moderate Effort" && pillText(es.H).empty()); noOverlap(es.H);
+        CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|ok|effort stop|effort coloured from 1.5\n") != std::string::npos || (cycle(x, es.H), get(P("TurnPane\\status-ES-180.txt")).find("SHOW|ok|effort stop|effort coloured from 1.5\n") != std::string::npos)); }
+      // THE SAVED FULL SETTING back: the pane of before, draw for draw; nothing was re-decided
+      put(P("TurnPane\\display.txt"), FULL); cycle(x, es.H); cycle(x, es.H);
+      CHECK(dumpDraws(es.H) == fullDraws); CHECK(get(P("TurnPane\\turn-ES-180.txt")) == rec0); }
     // (1.0.1) the strip sits on the pane's top edge: its box is rows 2..20, nothing is drawn above it, the bars start under it
     { bool stripBox = false; for (const mock::Draw& d : es.H.draws) { CHECK(d.t >= es.H.paneTop + 2); if (d.type == "box" && d.t == es.H.paneTop + 2 && d.b == es.H.paneTop + 20 && d.color == trh::C_STRIP) stripBox = true; }
       CHECK(stripBox); CHECK(barLabels(es.H, 60) >= 6); CHECK(barLabels(gc.H, 60) >= 4); }
@@ -225,6 +303,8 @@ int main() {
       es.H.vis1 = keep; cycle(x, es.H); CHECK(stripText(es.H) == sES); }
     // (1.0.1) THE MOUSE: while it is in the pane the strip is about the candle under it
     { const std::string rec0 = get(P("TurnPane\\turn-ES-180.txt")); const std::string bars0 = barsOnly(es.H); const int inv0 = es.H.invalidates;
+      const auto movesOf = [&]() { const std::string d = lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|"); const size_t a = d.find("|mouse moves "); int n = -1; if (a != std::string::npos) std::sscanf(d.c_str() + a, "|mouse moves %d", &n); return n; };
+      cycle(x, es.H); const int moves0 = movesOf();                     // (1.2.0) the Effort-only block above moved the mouse too
       const auto idx = [&](long long key) { return (long)((key - es.k0) / 180); };
       const auto hx = [&](long long key) { return es.H.barX0 + (int)idx(key) * es.H.barW; };   // the mock draws a candle's centre here
       // a sweep candle with its live read: that sweep's strip (8:51 LonHI), not the newest one
@@ -239,7 +319,7 @@ int main() {
         CHECK(pillText(es.H) == "\x96"); CHECK(barsOnly(es.H) == bars0); noOverlap(es.H);
         cycle(x, es.H);                                                // the status file tells what the draw BEFORE its calc showed
         CHECK(lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|").find("strip on the pane top: a candle at a level|") != std::string::npos);
-        CHECK(lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|").find("|mouse on a candle of this pane|mouse moves 2") != std::string::npos); }
+        CHECK(lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|").find("|mouse on a candle of this pane|mouse moves ") != std::string::npos && movesOf() == moves0 + 2); }
       // a candle at a named high AND a named low (9:00: ONH 9.628x above, 28768 0.279x below): the side the mouse is on
       mouseAt(x, es.H, idx(K903 - 180), hx(K903 - 180), 100); cycle(x, es.H);
       { const std::string up = stripText(es.H); std::cout << "mouse on 9:00, above the axis: " << up << "\n"; CHECK(up.find("ONH 9:00 AM   Heavy Stop Run / ") == 0);
@@ -250,11 +330,11 @@ int main() {
       // nothing else; the bars never move
       mouseAt(x, es.H, idx(K845), hx(K845), 100); cycle(x, es.H);
       { const std::string s = stripText(es.H); std::cout << "mouse on 8:45 (no level): " << s << " | " << pillText(es.H) << "\n";
-        CHECK(s == "8:45 AM   Buyers No Effort / Sellers Light Effort" && pillText(es.H) == "\x96"); CHECK(barsOnly(es.H) == bars0); noOverlap(es.H);
-        bool buyGrey = false, sellRed = false; for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t == es.H.paneTop + 4) { if (d.text == "Buyers No Effort" && d.color == trh::C_MUTED) buyGrey = true; if (d.text == "Sellers Light Effort" && d.color == trh::C_RED) sellRed = true; }
-        CHECK(buyGrey && sellRed);
+        CHECK(s == "8:45 AM   Buyers Light Effort / Sellers Light Effort" && pillText(es.H) == "\x96"); CHECK(barsOnly(es.H) == bars0); noOverlap(es.H);   // (1.2.0) buyers 0.46 reads 0.5: Light, as its bar
+        bool buyGreen = false, sellRed = false; for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t == es.H.paneTop + 4) { if (d.text == "Buyers Light Effort" && d.color == trh::C_GREEN) buyGreen = true; if (d.text == "Sellers Light Effort" && d.color == trh::C_RED) sellRed = true; }
+        CHECK(buyGreen && sellRed);
         cycle(x, es.H); CHECK(lineOf(get(P("TurnPane\\status-ES-180.txt")), "DISPLAY|").find("strip on the pane top: a candle|") != std::string::npos); }
-      mouseAt(x, es.H, idx(K845 - 180), hx(K845 - 180), 250); cycle(x, es.H); CHECK(stripText(es.H) == "8:42 AM   Buyers No Effort / Sellers Light Effort"); CHECK(barsOnly(es.H) == bars0);
+      mouseAt(x, es.H, idx(K845 - 180), hx(K845 - 180), 250); cycle(x, es.H); CHECK(stripText(es.H) == "8:42 AM   Buyers Light Effort / Sellers Light Effort"); CHECK(barsOnly(es.H) == bars0);
       mouseAt(x, es.H, idx(K903 - 360), hx(K903 - 360), 100); cycle(x, es.H);                                 // 8:57 is at ONH (no Stop Run value): above the axis the level's strip ...
       CHECK(stripText(es.H).find("ONH 8:57 AM   ") == 0);
       mouseAt(x, es.H, idx(K903 - 360), hx(K903 - 360), 250); cycle(x, es.H);                                 // ... below it, where only the sellers' Effort bar stands: the plain strip
@@ -305,7 +385,7 @@ int main() {
         if (const char* dump = std::getenv("TURN_DUMP")) put(std::string(dump) + "_ES_narrow_mouse.txt", dumpDraws(es.H));   // the render check's picture
         // (1.1.0) the mouse on a narrow candle with no level: both Efforts with their numbers
         mouseAt(x, es.H, (long)((K845 - es.k0) / 180), es.H.barX0 + (int)((K845 - es.k0) / 180) * 22, 100); cycle(x, es.H);
-        std::cout << "mouse on 8:45, narrow: " << stripText(es.H) << "\n"; CHECK(stripText(es.H) == "8:45 AM   Buyers No Effort 0.5x / Sellers Light Effort 0.7x"); CHECK(barsOnly(es.H) == b22); noOverlap(es.H);
+        std::cout << "mouse on 8:45, narrow: " << stripText(es.H) << "\n"; CHECK(stripText(es.H) == "8:45 AM   Buyers Light Effort 0.5x / Sellers Light Effort 0.7x"); CHECK(barsOnly(es.H) == b22); noOverlap(es.H);
         turn_test_window = nullptr; cycle(x, es.H); CHECK(stripText(es.H) == s); }
       // closer candles: labels compete - fewer are drawn than offered, the taller bar keeps its label, nothing overlaps
       es.H.barW = 12; es.H.barX0 = 1200; cycle(x, es.H); std::cout << "ES narrow (12 px): " << stripText(es.H) << "\n"; noOverlap(es.H);

@@ -80,6 +80,7 @@ int main(int argc, char** argv) {
     cppExtension* x = CreateExtension();
     es.chartTo(K824); cycle(x, es.H);                                    // (the files are made by the first cycle's directory: write them, then go)
     put(P("LRA-TurnPane-ES.csv"), get(data + "/LRA-Turn-ES.csv")); put(P("RevRead\\wy-ES-180.txt"), get(data + "/wy-ES.txt"));
+    if (const char* sh = std::getenv("EFF_SHOW")) put(P("TurnPane\\display.txt"), get(sh)); else std::remove(P("TurnPane\\display.txt").c_str());   // (1.2.0) the display file (none = Effort only)
     for (long long forming = K824; forming <= KEND - 180; forming += 180) { es.chartTo(forming); es.feedTo(forming); drain(x, es); }
     es.chartTo(KEND); es.feedTo(KEND - 150); drain(x, es);                 // the 10:33 candle forms: 10:30 is closed
     for (int i = 0; i < 6; ++i) cycle(x, es.H);

@@ -1,4 +1,5 @@
-// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.1.0; 1.1.0: effOf, stripOfEffort, candPlainSide, the fast pickLabels = the plain one;
+// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.2.0; 1.2.0: the display file (parseShow), the colour by the number written (shown10, effOn), the
+// strip by the number written; 1.1.0: effOf, stripOfEffort, candPlainSide, the fast pickLabels = the plain one;
 // 1.0.1: labelText, stripOfCand, levelNameAt, candSide, pickLabels). g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror
 #include "../TurnLogic.h"
 #include <cassert>
@@ -341,7 +342,7 @@ static void drawing() {
 }
 // (1.0.1) the ratio on a bar, the strip of a candle at a named level, and which labels narrow candles keep
 static void mouseAndLabels() {
-    CHECK(std::string(VERSION) == "1.1.0");
+    CHECK(std::string(VERSION) == "1.2.0");
     // the ratio ON a bar: no x, one decimal under 10, none from 10 up, 99+ cap; the strip's ratioText is unchanged
     CHECK(labelText(0) == "0.0" && labelText(0.522) == "0.5" && labelText(2.435) == "2.4" && labelText(2.87) == "2.9" && labelText(9.94) == "9.9" && labelText(9.95) == "10" && labelText(13.652) == "14");
     CHECK(labelText(99.4) == "99" && labelText(99.5) == "99+" && labelText(1e9) == "99+" && labelText(-1).empty() && labelText(std::nan("")).empty() && labelText(1.0 / 0.0).empty());
@@ -414,26 +415,28 @@ static void mouseAndLabels() {
 static void effortEveryCandle() {
     // the two bars: buyers at the top (up), sellers at the bottom (down); the same numbers as the Effort of a candle at a level
     { Bars b; b.topOk = true; b.top = 1.957; b.botOk = true; b.bot = 0.49;                      // ES 2026-11-20 9:51 AM
-      const EffPair e = effOf(b); CHECK(e.up.show && e.up.on && e.up.label == "2.0" && std::fabs(e.up.v - 1.957) < 1e-9); CHECK(e.dn.show && !e.dn.on && e.dn.label == "0.5" && std::fabs(e.dn.v - 0.49) < 1e-9);
+      const EffPair e = effOf(b, 5); CHECK(e.up.show && e.up.on && e.up.label == "2.0" && std::fabs(e.up.v - 1.957) < 1e-9); CHECK(e.dn.show && e.dn.on && e.dn.label == "0.5" && std::fabs(e.dn.v - 0.49) < 1e-9);   /* (1.2.0) it reads 0.5: coloured from 0.5 */
       CHECK(e.up.v == ratioBar(x1000(b.top), 0).v && e.dn.v == ratioBar(x1000(b.bot), 0).v); }  // = the level candle's Effort bar
-    { Bars b; b.topOk = true; b.top = 0.5; b.botOk = true; b.bot = 0.4996; const EffPair e = effOf(b); CHECK(e.up.on && e.up.label == "0.5" && e.dn.on && e.dn.label == "0.5"); }   // coloured from 0.5x; a ratio is kept to 3 decimals, as at a level (0.4996 = 0.500: on)
-    { Bars b; b.topOk = true; b.top = 0.4994; const EffPair e = effOf(b); CHECK(e.up.show && !e.up.on && !e.dn.show); }
-    { Bars b; const EffPair e = effOf(b); CHECK(!e.up.show && !e.dn.show && e.up.label.empty()); }                                   // under 4 price levels / nothing in the rest: no bar
-    { Bars b; b.topOk = true; b.top = std::nan(""); b.botOk = true; b.bot = -1; const EffPair e = effOf(b); CHECK(!e.up.show && !e.dn.show); }
-    { Bars b; b.topOk = true; b.top = 1.0 / 0.0; b.botOk = true; b.bot = 0; const EffPair e = effOf(b); CHECK(!e.up.show && e.dn.show && !e.dn.on && e.dn.label == "0.0"); }
-    { Bars b; b.topOk = true; b.top = 250; b.botOk = true; b.bot = 12.34; const EffPair e = effOf(b); CHECK(e.up.label == "99+" && e.dn.label == "12" && barPx(e.up.v, 60) == 60 && barPx(e.dn.v, 60) == 60); }
+    { Bars b; b.topOk = true; b.top = 0.5; b.botOk = true; b.bot = 0.4996; const EffPair e = effOf(b, 5); CHECK(e.up.on && e.up.label == "0.5" && e.dn.on && e.dn.label == "0.5"); }   // coloured from 0.5x; a ratio is kept to 3 decimals, as at a level (0.4996 = 0.500: on)
+    { Bars b; b.topOk = true; b.top = 0.4994; const EffPair e = effOf(b, 5); CHECK(e.up.show && e.up.on && e.up.label == "0.5" && !e.dn.show); }   // (1.2.0) it reads 0.5: coloured from 0.5
+    { Bars b; b.topOk = true; b.top = 0.4494; const EffPair e = effOf(b, 5); CHECK(e.up.show && !e.up.on && e.up.label == "0.4"); }
+    { Bars b; const EffPair e = effOf(b, 5); CHECK(!e.up.show && !e.dn.show && e.up.label.empty()); }                                   // under 4 price levels / nothing in the rest: no bar
+    { Bars b; b.topOk = true; b.top = std::nan(""); b.botOk = true; b.bot = -1; const EffPair e = effOf(b, 5); CHECK(!e.up.show && !e.dn.show); }
+    { Bars b; b.topOk = true; b.top = 1.0 / 0.0; b.botOk = true; b.bot = 0; const EffPair e = effOf(b, 5); CHECK(!e.up.show && e.dn.show && !e.dn.on && e.dn.label == "0.0"); }
+    { Bars b; b.topOk = true; b.top = 250; b.botOk = true; b.bot = 12.34; const EffPair e = effOf(b, 5); CHECK(e.up.label == "99+" && e.dn.label == "12" && barPx(e.up.v, 60) == 60 && barPx(e.dn.v, 60) == 60); }
     // from volume at price: a candle of 8 prices, the buyers heavy in its top two, the sellers thin in its bottom two
     { std::vector<Row> rows; for (long long t = 100; t <= 107; ++t) { Row r; r.tick = t; r.buy = t >= 106 ? 60 : 10; r.sell = t <= 101 ? 2 : 20; rows.push_back(r); }
-      const EffPair e = effOf(barRatios(rows, 100, 107)); CHECK(e.up.show && e.up.on && e.up.label == "6.0" && e.dn.show && !e.dn.on && e.dn.label == "0.1");
-      const EffPair f = effOf(barRatios(rows, 100, 102)); CHECK(!f.up.show && !f.dn.show); }     // 3 price levels: none
+      const EffPair e = effOf(barRatios(rows, 100, 107), 5); CHECK(e.up.show && e.up.on && e.up.label == "6.0" && e.dn.show && !e.dn.on && e.dn.label == "0.1");
+      const EffPair f = effOf(barRatios(rows, 100, 102), 5); CHECK(!f.up.show && !f.dn.show); }     // 3 price levels: none
     // the strip of a plain candle: buyers green, sellers red, No = grey; a dash where there is no bar; never a verdict, a level or a pill
-    { const Strip a = stripOfEffort(610, 1800, true, "9:27 AM"); CHECK(a.flat == "9:27 AM   Buyers Light Effort 0.6x / Sellers Heavy Effort 1.8x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
+    { const Strip a = stripOfEffort(610, 1800, true, "9:27 AM", 5); CHECK(a.flat == "9:27 AM   Buyers Light Effort 0.6x / Sellers Heavy Effort 1.8x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
       CHECK(a.segs.size() == 4 && a.segs[0].tone == T_MUTED && !a.segs[0].bold && a.segs[1].tone == T_BUY && a.segs[1].bold && a.segs[2].tone == T_MUTED && a.segs[3].tone == T_SELL && a.segs[3].bold);
-      CHECK(stripOfEffort(610, 1800, false, "9:27 AM").flat == "9:27 AM   Buyers Light Effort / Sellers Heavy Effort");
-      CHECK(stripOfEffort(1957, 490, true, "").flat == "Buyers Heavy Effort 2.0x / Sellers No Effort 0.5x" && stripOfEffort(1957, 490, true, "").segs.size() == 3 && stripOfEffort(1957, 490, true, "").segs[2].tone == T_MUTED);
-      CHECK(stripOfEffort(1000, 1499, true, "").flat == "Buyers Moderate Effort 1.0x / Sellers Moderate Effort 1.5x" && stripOfEffort(1500, 999, true, "").flat == "Buyers Heavy Effort 1.5x / Sellers Light Effort 1.0x");
-      CHECK(stripOfEffort(-1, 3160, true, "10:06 AM").flat == "10:06 AM   Buyers \x96 Effort / Sellers Heavy Effort 3.2x" && stripOfEffort(230, -1, true, "").flat == "Buyers No Effort 0.2x / Sellers \x96 Effort");
-      for (const Strip& q : { stripOfEffort(610, 1800, true, "9:27 AM"), stripOfEffort(-1, -1, false, ""), stripOfEffort(0, 99999000, true, "x") }) {
+      CHECK(stripOfEffort(610, 1800, false, "9:27 AM", 5).flat == "9:27 AM   Buyers Light Effort / Sellers Heavy Effort");
+      CHECK(stripOfEffort(1957, 490, true, "", 5).flat == "Buyers Heavy Effort 2.0x / Sellers Light Effort 0.5x" && stripOfEffort(1957, 490, true, "", 5).segs.size() == 3 && stripOfEffort(1957, 490, true, "", 5).segs[2].tone == T_SELL);   /* (1.2.0) the word by the number written */
+      CHECK(stripOfEffort(1957, 440, true, "", 5).flat == "Buyers Heavy Effort 2.0x / Sellers No Effort 0.4x" && stripOfEffort(1957, 440, true, "", 5).segs[2].tone == T_MUTED);
+      CHECK(stripOfEffort(1000, 1499, true, "", 5).flat == "Buyers Moderate Effort 1.0x / Sellers Heavy Effort 1.5x" && stripOfEffort(1500, 999, true, "", 5).flat == "Buyers Heavy Effort 1.5x / Sellers Moderate Effort 1.0x");
+      CHECK(stripOfEffort(-1, 3160, true, "10:06 AM", 5).flat == "10:06 AM   Buyers \x96 Effort / Sellers Heavy Effort 3.2x" && stripOfEffort(230, -1, true, "", 5).flat == "Buyers No Effort 0.2x / Sellers \x96 Effort");
+      for (const Strip& q : { stripOfEffort(610, 1800, true, "9:27 AM", 5), stripOfEffort(-1, -1, false, "", 5), stripOfEffort(0, 99999000, true, "x", 5) }) {
           CHECK(q.flat.find("Stop Run") == std::string::npos && q.flat.find("Exhaustion") == std::string::npos && q.flat.find("Answer") == std::string::npos && q.flat.find("\xBB") == std::string::npos && q.flat.find("%") == std::string::npos);
           std::string f; for (const Seg& g : q.segs) { CHECK(g.tone == T_BUY || g.tone == T_SELL || g.tone == T_MUTED); f += g.text; } CHECK(f == q.flat); } }
     // a candle at a level under the mouse: the half that has a level keeps the level's strip; the half with only the other side's Effort is plain
@@ -473,8 +476,51 @@ static void effortEveryCandle() {
       const std::clock_t t1 = std::clock(); const std::vector<size_t> b = pickLabelsPlain(c, bars); const double msPlain = 1000.0 * (double)(std::clock() - t1) / CLOCKS_PER_SEC;
       CHECK(a == b); CHECK(ms < 60.0); std::printf("pickLabels, 1,500 candles x 2 sides (3,000 labels asked, %zu kept): %.2f ms (the plain loop %.1f ms)\n", a.size(), ms, msPlain); }
 }
+// (1.2.0) just Effort: the display file, the colour and the word by the number WRITTEN on the bar
+static void justEffort() {
+    // the defaults = no file = Effort only, coloured from 1.5
+    { const Show d; CHECK(!d.stop && !d.exh && !d.ans && !d.read && d.effFrom10 == 15 && !d.fromFile && !d.twoCol() && showText(d) == "effort|effort coloured from 1.5");
+      const Show e = parseShow(""); CHECK(!e.fromFile && !e.twoCol() && e.effFrom10 == 15 && e.why == "no display file (Effort only)"); }
+    // the saved full setting (display-full.txt): every piece on, coloured from 0.5 = the 1.1.0 pane
+    { const Show f = parseShow("TURNSHOW|1\nstop|1\nexhaustion|1\nanswer|1\nread|1\neffort_from|0.5\nEND\n");
+      CHECK(f.fromFile && f.why == "ok" && f.stop && f.exh && f.ans && f.read && f.effFrom10 == 5 && f.twoCol() && showText(f) == "effort stop exhaustion answer read|effort coloured from 0.5");
+      const Show g = parseShow("TURNSHOW|1\r\nstop|1\r\nexhaustion|1\r\nanswer|1\r\nread|1\r\neffort_from|0.5\r\nEND\r\n"); CHECK(g.fromFile && g.stop && g.read && g.effFrom10 == 5);   // Windows line ends
+      const Show h = parseShow("TURNSHOW|1\nstop|1\nEND"); CHECK(h.fromFile && h.stop && !h.exh && !h.ans && !h.read && h.effFrom10 == 15 && h.twoCol());   // one piece; no newline after END
+      const Show k = parseShow("TURNSHOW|1\nEND\n"); CHECK(k.fromFile && !k.twoCol() && k.effFrom10 == 15);                                             // nothing switched
+      const Show u = parseShow("TURNSHOW|1\nfuture_piece|7\nread|1\neffort_from|2\nEND\n"); CHECK(u.fromFile && u.read && !u.stop && u.effFrom10 == 20 && showText(u) == "effort read|effort coloured from 2.0"); }
+    // anything wrong = Effort only for everything, with the reason (never half a file)
+    for (const char* bad : { "stop|1\nEND\n", "TURNSHOW|2\nstop|1\nEND\n", "TURNSHOW|1\nstop|1\n", "TURNSHOW|1\nstop|1\nEN", "TURNSHOW|1", "TURNSHOW|1\nstop|2\nEND\n", "TURNSHOW|1\nstop|\nEND\n", "TURNSHOW|1\nstop|1|1\nEND\n",
+                             "TURNSHOW|1\nread|yes\nEND\n", "TURNSHOW|1\nstop|1\neffort_from|abc\nEND\n", "TURNSHOW|1\neffort_from|-1\nEND\n", "TURNSHOW|1\neffort_from|100\nEND\n", "TURNSHOW|1\neffort_from|nan\nEND\n", "\n\n", "garbage" }) {
+        const Show x = parseShow(bad); CHECK(!x.fromFile && !x.stop && !x.exh && !x.ans && !x.read && x.effFrom10 == 15 && x.why.find("(Effort only)") != std::string::npos && x.why != "ok"); }
+    { const Show x = parseShow(std::string(SHOW_MAX_BYTES + 1, ' ')); CHECK(!x.fromFile && x.why == "display file too big (Effort only)"); }
+    CHECK(parseShow("TURNSHOW|1\nstop|1\nexhaustion|x\nEND\n").why == "display line 3 garbled (Effort only)");
+    // the number written on a bar, in tenths
+    CHECK(shown10("1.5") == 15 && shown10("0.5") == 5 && shown10("0.0") == 0 && shown10("9.9") == 99 && shown10("14") == 140 && shown10("99") == 990 && shown10("99+") == 990 && shown10("") == -1 && shown10("x") == -1 && shown10("3/3") == 30);
+    for (double v = 0; v < 120; v += 0.0037) { const std::string t = labelText(v); const long long s10 = shown10(t); CHECK(s10 >= 0); char b[16]; std::snprintf(b, sizeof b, s10 >= 100 ? "%lld" : "%lld.%lld", s10 >= 100 ? s10 / 10 : s10 / 10, s10 % 10); CHECK(t == b || t == "99+"); }   // = the label, digit for digit
+    // THE COLOUR FOLLOWS THE NUMBER WRITTEN: a bar that reads 1.5 is coloured, a bar that reads 1.4 is grey - whatever the digits behind it
+    { Bars b; b.topOk = b.botOk = true; b.top = 1.4996; b.bot = 1.4494; const EffPair e = effOf(b, 15); CHECK(e.up.label == "1.5" && e.up.on && e.dn.label == "1.4" && !e.dn.on); }
+    { Bars b; b.topOk = b.botOk = true; b.top = 1.49; b.bot = 1.45; const EffPair e = effOf(b, 15); CHECK(e.up.label == "1.5" && e.up.on); CHECK((e.dn.label == "1.5") == e.dn.on); }   // ES 9:30 AM: sellers 1.49 reads 1.5; 1.45: as it is written
+    for (long long m = 0; m <= 120000; m += 7) { Bars b; b.topOk = true; b.top = (double)m / 1000.0; const EffPair e = effOf(b, 15); CHECK(e.up.show && e.up.on == (shown10(e.up.label) >= 15));
+        if (m >= 1500) CHECK(e.up.on);
+        if (m < 1440) CHECK(!e.up.on); }
+    { Bars b; b.topOk = b.botOk = true; b.top = 3.11; b.bot = 0.29; const EffPair e = effOf(b, 15); CHECK(e.up.on && e.up.label == "3.1" && !e.dn.on && e.dn.show && e.dn.label == "0.3" && barPx(e.up.v, 60) == 60); }   // ES 8:24 AM
+    { Bars b; b.topOk = b.botOk = true; b.top = 250; b.bot = 12.34; const EffPair e = effOf(b, 15); CHECK(e.up.on && e.up.label == "99+" && e.dn.on && e.dn.label == "12"); }
+    { Bars b; const EffPair e = effOf(b, 15); CHECK(!e.up.show && !e.dn.show && !e.up.on && !e.dn.on); Bar1 none; CHECK(!effOn(none, 0) && !effOn(none, 15)); }
+    { Bars b; b.topOk = true; b.top = 0.2; CHECK(effOf(b, 0).up.on && !effOf(b, 5).up.on && !effOf(b, 990).up.on); b.top = 500; CHECK(effOf(b, 990).up.on); }
+    CHECK(effClass10(0) == 0 && effClass10(4) == 0 && effClass10(5) == 1 && effClass10(9) == 1 && effClass10(10) == 2 && effClass10(14) == 2 && effClass10(15) == 3 && effClass10(990) == 3);
+    // the top line of a candle: the word and the colour by the number written; green / red only from 1.5
+    { const Strip a = stripOfEffort(230, 3160, true, "10:06 AM", 15); CHECK(a.flat == "10:06 AM   Buyers No Effort 0.2x / Sellers Heavy Effort 3.2x" && a.segs.size() == 4 && a.segs[1].tone == T_MUTED && a.segs[3].tone == T_SELL);
+      const Strip b = stripOfEffort(560, 600, true, "10:30 AM", 15); CHECK(b.flat == "10:30 AM   Buyers Light Effort 0.6x / Sellers Light Effort 0.6x" && b.segs[1].tone == T_MUTED && b.segs[3].tone == T_MUTED);   // his mockup's top line: both grey
+      const Strip c = stripOfEffort(1957, 490, true, "9:51 AM", 15); CHECK(c.flat == "9:51 AM   Buyers Heavy Effort 2.0x / Sellers Light Effort 0.5x" && c.segs[1].tone == T_BUY && c.segs[3].tone == T_MUTED);
+      const Strip d = stripOfEffort(1290, 1490, true, "9:30 AM", 15); CHECK(d.flat == "9:30 AM   Buyers Moderate Effort 1.3x / Sellers Heavy Effort 1.5x" && d.segs[1].tone == T_MUTED && d.segs[3].tone == T_SELL);   // 1.49 reads 1.5: Heavy, red - as its bar
+      const Strip e = stripOfEffort(1440, 1449, true, "", 15); CHECK(e.flat == "Buyers Moderate Effort 1.4x / Sellers Moderate Effort 1.4x" && e.segs[0].tone == T_MUTED && e.segs[2].tone == T_MUTED);
+      const Strip f = stripOfEffort(-1, -1, true, "8:24 AM", 15); CHECK(f.flat == "8:24 AM   Buyers \x96 Effort / Sellers \x96 Effort" && f.segs[1].tone == T_MUTED && f.segs[3].tone == T_MUTED);
+      const Strip g = stripOfEffort(1957, 490, true, "", 5); CHECK(g.segs[0].tone == T_BUY && g.segs[2].tone == T_SELL);        // the saved full setting: coloured from 0.5
+      for (long long m = 0; m <= 9000; m += 13) { const Strip q = stripOfEffort(m, m, true, "", 15); Bars bb; bb.topOk = true; bb.top = (double)m / 1000.0; const bool on = effOf(bb, 15).up.on;
+          CHECK((q.segs[0].tone == T_BUY) == on && (q.segs[2].tone == T_SELL) == on && (q.flat.find("Heavy") != std::string::npos) == on); } }   // the strip never disagrees with the bar
+}
 int main() {
-    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing(); mouseAndLabels(); effortEveryCandle();
+    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing(); mouseAndLabels(); effortEveryCandle(); justEffort();
     std::printf("%d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

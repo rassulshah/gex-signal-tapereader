@@ -1,4 +1,10 @@
-// TurnLogic.h 1.1.0 (2026-11-23; 1.0.1 2026-11-22; 1.0.0 the same day) -- the logic of lsTurn "Turn v1.1" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// TurnLogic.h 1.2.0 (2026-11-23; 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day) -- the logic of lsTurn "Turn v1.2" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// (1.2.0, Rassul 2026-11-23 CT 11:00 "show me this indicator with just effort .. show mockup"; 11:04 "meke values that are less than 1.5 gray";
+// 11:06 "this look simple and easy  i like it.   lets use this for now.. save other setting because i might change my mind and add it
+// pieces later"): THE PANE SHOWS JUST EFFORT - one bar a side on every closed candle, coloured only when the number written on it is 1.5 or
+// more. The other pieces (the Stop Run bar, the Exhaustion bar, the Answer bar, the read strip with level / verdict / odds) are kept whole
+// and switched by a small display file (Show, parseShow; no file = Effort only): the saved full setting brings the 1.1.0 pane back, piece
+// by piece. Nothing that is read, decided or recorded changes - only what is drawn.
 // (1.1.0, Rassul 2026-11-23 CT 09:45 "does the turn indicator only show values when there is a level"; 09:47 "can you show the indicator on
 // all bars ?"; 09:51 "go -  for now just do effort"): Effort on EVERY closed candle - the buyers' Effort at the top of the candle (up, green)
 // and the sellers' Effort at its bottom (down, red), the same ratio and the same right-hand column as on a candle at a level (effOf); the
@@ -54,7 +60,7 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";
 static const size_t FILL_CAP = 150000;      // fills of one candle (more = the candle is not decided live)
 static const size_t SHOWN_CAP = 50000;      // resting orders tracked (is the aggressor a known resting order?)
 static const long long NEAR_TICKS = 64;     // only orders within this many ticks of the last trade are tracked
@@ -758,28 +764,79 @@ inline Strip stripOfCand(long long stopX1000, long long eff1000, bool numbers, c
     s.pill = "\x96"; s.pillTone = T_MUTED; s.edgeTone = T_MUTED;
     return s;
 }
+// (1.2.0) WHAT THE PANE SHOWS besides Effort. lsFlexLevels\TurnPane\display.txt, written by hand / by Claude when Rassul asks for a piece:
+//   TURNSHOW|1
+//   stop|0            the Stop Run bar (left column, at a named level / on a sweep)
+//   exhaustion|0      the Exhaustion bar (left column, the turn half of a sweep candle)
+//   answer|0          the Answer bar (right column, the turn half of a sweep candle)
+//   read|0            the read strip: level, the four words, the verdict, the odds pill (off = the strip tells the candle's two Efforts)
+//   effort_from|1.5   an Effort bar is coloured when the number written on it is this or more (grey under it)
+//   END
+// No file = the defaults = Effort only, coloured from 1.5. The first line and END must be there (a half-written file is never used); a
+// key that is missing keeps its default, an unknown key is ignored, a bad value = the defaults for everything + why.
+static const size_t SHOW_MAX_BYTES = 4096;
+struct Show {
+    bool stop = false, exh = false, ans = false, read = false;
+    long long effFrom10 = 15;                                             // tenths
+    bool fromFile = false; std::string why = "no display file (Effort only)";
+    bool twoCol() const { return stop || exh || ans; }                    // two columns a candle; else ONE centred Effort bar a side
+};
+inline Show parseShow(const std::string& txt) {
+    Show d; if (txt.empty()) return d;
+    if (txt.size() > SHOW_MAX_BYTES) { d.why = "display file too big (Effort only)"; return d; }
+    const std::vector<std::string> L = lines(txt, false);
+    if (L.empty() || L[0] != "TURNSHOW|1") { d.why = "display file header (Effort only)"; return d; }
+    if (L.size() < 2 || L.back() != "END") { d.why = "display file not whole (Effort only)"; return d; }
+    Show s;
+    for (size_t i = 1; i + 1 < L.size(); ++i) {
+        const std::vector<std::string> c = split(L[i], '|'); bool ok = true; bool* f = nullptr;
+        if (c[0] == "stop") f = &s.stop; else if (c[0] == "exhaustion") f = &s.exh; else if (c[0] == "answer") f = &s.ans; else if (c[0] == "read") f = &s.read;
+        if (f) { long long b = 0; ok = c.size() == 2 && toLL(c[1], b) && (b == 0 || b == 1); if (ok) *f = b == 1; }
+        else if (c[0] == "effort_from") { double x = 0; ok = c.size() == 2 && toD(c[1], x) && x >= 0 && x <= 99; if (ok) s.effFrom10 = (long long)std::llround(x * 10.0); }
+        else continue;
+        if (!ok) { d.why = "display line " + std::to_string(i + 1) + " garbled (Effort only)"; return d; }
+    }
+    s.fromFile = true; s.why = "ok"; return s;
+}
+inline std::string showText(const Show& s) {                             // the status file: "effort stop exhaustion answer read|effort coloured from 1.5"
+    char b[48]; std::snprintf(b, sizeof b, "|effort coloured from %lld.%lld", s.effFrom10 / 10, s.effFrom10 % 10);
+    return std::string("effort") + (s.stop ? " stop" : "") + (s.exh ? " exhaustion" : "") + (s.ans ? " answer" : "") + (s.read ? " read" : "") + b;
+}
+// the number WRITTEN on a bar, in tenths ("1.5" -> 15, "0.5" -> 5, "14" -> 140, "99+" -> 990); -1 = no number. The colour of an Effort
+// bar follows what the bar says: a bar that reads 1.5 is coloured, whatever the digits behind it.
+inline long long shown10(const std::string& label) {
+    if (label.empty()) return -1;
+    char* e = nullptr; const double x = std::strtod(label.c_str(), &e);
+    if (e == label.c_str() || !std::isfinite(x) || x < 0) return -1;
+    return (long long)std::llround(x * 10.0);
+}
+inline bool effOn(const Bar1& b, long long from10) { return b.show && shown10(b.label) >= from10; }
+inline int effClass10(long long t) { return t < 5 ? 0 : t < 10 ? 1 : t < 15 ? 2 : 3; }   // No / Light / Moderate / Heavy by the number written (tenths)
 // (1.1.0) EFFORT ON EVERY CANDLE. The two Effort bars of a closed candle from its volume at price: up = the buyers' Effort at the top
 // of the candle, dn = the sellers' Effort at its bottom (barRatios: per price level in the 25% at that end / per level in the rest).
-// No bar where the candle has under 4 price levels or nothing traded in the rest. Grey under 0.5x (No Effort), as at a level.
+// No bar where the candle has under 4 price levels or nothing traded in the rest. (1.2.0) Coloured when the number written on the bar is
+// from10 tenths or more (15 = "1.5"), grey under it.
 struct EffPair { Bar1 up, dn; };
-inline EffPair effOf(const Bars& b) {
+inline EffPair effOf(const Bars& b, long long from10) {
     EffPair e;
     if (b.topOk && std::isfinite(b.top) && b.top >= 0) e.up = ratioBar(x1000(b.top), 0);
     if (b.botOk && std::isfinite(b.bot) && b.bot >= 0) e.dn = ratioBar(x1000(b.bot), 0);
+    e.up.on = effOn(e.up, from10); e.dn.on = effOn(e.dn, from10);
     return e;
 }
-// the strip of a plain candle (no named level, not a sweep) under the mouse: "<time>   Buyers <word> Effort 1.2x / Sellers <word> Effort
-// 1.9x" - what is drawn on it, nothing else. Buyers green, sellers red, a No Effort side grey. -1 = no bar on that side.
-inline Strip stripOfEffort(long long up1000, long long dn1000, bool numbers, const std::string& prefix) {
+// the strip of a plain candle: "<time>   Buyers <word> Effort 1.2x / Sellers <word> Effort 1.9x" - what is drawn on it, nothing else.
+// (1.2.0) The word and the colour follow the number written on the bar: buyers green / sellers red when it is from10 tenths or more,
+// grey under it. -1 = no bar on that side (a dash).
+inline Strip stripOfEffort(long long up1000, long long dn1000, bool numbers, const std::string& prefix, long long from10) {
     Strip s;
     struct Add { Strip& s; void operator()(const std::string& t, int tone, bool bold) const { Seg g; g.text = t; g.tone = tone; g.bold = bold; s.segs.push_back(g); s.flat += t; } } add = { s };
     if (!prefix.empty()) add(prefix + "   ", T_MUTED, false);
-    if (up1000 >= 0) { const double x = (double)up1000 / 1000.0; const int k = effClass(x);
-        add(std::string("Buyers ") + word4(k) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_BUY, true); }
+    if (up1000 >= 0) { const double x = (double)up1000 / 1000.0; const long long t = shown10(labelText(x));
+        add(std::string("Buyers ") + word4(effClass10(t)) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), t >= from10 ? T_BUY : T_MUTED, true); }
     else add("Buyers \x96 Effort", T_MUTED, true);
     add(" / ", T_MUTED, false);
-    if (dn1000 >= 0) { const double x = (double)dn1000 / 1000.0; const int k = effClass(x);
-        add(std::string("Sellers ") + word4(k) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_SELL, true); }
+    if (dn1000 >= 0) { const double x = (double)dn1000 / 1000.0; const long long t = shown10(labelText(x));
+        add(std::string("Sellers ") + word4(effClass10(t)) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), t >= from10 ? T_SELL : T_MUTED, true); }
     else add("Sellers \x96 Effort", T_MUTED, true);
     s.pill = "\x96"; s.pillTone = T_MUTED; s.edgeTone = T_MUTED;
     return s;

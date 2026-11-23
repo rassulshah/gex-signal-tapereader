@@ -1,5 +1,16 @@
 /*
- *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.1"  1.1.0  (2026-11-23; 1.0.1 2026-11-22; 1.0.0 the same day)
+ *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.2"  1.2.0  (2026-11-23; 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day)
+ *
+ *  (1.2.0) Rassul 2026-11-23 CT: 11:00 "show me this indicator with just effort .. show mockup"; 11:04, on the mockup, "meke values that are
+ *  less than 1.5 gray"; 11:06 "this look simple and easy  i like it.   lets use this for now.. save other setting because i might change my
+ *  mind and add it pieces later". THE PANE SHOWS JUST EFFORT: on every closed candle ONE bar a side, centred on the candle - the buyers'
+ *  Effort at its top (up), the sellers' Effort at its bottom (down) - with its number; green / red only when the number written on the bar
+ *  is 1.5 or more, grey under it. The top line tells the candle under the mouse, else the last closed candle in view: "<time>   Buyers
+ *  <word> Effort 0.6x / Sellers <word> Effort 3.2x". THE OTHER SETTING IS SAVED, NOT REMOVED: the Stop Run bar, the Exhaustion bar, the
+ *  Answer bar and the read strip (level, verdict, odds) are whole in this file and are switched on, piece by piece, by
+ *  lsFlexLevels\TurnPane\display.txt (turn::Show; no file = Effort only; the full setting is kept next to it as display-full.txt). The
+ *  file is re-read when it changes: a piece comes back without a rebuild or a restart. Everything is still read, decided once and recorded
+ *  as before (the nightly keeps scoring the reads); only what is DRAWN changed. Mockup turn-just-effort-mockup.html. Notes NOTES-TURN120.md.
  *
  *  (1.1.0) Rassul 2026-11-23 CT, on his CL chart: 09:45 "does the turn indicator only show values when there is a level"; 09:47 "can you
  *  show the indicator on all bars ?"; 09:51 "go -  for now just do effort". EFFORT ON EVERY CLOSED CANDLE: the buyers' Effort at the top
@@ -75,7 +86,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.1.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.2.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -326,7 +337,9 @@ struct State {
     // (1.0.1) the mouse: the chart bar it is on while it is inside this pane (-1 = not in the pane), where it is, the axis row of the last draw
     pc::Tracker cur; int hov = -1, hovY = 0, axisY = 0; long long mouseMoves = 0;
     int stripKind = 0, labMode = 0, labOffered = 0, labDrawn = 0;      // what the last draw showed (the status file): strip 0 none / 1 a sweep / 2 a level candle / (1.1.0) 3 a plain candle
-    int effCandles = 0;                                                // (1.1.0) candles the last draw gave an Effort bar that have no level and no sweep read
+    int effCandles = 0;                                                // (1.1.0) candles the last draw gave an Effort bar; (1.2.0) every such candle
+    // (1.2.0) what the pane shows besides Effort: lsFlexLevels\TurnPane\display.txt (no file = Effort only), re-read when its stamp changes
+    turn::Show show; long long showSig = -2; std::string showPath; bool showChanged = false;
 };
 
 }  // namespace trh
@@ -419,6 +432,7 @@ private:
         S.paramsPath = flex.empty() || !S.supported ? std::string() : flex + "\\LRA-TurnPane-" + S.market + ".csv";
         S.wyPath = flex.empty() || !S.supported || spb <= 0 ? std::string() : flex + "\\RevRead\\wy-" + S.market + "-" + std::to_string(spb) + ".txt";
         S.recPath = own.empty() || !S.supported || spb <= 0 ? std::string() : own + "\\turn-" + S.market + "-" + std::to_string(spb) + ".txt";
+        S.showPath = own.empty() || !S.supported ? std::string() : own + "\\display.txt"; S.showSig = -2; S.show = turn::Show(); S.showChanged = false;   // (1.2.0)
         S.paramsSig = S.wySig = -2; S.P = turn::defaults(S.market); S.sweeps.clear(); S.levels.clear(); S.swAt.clear(); S.histAt.clear();
         S.rec = turn::Rec(); S.recLoaded = false; S.recDirty = false; S.recSig = -2;
         S.closedSeen.clear(); S.barSeen.clear(); S.recheck.clear(); S.noLive.clear(); S.candMark = 0; S.capSeen = 0; S.fileCheckMs = -100000;
@@ -462,6 +476,7 @@ private:
                         if (S.feed.capHits == S.capSeen && (S.feed.lastEventMs < 0 || now - S.feed.lastEventMs >= CLOSE_QUIET_MS)) S.live.closeThrough(S.lastClosedKey);
                         S.capSeen = S.feed.capHits;   // a quiet feed: the chart's next bar closes it (else the next event does, in order)
                         files(S, now);
+                        if (S.showChanged) { S.showChanged = false; if (!fromDraw) invalidateChart(false); }   // (1.2.0) a piece was switched: show it now
                         decide(S, now, times, vols, count);
                     }
                 }
@@ -522,6 +537,14 @@ private:
             if (readCapped(S.paramsPath, turn::PARAMS_MAX_BYTES, t, sig)) {
                 S.P = turn::parseParams(t, S.market); S.paramsSig = sig;
                 S.histAt.clear(); for (size_t k = 0; k < S.P.hist.size(); ++k) S.histAt[S.P.hist[k].stamp] = k;
+            }
+        }
+        if (fileSig(S.showPath) != S.showSig) {                         // (1.2.0) the display file: missing / garbled = Effort only
+            std::string t; long long sig = -1;
+            if (readCapped(S.showPath, turn::SHOW_MAX_BYTES, t, sig)) {
+                const turn::Show n = sig < 0 ? turn::Show() : turn::parseShow(t);
+                if (n.stop != S.show.stop || n.exh != S.show.exh || n.ans != S.show.ans || n.read != S.show.read || n.effFrom10 != S.show.effFrom10) S.showChanged = true;
+                S.show = n; S.showSig = sig;
             }
         }
         if (fileSig(S.wyPath) != S.wySig) {
@@ -669,10 +692,12 @@ private:
     // draw: emptied at the start of every render, so it never carries anything from one chart to the next (the per-chart state is State).
     std::map<std::string, int> labW_;
     int labW(const std::string& t) { const std::map<std::string, int>::const_iterator it = labW_.find(t); if (it != labW_.end()) return it->second; const int w = (int)getTextWidth(t.c_str(), -1) + 2; if (labW_.size() < 512) labW_[t] = w; return w; }
+    // (1.2.0) one = the pane shows Effort only: ONE bar a side, centred on the candle and wider (the two columns are for the other pieces)
     int drawSide(int owner, int x, int dir, const turn::BarSet& bs, int axis, int half, int bw, bool wide, bool offer, int padL, int padR,
-                 std::vector<turn::BarBox>& boxes, std::vector<turn::LabCand>& cands, std::vector<LabText>& texts) {
-        const int gap = bw >= 12 ? 2 : bw >= 6 ? 1 : 0, w = std::max(1, std::min((bw - gap - 2) / 2, 20));
-        const int xl = x - gap / 2 - w, xr = x + (gap - gap / 2);
+                 std::vector<turn::BarBox>& boxes, std::vector<turn::LabCand>& cands, std::vector<LabText>& texts, bool one) {
+        const int gap = one ? 0 : bw >= 12 ? 2 : bw >= 6 ? 1 : 0;
+        const int w = one ? std::max(1, std::min(bw - (bw >= 12 ? 6 : bw >= 6 ? 2 : 1), 40)) : std::max(1, std::min((bw - gap - 2) / 2, 20));
+        const int xl = one ? x - w / 2 : x - gap / 2 - w, xr = one ? x - w / 2 : x + (gap - gap / 2);
         const bool pushUp = dir < 0;                                    // a swept high: the buyers' bars go up, the turn's bars down
         struct One { const turn::Bar1* b; int left; bool up; COLOR c; };
         const One all[4] = { { &bs.stop, xl, pushUp, pushUp ? C_LGREEN : C_LRED }, { &bs.eff, xr, pushUp, pushUp ? C_GREEN : C_RED },
@@ -725,7 +750,8 @@ private:
         const int bw = std::max(1, (int)getPixelsPerBar());
         int xLast = R; { PNT p; p.set(v1, 0.0f, kBarCenter); xLast = std::min(R - 2, (int)p.h + bw / 2 + 2); }
         setFont(f9b);
-        const bool wide = bw >= 2 * ((int)getTextWidth("9.9", -1) + 2) + 6;   // room for two ratio labels side by side on one candle
+        const turn::Show& W = S.show; const bool one = !W.twoCol();          // (1.2.0) Effort only: one centred bar a side, one number a side
+        const bool wide = !one && bw >= 2 * ((int)getTextWidth("9.9", -1) + 2) + 6;   // room for two ratio labels side by side on one candle
         // the strip, (1.0.1) on the pane's top edge: the candle under the mouse while the mouse is in this pane, else the newest sweep at or
         // before the last candle in view. A sweep candle: its read. A candle at a named level: what is drawn on it. No bars on the candle:
         // the same strip as with no mouse (the strip never comes and goes while the mouse moves, so the bars never jump).
@@ -734,7 +760,16 @@ private:
         const long long atKey = std::min(viewKey, S.lastClosedKey);
         int kind = 0; turn::Read rd; long long cStop = -1, cEff = -1, eUp = -1, eDn = -1; std::string cPrefix;
         const int hv = (S.hov >= v0 && S.hov <= v1) ? S.hov : -1;
-        if (hv >= 0) {
+        // the two Efforts of a closed candle, as its bars say them (-1 = no bar)
+        const auto effortsOf = [&](long long key) { eUp = eDn = -1; const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
+            if (bi != S.bars.end()) { const turn::EffPair e = turn::effOf(bi->second.b, W.effFrom10); if (e.up.show) eUp = turn::x1000(bi->second.b.top); if (e.dn.show) eDn = turn::x1000(bi->second.b.bot); } };
+        if (!W.read) {
+            // (1.2.0) no read strip: the top line is about Effort only - the closed candle under the mouse, else the last closed candle in
+            // view. Always there (a dash where a side has no bar), so the bars never jump while the mouse moves.
+            const long long key = (hv >= 0 && (long long)times[hv] <= S.lastClosedKey) ? (long long)times[hv] : atKey;
+            if (key > 0 && key <= S.lastClosedKey) { effortsOf(key); cPrefix = prefixText(std::string(), key, false, viewKey); kind = 3; }
+        }
+        else if (hv >= 0) {
             const long long key = (long long)times[hv];
             const std::map<long long, size_t>::const_iterator si = S.swAt.find(key);
             const std::map<long long, turn::Cand>::const_iterator ci = S.rec.cands.find(key);
@@ -746,10 +781,7 @@ private:
             // (1.1.0) a closed candle with no level - or the half of a level candle that has none: its two Effort bars
             const bool plain = !kind && key <= S.lastClosedKey && (ci == S.rec.cands.end() || turn::candPlainSide(ci->second, above));
             if (plain) {
-                const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
-                if (bi != S.bars.end()) { const turn::EffPair e = turn::effOf(bi->second.b);
-                    if (e.up.show) eUp = turn::x1000(bi->second.b.top);
-                    if (e.dn.show) eDn = turn::x1000(bi->second.b.bot); }
+                effortsOf(key);
                 if (eUp >= 0 || eDn >= 0) { cPrefix = prefixText(std::string(), key, false, viewKey); kind = 3; }
             }
             if (!kind && ci != S.rec.cands.end()) {
@@ -763,7 +795,7 @@ private:
                 }
             }
         }
-        if (!kind) {
+        if (!kind && W.read) {
             const turn::Sw* sw = nullptr; for (size_t k = S.sweeps.size(); k-- > 0;) if (S.sweeps[k].stamp <= atKey) { sw = &S.sweeps[k]; break; }
             if (sw) { rd = readFor(S, *sw); kind = 1; }
         }
@@ -773,10 +805,10 @@ private:
             const std::string px = kind == 1 ? prefixOf(rd, viewKey) : cPrefix;
             const auto make = [&](bool numbers, bool withPrefix) {
                 return kind == 1 ? turn::stripOf(rd, S.P.bestProven, numbers, withPrefix ? px : std::string())
-                     : kind == 3 ? turn::stripOfEffort(eUp, eDn, numbers, withPrefix ? px : std::string())
+                     : kind == 3 ? turn::stripOfEffort(eUp, eDn, numbers, withPrefix ? px : std::string(), W.effFrom10)
                      : turn::stripOfCand(cStop, cEff, numbers, withPrefix ? px : std::string()); };
             turn::Strip st = make(!wide, true);                           // the ratios in words where not every bar carries its own
-            setFont(f10b); const int pw = (int)getTextWidth(st.pill.c_str(), -1) + 14;
+            setFont(f10b); const int pw = W.read ? (int)getTextWidth(st.pill.c_str(), -1) + 14 : 0;   // (1.2.0) the odds pill belongs to the read strip
             const int tx0 = l + 10, avail = r - pw - 14 - tx0;
             if (stripWidth(st, f10, f10b) > avail) st = make(false, true);    // too long: without the numbers,
             if (stripWidth(st, f10, f10b) > avail) st = make(false, false);   // then without the level and time,
@@ -784,7 +816,7 @@ private:
             fill(l, sTop, r, sBot, C_STRIP);
             fill(l, sTop, l + 4, sBot, toneColor(st.edgeTone, dir, true));
             setFont(f10b);
-            fill(r - pw - 4, sTop + 2, r - 4, sBot - 2, toneColor(st.pillTone, dir, true)); text(st.pill, r - pw - 4, sTop + 2, r - 4, sBot - 2, C_BLACK, true);
+            if (W.read) { fill(r - pw - 4, sTop + 2, r - 4, sBot - 2, toneColor(st.pillTone, dir, true)); text(st.pill, r - pw - 4, sTop + 2, r - 4, sBot - 2, C_BLACK, true); }
             int tx = tx0;
             for (size_t k = first; k < st.segs.size(); ++k) {
                 const turn::Seg& g = st.segs[k]; setFont(g.bold ? f10b : f10);
@@ -805,30 +837,40 @@ private:
         fill(L, axis, xLast, axis + 1, C_AXIS);
         setFont(f9b);
         std::vector<turn::BarBox> boxes; std::vector<turn::LabCand> cands; std::vector<LabText> texts; int owner = 0, wideDrawn = 0;
-        // (1.1.0) EVERY closed candle carries its two Effort bars (the right-hand column: buyers up, sellers down). A candle at a named level
-        // adds the Stop Run of that side (left column); a sweep candle with a read is drawn as before (its other half = Exhaustion + Answer).
+        // (1.1.0) EVERY closed candle carries its two Effort bars (buyers up, sellers down). (1.2.0) That is all the pane draws unless the
+        // display file switches a piece on: then two columns a candle - the Stop Run of a candle at a named level (left), a sweep candle's
+        // Exhaustion (left) and Answer (right) on its turn half - each only when its piece is on.
+        const bool wd = wide && lab, of = lab && !wide;
         for (int i = v0; i <= v1; ++i) {
             const long long key = (long long)times[i];
             if (key > S.lastClosedKey) continue;                        // the forming candle: nothing (its Effort is not final)
-            const std::map<long long, size_t>::const_iterator si = S.swAt.find(key);
-            const std::map<long long, turn::Cand>::const_iterator ci = S.rec.cands.find(key);
+            const std::map<long long, size_t>::const_iterator si = one ? S.swAt.end() : S.swAt.find(key);
+            const std::map<long long, turn::Cand>::const_iterator ci = W.stop ? S.rec.cands.find(key) : S.rec.cands.end();
             const bool isSw = si != S.swAt.end() && si->second < S.sweeps.size();
             const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
             if (!isSw && ci == S.rec.cands.end() && bi == S.bars.end()) continue;
             PNT p; p.set(i, 0.0f, kBarCenter); const int x = p.h; if (x < L || x > R) continue;
+            const turn::EffPair e = bi != S.bars.end() ? turn::effOf(bi->second.b, W.effFrom10) : turn::EffPair();
             if (isSw) {
                 const turn::Sw& w = S.sweeps[si->second]; const turn::Read sr = readFor(S, w);
-                if (sr.src != '-') { wideDrawn += drawSide(owner++, x, w.dir, turn::barsOf(sr), axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts); continue; }
+                if (sr.src != '-') {                                    // a sweep candle with its read: the push on its side, the turn on the other
+                    turn::BarSet bs = turn::barsOf(sr); bs.eff.on = turn::effOn(bs.eff, W.effFrom10);
+                    if (!W.stop) bs.stop = turn::Bar1();
+                    if (!W.exh) bs.exh = turn::Bar1();
+                    if (!W.ans) bs.ans = turn::Bar1();
+                    wideDrawn += drawSide(owner++, x, w.dir, bs, axis, half, bw, wd, of, L + 1, R - 1, boxes, cands, texts, false);
+                    if (!W.ans) { turn::BarSet o; o.eff = w.dir < 0 ? e.dn : e.up;      // the Answer is off: its column holds the other side's Effort
+                        if (o.eff.show) wideDrawn += drawSide(owner++, x, -w.dir, o, axis, half, bw, wd, of, L + 1, R - 1, boxes, cands, texts, false); }
+                    continue;
+                }
             }
-            const turn::EffPair e = bi != S.bars.end() ? turn::effOf(bi->second.b) : turn::EffPair();
             turn::BarSet up, dn; up.eff = e.up; dn.eff = e.dn;
-            const bool atLevel = ci != S.rec.cands.end();
-            if (atLevel) { const turn::Cand& c = ci->second;            // a candle at a named level: + the Stop Run of the side(s) it traded at
+            if (ci != S.rec.cands.end()) { const turn::Cand& c = ci->second;   // a candle at a named level: + the Stop Run of the side(s) it traded at
                 if (c.hiL) up.stop = turn::ratioBar(c.hiX1000, 50);
                 if (c.loL) dn.stop = turn::ratioBar(c.loX1000, 50); }
-            else if (e.up.show || e.dn.show) ++S.effCandles;
-            if (up.stop.show || up.eff.show) wideDrawn += drawSide(owner++, x, -1, up, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts);
-            if (dn.stop.show || dn.eff.show) wideDrawn += drawSide(owner++, x, 1, dn, axis, half, bw, wide && lab, lab && !wide, L + 1, R - 1, boxes, cands, texts);
+            if (e.up.show || e.dn.show) ++S.effCandles;
+            if (up.stop.show || up.eff.show) wideDrawn += drawSide(owner++, x, -1, up, axis, half, bw, wd, of, L + 1, R - 1, boxes, cands, texts, one);
+            if (dn.stop.show || dn.eff.show) wideDrawn += drawSide(owner++, x, 1, dn, axis, half, bw, wd, of, L + 1, R - 1, boxes, cands, texts, one);
         }
         const std::vector<size_t> keep = turn::pickLabels(cands, boxes);
         for (size_t q = 0; q < keep.size(); ++q) { const size_t k = keep[q]; text(texts[k].text, cands[k].box.l, cands[k].box.t, cands[k].box.r, cands[k].box.b, texts[k].c, true); }
@@ -855,7 +897,8 @@ private:
         if (!S.lastRead.empty()) o << "LAST|T|" << S.lastRead << "\n";
         o << "DISPLAY|" << TURN_VERSION << "|strip on the pane top: " << (S.stripKind == 1 ? "a sweep" : S.stripKind == 2 ? "a candle at a level" : S.stripKind == 3 ? "a candle" : "none")
           << "|ratios " << (S.labMode == 2 ? "on every bar (wide candles)" : S.labMode == 1 ? "one per candle side" : "none") << " " << S.labDrawn << " of " << S.labOffered
-          << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "|effort on plain candles " << S.effCandles << "\n";
+          << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "|effort candles " << S.effCandles << "\n";
+        o << "SHOW|" << S.show.why << "|" << turn::showText(S.show) << "\n";   // (1.2.0) what the pane draws: Effort + the pieces the display file switched on
         const std::string t = o.str();
         S.statusMs = now;
         if (t == S.lastStatus && !force) return;
@@ -875,7 +918,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Turn v1.1 - the process of a turn at a swept key level (lsRevRead Sw). Every closed candle: the buyers' Effort at its top (green, up) and the sellers' Effort at its bottom (red, down). A candle at a named level: also the Stop Run of the pushing side; on the sweep candle also Exhaustion and the Answer of the other side. Strip: the read (STAND ASIDE / WAIT / BEST ODDS ? / UNCLEAR) and the measured odds, for the candle under the mouse or the newest sweep.");
-    p->setVersion("1.1.0");
+    p->setDescription("LRA Turn v1.2 - Effort on every closed candle: the buyers' Effort at its top (up) and the sellers' Effort at its bottom (down), green / red from 1.5, grey under it. Top line: the candle under the mouse, else the last closed candle. The other pieces of the turn read (Stop Run, Exhaustion, the Answer, the read strip with the verdict and the odds) are still read and recorded and can be switched back on.");
+    p->setVersion("1.2.0");
     return p;
 }
