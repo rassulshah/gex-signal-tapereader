@@ -1,4 +1,13 @@
-// TurnLogic.h 1.2.0 (2026-11-23; 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day) -- the logic of lsTurn "Turn v1.2" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// TurnLogic.h 1.2.1 (2026-11-23; 1.2.0 and 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day) -- the logic of lsTurn "Turn v1.2" (Turn.cpp). SDK-free, unit tested (tests_turn).
+// (1.2.1, Rassul 2026-11-23 11:47 CT "go" on the Stop Run fault: CL counted 81% of its fills as stops, NQ 42% in the session before) THE
+// ORDER-ID CLOCK IS NO LONGER STOPPED BY ONE OLD ORDER. IRT's order IDs are an 8-digit counter that starts again at 0 after 99,999,999
+// (CL: 99.99 M on Friday 2:27 PM, 27.5 M on Monday 9:00 AM), so an order from the lap before can carry a HIGHER number than every new
+// order. 1.0.0 - 1.2.0 took any ID up to 16.7 M above the newest as the newest: on CL 2026-11-23 9:49:52 AM one such order (ID
+// 44,965,432 while new orders were at 30.4 M) stopped the clock at 431 points for the hours the counter needs to get there, every
+// aggressor looked 60+ s old and was counted as a stop. Now (IdClock): an ID above the newest moves the clock only when the counter can
+// have advanced that far since (20,000 + 5,000 a second; measured on IRT's own feed: never over 5,000 + 5,000 a second); a farther one
+// is a candidate that needs 32 rising IDs of its own with no ID of the running count in between; and 64 new orders in a row far below
+// the newest (the counter started again at 0, or the newest was not real) set the clock back to them. Nothing else changes.
 // (1.2.0, Rassul 2026-11-23 CT 11:00 "show me this indicator with just effort .. show mockup"; 11:04 "meke values that are less than 1.5 gray";
 // 11:06 "this look simple and easy  i like it.   lets use this for now.. save other setting because i might change my mind and add it
 // pieces later"): THE PANE SHOWS JUST EFFORT - one bar a side on every closed candle, coloured only when the number written on it is 1.5 or
@@ -60,7 +69,7 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.2.0";
+static const char* const VERSION = "1.2.1";
 static const size_t FILL_CAP = 150000;      // fills of one candle (more = the candle is not decided live)
 static const size_t SHOWN_CAP = 50000;      // resting orders tracked (is the aggressor a known resting order?)
 static const long long NEAR_TICKS = 64;     // only orders within this many ticks of the last trade are tracked
@@ -336,24 +345,66 @@ inline double rankOf(const std::vector<double>& sortedPool, double x) {
 // ---------------------------------------------------------------------------------------------------------------------------------
 // THE LIVE ORDER FEED -> per-candle sums
 // ---------------------------------------------------------------------------------------------------------------------------------
-// order IDs: IRT's are increasing ints; unwrapped as 32-bit against the newest so a wrap never breaks the clock
+// order IDs: IRT's are ints that count up; unwrapped as 32-bit against the newest so a 32-bit wrap never breaks the clock.
+// (1.2.1) THE COUNT IS NOT ONE LINE: (a) it is an 8-digit counter - after 99,999,999 it starts again near 0, so orders of the lap before
+// have higher numbers than the new ones; (b) such an old order shows up among the new ones - as a NEW order (a stop-limit that was
+// triggered, an order re-announced) or as an aggressor (a triggered stop) - 15 to 35 times a session a market, one ID or a handful of
+// neighbours. The clock follows the RUNNING count only:
+//   near      an ID above the newest by no more than BASE + RATE x (seconds since the newest moved): the count went on. Moves the clock.
+//   far above a candidate lane. It becomes the clock only after LANE_VOTES rising IDs of that lane with no ID of the running count
+//             (above it, or less than BASE below it) in between - a real jump (the feed was away, the pane started on an old order).
+//             One running ID drops the candidate: it was an old order.
+//   far below (more than BASE under the newest) from a NEW order: says nothing by itself (an old order announced again), but LOW_RUN
+//             of them in a row with no running ID in between = the newest is not the count (the counter started again at 0, or the
+//             clock was caught by old orders after all): the clock is set back to where MOST of them are - the newest ID within BASE
+//             of their median (an old order among them never becomes the newest again); points above it are dropped.
+//   An old aggressor below the newest never counts for or against: that is what a stop looks like.
+// After a lane change or a set-back the clock is "known since" that second: a candle that began less than 60 s later has no Stop Run.
 struct IdClock {
     struct P { long long sec, id; };
-    std::deque<P> pts; long long maxId = 0, since = -1; bool have = false; int jumpRun = 0; long long jumps = 0;
-    static const long long JUMP = 1LL << 24;                              // a bigger jump needs 8 IDs in a row to be believed
+    std::deque<P> pts; long long maxId = 0, maxSec = 0, since = -1; bool have = false;
+    long long candId = 0, candSec = 0; int candVotes = 0; bool candOn = false;
+    long long lowIds[64]; int lowRun = 0;                                    // the far-below NEW IDs of the running streak (LOW_RUN of them)
+    long long jumps = 0, strays = 0, lanes = 0, setBacks = 0;                // jumps = candidates opened; strays = dropped; lanes = accepted
+    static const long long BASE = 20000, RATE = 5000, GAP_CAP = 3600;
+    static const int LANE_VOTES = 32, LOW_RUN = 64;
     long long unwrap(long long raw) const {
         const uint32_t u = (uint32_t)(raw & 0xFFFFFFFFLL);
         if (!have) return (long long)u;
         const int32_t d = (int32_t)(u - (uint32_t)(maxId & 0xFFFFFFFFLL));
         return maxId + (long long)d;
     }
-    void note(long long id, long long sec) {
-        if (have && id <= maxId) return;
-        if (have && id > maxId + JUMP) { ++jumps; if (++jumpRun < 8) return; pts.clear(); since = -1; }   // a garbage ID never freezes the clock
-        jumpRun = 0;
-        maxId = id; have = true;
+    static long long reach(long long sec, long long from) { const long long dt = sec - from; return BASE + RATE * (dt < 0 ? 0 : dt > GAP_CAP ? GAP_CAP : dt); }
+    void push(long long id, long long sec) {
+        maxId = id; maxSec = sec; have = true;
         if (!pts.empty() && pts.back().sec >= sec) pts.back().id = id;
         else { P p; p.sec = sec; p.id = id; pts.push_back(p); if (since < 0) since = sec; if (pts.size() > CLOCK_CAP) pts.pop_front(); }
+    }
+    void dropCand() { if (candOn) { candOn = false; ++strays; } }
+    // fromNew = the ID of a NEW order (else: the aggressor of a fill)
+    void note(long long id, long long sec, bool fromNew) {
+        if (!have) { push(id, sec); return; }
+        if (id > maxId) {
+            if (id <= maxId + reach(sec, maxSec)) { dropCand(); lowRun = 0; push(id, sec); return; }   // the count went on
+            if (!candOn || id < candId - BASE || id > candId + reach(sec, candSec)) { dropCand(); ++jumps; candOn = true; candId = id; candSec = sec; candVotes = 1; return; }
+            if (id <= candId) return;                                     // the same old order again, or a neighbour below it: no vote
+            candId = id; candSec = sec;
+            if (++candVotes < LANE_VOTES) return;
+            candOn = false; ++lanes; lowRun = 0;                          // the count IS there now: the older points stay (they are below)
+            push(id, sec); since = sec;
+            return;
+        }
+        if (id >= maxId - BASE) { dropCand(); lowRun = 0; return; }       // the running count, a moment behind
+        if (!fromNew) return;                                             // an old aggressor: a stop, not a word about the count
+        lowIds[lowRun] = id;
+        if (++lowRun < LOW_RUN) return;
+        long long srt[LOW_RUN]; for (int k = 0; k < LOW_RUN; ++k) srt[k] = lowIds[k];
+        std::sort(srt, srt + LOW_RUN); const long long med = srt[LOW_RUN / 2];
+        long long to = med; for (int k = 0; k < LOW_RUN; ++k) if (srt[k] <= med + BASE && srt[k] > to) to = srt[k];
+        ++setBacks; lowRun = 0; candOn = false;
+        while (!pts.empty() && pts.back().id > to) pts.pop_back();        // what was noted above it was not the count
+        maxId = to; maxSec = sec; { P p; p.sec = sec; p.id = to; if (!pts.empty() && pts.back().sec >= sec) pts.back().id = to; else pts.push_back(p); }
+        since = sec;
     }
     // seconds since the ID was first reached (a lower bound for IDs older than the clock); -1 = no clock yet
     long long age(long long id, long long sec) const {
@@ -364,7 +415,8 @@ struct IdClock {
         if (lo >= pts.size()) return 0;
         const long long a = sec - pts[lo].sec; return a < 0 ? 0 : a;
     }
-    void clear() { pts.clear(); maxId = 0; since = -1; have = false; jumpRun = 0; }
+    void clear() { pts.clear(); maxId = 0; maxSec = 0; since = -1; have = false; candOn = false; candVotes = 0; lowRun = 0; }
+    IdClock() { for (int k = 0; k < 64; ++k) lowIds[k] = 0; }
 };
 struct Fill { long long sec = 0, px = 0, size = 0, aid = 0; signed char ag = 0; bool fresh = false, stop = false; };
 struct Cell { long long buy = 0, sell = 0, stopB = 0, stopS = 0; };      // aggressor lots at the price; stop = from old orders never seen resting
@@ -408,7 +460,7 @@ public:
         const long long oid = oidRaw ? clock_.unwrap(oidRaw) : 0;
         switch (action) {
         case 0: case 1: {
-            if (oid) { if (action == 0) clock_.note(oid, sec); shown(oid, px); }
+            if (oid) { if (action == 0) clock_.note(oid, sec, true); shown(oid, px); }
             break; }
         case 2: if (oid) ords_.erase(oid); break;
         case 3: {
@@ -424,7 +476,7 @@ public:
                     f.fresh = a >= 0 && a < FRESH_S;
                     f.stop = a >= OLD_S && ords_.find(aid) == ords_.end();   // issued 60+ s ago and never seen resting: a stop / hidden order
                     if (f.stop) ++n.stopFills;
-                    clock_.note(aid, sec);
+                    clock_.note(aid, sec, false);
                 } else ++n.noAggr;
             }
             if (fills_.size() < FILL_CAP) fills_.push_back(f); else if (!overflow_) { overflow_ = true; ++n.overflows; }
@@ -439,6 +491,9 @@ public:
     size_t orders() const { return ords_.size(); }
     size_t clockPoints() const { return clock_.pts.size(); }
     long long clockSince() const { return clock_.since; }
+    long long idStrays() const { return clock_.strays; }                 // (1.2.1) old orders that showed up above the count and were left out
+    long long idLanes() const { return clock_.lanes; }                   //         real jumps of the count taken over
+    long long idSetBacks() const { return clock_.setBacks; }             //         times the clock was set back to the running count
     long long forming() const { return curKey_; }
 private:
     std::vector<Fill> fills_; std::unordered_map<long long, long long> ords_; IdClock clock_;   // ords_: resting order ID -> its price

@@ -1,4 +1,5 @@
-// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.2.0; 1.2.0: the display file (parseShow), the colour by the number written (shown10, effOn), the
+// tests_turn/test_turn.cpp -- unit tests of TurnLogic.h (lsTurn 1.2.1; 1.2.1: the order-ID clock follows the running count only - one old order with a
+// higher number can no longer stop it (idClockRunningCount; the real CL feed of 2026-11-23 9:47 - 9:52 AM, cl_20261123_0947.txt); 1.2.0: the display file (parseShow), the colour by the number written (shown10, effOn), the
 // strip by the number written; 1.1.0: effOf, stripOfEffort, candPlainSide, the fast pickLabels = the plain one;
 // 1.0.1: labelText, stripOfCand, levelNameAt, candSide, pickLabels). g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror
 #include "../TurnLogic.h"
@@ -6,6 +7,7 @@
 #include <cstdio>
 #include <iostream>
 #include <ctime>
+#include <fstream>
 #include <random>
 static int fails = 0, checks = 0;
 #define CHECK(c) do { ++checks; if (!(c)) { ++fails; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -226,13 +228,15 @@ static void noLookAhead() {
 static void clockAndCaps() {
     // the ID clock: ages, the 32-bit wrap, a garbage jump, the 60-s rule for Stop Run
     IdClock c; CHECK(c.age(5, 100) == -1 && c.since == -1);
-    c.note(1000, 100); c.note(1500, 105); c.note(1400, 106); c.note(2000, 110);
+    c.note(1000, 100, true); c.note(1500, 105, true); c.note(1400, 106, true); c.note(2000, 110, true);
     CHECK(c.since == 100 && c.age(900, 200) == 100 && c.age(1000, 200) == 100 && c.age(1001, 200) == 95 && c.age(1500, 200) == 95 && c.age(1501, 200) == 90 && c.age(2500, 200) == 0);
-    c.note(2000 + (1LL << 30), 111); CHECK(c.maxId == 2000 && c.jumps == 1);                  // one garbage ID: ignored
-    for (int i = 0; i < 8; ++i) { c.note(2000 + (1LL << 30) + i, 112 + i); }
-    CHECK(c.maxId > 2000 && c.since >= 112);   // 8 in a row: believed, the clock restarts
-    IdClock w; w.note(0xFFFFFFF0LL, 10); const long long u = w.unwrap(5); CHECK(u == 0x100000005LL); w.note(u, 11); CHECK(w.age(u, 20) == 9 && w.unwrap(0xFFFFFFF1LL) == 0xFFFFFFF1LL);
-    for (int i = 0; i < 10000; ++i) { w.note(u + 1 + i, 12 + i); }
+    c.note(2000 + (1LL << 30), 111, true); CHECK(c.maxId == 2000 && c.jumps == 1);            // one garbage ID: ignored
+    for (int i = 1; i <= 8; ++i) { c.note(2000 + (1LL << 30) + i, 112 + i, true); }
+    CHECK(c.maxId == 2000 && c.lanes == 0);    // (1.2.1) 8 in a row are not enough any more (one old stop order fills 8 resting orders)
+    for (int i = 9; i <= 40; ++i) { c.note(2000 + (1LL << 30) + i, 112 + i, true); }
+    CHECK(c.maxId > 2000 && c.lanes == 1 && c.since >= 112 && c.age(1000, 200) == 100);   // 32 rising IDs and nothing of the old count: believed; the older points stay
+    IdClock w; w.note(0xFFFFFFF0LL, 10, true); const long long u = w.unwrap(5); CHECK(u == 0x100000005LL); w.note(u, 11, true); CHECK(w.age(u, 20) == 9 && w.unwrap(0xFFFFFFF1LL) == 0xFFFFFFF1LL);
+    for (int i = 0; i < 10000; ++i) { w.note(u + 1 + i, 12 + i, true); }
     CHECK(w.pts.size() == CLOCK_CAP);
     c.clear(); CHECK(c.pts.empty() && c.since == -1 && !c.have);
     // loaded 30 s before the candle: complete but no Stop Run yet; the next candle has it
@@ -342,7 +346,7 @@ static void drawing() {
 }
 // (1.0.1) the ratio on a bar, the strip of a candle at a named level, and which labels narrow candles keep
 static void mouseAndLabels() {
-    CHECK(std::string(VERSION) == "1.2.0");
+    CHECK(std::string(VERSION) == "1.2.1");
     // the ratio ON a bar: no x, one decimal under 10, none from 10 up, 99+ cap; the strip's ratioText is unchanged
     CHECK(labelText(0) == "0.0" && labelText(0.522) == "0.5" && labelText(2.435) == "2.4" && labelText(2.87) == "2.9" && labelText(9.94) == "9.9" && labelText(9.95) == "10" && labelText(13.652) == "14");
     CHECK(labelText(99.4) == "99" && labelText(99.5) == "99+" && labelText(1e9) == "99+" && labelText(-1).empty() && labelText(std::nan("")).empty() && labelText(1.0 / 0.0).empty());
@@ -519,8 +523,104 @@ static void justEffort() {
       for (long long m = 0; m <= 9000; m += 13) { const Strip q = stripOfEffort(m, m, true, "", 15); Bars bb; bb.topOk = true; bb.top = (double)m / 1000.0; const bool on = effOf(bb, 15).up.on;
           CHECK((q.segs[0].tone == T_BUY) == on && (q.segs[2].tone == T_SELL) == on && (q.flat.find("Heavy") != std::string::npos) == on); } }   // the strip never disagrees with the bar
 }
-int main() {
-    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing(); mouseAndLabels(); effortEveryCandle(); justEffort();
+// (1.2.1) THE ORDER-ID CLOCK FOLLOWS THE RUNNING COUNT ONLY. IRT's IDs are an 8-digit counter that starts again at 0, so an old order can
+// carry a higher number than every new one; on CL 2026-11-23 9:49:52 AM one such order stopped the 1.0.0 - 1.2.0 clock for hours.
+static void idClockRunningCount() {
+    const auto run = [](IdClock& c, long long& id, long long from, long long to, long long perSec) { for (long long s = from; s <= to; ++s) for (int k = 0; k < 4; ++k) { id += perSec / 4; c.note(id, s, true); } };
+    // his case: the count at 30.4 M, about 800 a second; ONE new order with ID 44,965,432 (an order of the lap before)
+    { IdClock c; long long id = 30300000; run(c, id, 1000, 1100, 800); const long long before = c.maxId; const size_t pts = c.pts.size();
+      c.note(44965432, 1100, true); CHECK(c.maxId == before && c.candOn && c.jumps == 1 && c.pts.size() == pts);        // not the newest: a candidate
+      run(c, id, 1101, 1300, 800); CHECK(c.maxId == id && c.strays == 1 && !c.candOn && c.lanes == 0 && c.setBacks == 0);  // the count went on: dropped
+      CHECK(c.pts.size() == pts + 200);                                                                               // the clock kept ticking every second
+      CHECK(c.age(id - 800 * 10, 1300) >= 9 && c.age(id - 800 * 10, 1300) <= 11 && c.age(id - 800 * 100, 1300) >= 99 && c.age(id - 800 * 100, 1300) <= 101);   // ages are real
+      CHECK(c.age(id, 1300) == 0 && c.age(44965432, 1300) == 0); }                                                    // a new aggressor is fresh; the old order is not "newer"
+    // an old stop order of the lap before fills 20 resting orders: 20 fills with the SAME high aggressor ID in a row. Not the count.
+    { IdClock c; long long id = 30300000; run(c, id, 1000, 1100, 800); const long long before = c.maxId;
+      for (int i = 0; i < 20; ++i) c.note(73605376, 1100, false);
+      CHECK(c.maxId == before && c.candVotes == 1 && c.lanes == 0); run(c, id, 1101, 1105, 800); CHECK(c.strays == 1 && c.maxId == id); }
+    // a handful of old neighbours (orders entered together long ago, triggered together): rising IDs within a few of each other - still
+    // under 32, and the next ID of the running count ends it
+    { IdClock c; long long id = 90380000; run(c, id, 1000, 1100, 800); const long long before = c.maxId;
+      for (int i = 0; i < 12; ++i) c.note(91819253 + i * 7, 1100, true);
+      CHECK(c.maxId == before && c.candVotes == 12 && c.lanes == 0); c.note(before + 3, 1100, true); CHECK(c.maxId == before + 3 && c.strays == 1 && !c.candOn); }
+    // ... and an ID just BELOW the newest (the count, a moment behind) ends a candidate too
+    { IdClock c; long long id = 30300000; run(c, id, 1000, 1100, 800); c.note(44965432, 1100, true); CHECK(c.candOn); c.note(c.maxId - 50, 1100, false); CHECK(!c.candOn && c.strays == 1); }
+    // caught after all (40 rising old IDs with nothing between them - a book announced again): the running count below sets it back
+    { IdClock c; long long id = 30300000; run(c, id, 1000, 1100, 800); const long long before = c.maxId; const size_t pts = c.pts.size();
+      for (int i = 0; i < 40; ++i) c.note(76539281 + i * 500, 1101, true);
+      CHECK(c.lanes == 1 && c.maxId > 76000000 && c.since == 1101);                                       // believed (32 votes)
+      for (int i = 0; i < 63; ++i) { id += 200; c.note(id, 1102, true); } CHECK(c.setBacks == 0 && c.maxId > 76000000);
+      id += 200; c.note(id, 1102, true);                                                                  // the 64th new order far below it
+      CHECK(c.setBacks == 1 && c.maxId == id && c.since == 1102 && c.pts.size() == pts + 1 && c.pts.back().id == id);   // back on the count; the points above are gone, the older ones kept
+      CHECK(c.age(before - 800 * 50, 1102) >= 51 && c.age(before - 800 * 50, 1102) <= 53);                // the old ages still read right
+      run(c, id, 1103, 1110, 800); CHECK(c.maxId == id && c.setBacks == 1); }
+    // THE COUNTER STARTS AGAIN AT 0: 64 new orders far below the newest = the count is there now
+    { IdClock c; long long id = 99900000; run(c, id, 1000, 1100, 800); CHECK(c.maxId > 99900000);
+      long long z = 0; for (int i = 0; i < 64; ++i) { z += 150; c.note(z, 1101, true); }
+      CHECK(c.setBacks == 1 && c.maxId == z && c.pts.size() == 1 && c.since == 1101); run(c, z, 1102, 1200, 800); CHECK(c.maxId == z && c.pts.size() == 100 && c.age(z - 800 * 30, 1200) >= 29 && c.age(z - 800 * 30, 1200) <= 31);
+      CHECK(c.age(99950000, 1200) == 0); }                                                                 // an order of the lap before is not counted as old (not known)
+    // old orders announced again BELOW the count (a triggered stop-limit rests as a NEW order with its old ID): no set-back while the
+    // count keeps coming; old aggressors (stops) never count toward it, however many
+    { IdClock c; long long id = 30300000; run(c, id, 1000, 1100, 800); const long long before = c.maxId;
+      for (int i = 0; i < 500; ++i) c.note(25000000 + i, 1100, false);                                    // a stop cascade: 500 old aggressors
+      CHECK(c.setBacks == 0 && c.maxId == before && c.lowRun == 0);
+      for (int k = 0; k < 10; ++k) { for (int i = 0; i < 60; ++i) c.note(25000000 + i, 1101, true); id += 10; c.note(id, 1101, true); }   // 60 old NEW orders, one of the count, ten times
+      CHECK(c.setBacks == 0 && c.maxId == id); }
+    // how far the count can have gone: 20,000 at once, 5,000 a second more, an hour at most
+    CHECK(IdClock::reach(100, 100) == 20000 && IdClock::reach(101, 100) == 25000 && IdClock::reach(90, 100) == 20000 && IdClock::reach(100 + 7200, 100) == 20000 + 5000LL * 3600);
+    // the feed was away for 25 minutes (the count went 1.2 M on): taken at once, no candidate - CL 2026-11-23 9:18 -> 9:42 AM
+    { IdClock c; long long id = 28900000; run(c, id, 1000, 1100, 800); c.note(30152777, 1100 + 1508, true); CHECK(c.maxId == 30152777 && c.jumps == 0 && c.lanes == 0 && c.since == 1000); }
+    // a jump the time cannot explain (the pane started on an old order of the book): the candidate lane, believed after 32 rising IDs
+    { IdClock c; c.note(11909632, 1000, true); long long id = 30300000; for (int i = 0; i < 31; ++i) { id += 9; c.note(id, 1000, true); } CHECK(c.maxId == 11909632 && c.candVotes == 31);
+      id += 9; c.note(id, 1000, true); CHECK(c.maxId == id && c.lanes == 1); }
+    // the pane started on an order of the lap before (a HIGH ID): the running count below sets it right after 64 new orders
+    { IdClock c; c.note(95000000, 1000, true); long long id = 30300000; for (int i = 0; i < 64; ++i) { id += 9; c.note(id, 1000, true); } CHECK(c.maxId == id && c.setBacks == 1); }
+    // an old order among the far-below streak never becomes the newest: the clock, caught at 76 M, sees 60 running IDs at 30 M and 4 old
+    // orders at 55 M between them - it goes to the running count, not to 55 M
+    { IdClock c; long long id = 30300000; run(c, id, 1000, 1100, 800); for (int i = 0; i < 40; ++i) c.note(76539281 + i * 500, 1101, true); CHECK(c.lanes == 1);
+      for (int i = 0; i < 64; ++i) { if (i % 16 == 7) c.note(55000000 + i, 1102, true); else { id += 200; c.note(id, 1102, true); } }
+      CHECK(c.setBacks == 1 && c.maxId == id); }
+    // random streams (2,000): a running count with old orders mixed in above and below, alone and in clusters of up to 20 - the newest
+    // ID of the clock is always the running count's, never an old order's; nothing is ever taken over or set back
+    std::mt19937 rng(20261123);
+    for (int rep = 0; rep < 2000; ++rep) {
+        IdClock c; long long id = 1000000 + (long long)(rng() % 90000000), sec = 1000; long long worst = 0;
+        for (int i = 0; i < 3000; ++i) {
+            if (rng() % 5 == 0) sec += 1 + (long long)(rng() % 3);
+            const unsigned r = rng() % 100;
+            if (r < 92 || i < 10) { id += 1 + (long long)(rng() % 400); c.note(id, sec, rng() % 3 != 0); }
+            else { const int n = 1 + (int)(rng() % 20); const bool above = rng() % 2 == 0; const long long far = 200000 + (long long)(rng() % 40000000); long long o = above ? id + far : id - far; if (o < 1) o = 1;
+                   const bool same = rng() % 2 == 0; for (int k = 0; k < n; ++k) c.note(same ? o : o + k * 3, sec, rng() % 2 == 0); }
+            const long long off = c.maxId > id ? c.maxId - id : id - c.maxId; if (off > worst) worst = off;
+        }
+        CHECK(worst <= 400); CHECK(c.lanes == 0 && c.setBacks == 0); CHECK(c.age(id, sec) >= 0 && c.age(id, sec) <= 3);   // the newest ID was reached at most 3 s ago
+    }
+    // ... and a pane that STARTS on old orders (the book as it is announced at the load: 30 to 300 resting orders of every age, some of
+    // the lap before, in any order) is on the running count within 200 new orders of the live feed, every time
+    for (int rep = 0; rep < 2000; ++rep) {
+        IdClock c; long long id = 1000000 + (long long)(rng() % 90000000), sec = 1000; const int book = 30 + (int)(rng() % 270);
+        for (int i = 0; i < book; ++i) { const unsigned r = rng() % 10; long long o = r < 7 ? id - (long long)(rng() % 3000000) : r < 9 ? id - (long long)(rng() % 60000000) : id + 200000 + (long long)(rng() % 60000000); if (o < 1) o = 1; c.note(o, sec, true); }
+        int need = -1;
+        for (int i = 0; i < 400; ++i) { if (rng() % 5 == 0) ++sec; id += 1 + (long long)(rng() % 400); c.note(id, sec, rng() % 3 != 0); if (need < 0 && c.maxId == id) need = i + 1; if (need >= 0) CHECK(c.maxId == id); }
+        CHECK(need >= 1 && need <= 200);
+    }
+}
+// (1.2.1) THE REAL FEED: IRT's own CL order events of 2026-11-23, 9:47:00 - 9:52:30 AM CT (lsBookFlow's recording, 52,000 events; the old
+// order arrives at 9:49:52). After it the 1.2.0 clock stood still and counted nine fills in ten as stops; the clock now runs on.
+static void realFeedCl(const char* path) {
+    std::ifstream in(path); if (!in) { std::printf("(no %s: the real-feed check is skipped)\n", path); return; }
+    Live L; L.reset(180); long long sec, act, bs, px, sz, oid, aid, n = 0, fAfter = 0, sAfter = 0, f0 = 0, s0 = 0; const long long T = 1795392000LL + 9 * 3600 + 51 * 60;   // 9:51:00 = 68 s after the old order
+    size_t ptsAt = 0;
+    while (in >> sec >> act >> bs >> px >> sz >> oid >> aid) { if (sec >= T && !ptsAt) { ptsAt = L.clockPoints(); f0 = L.n.fills; s0 = L.n.stopFills; } L.onEvent(sec, (int)act, (int)bs, px, sz, oid, aid); ++n; }
+    fAfter = L.n.fills - f0; sAfter = L.n.stopFills - s0;
+    std::printf("real CL feed 9:47 - 9:52:30 AM: %lld events, %lld fills; from 9:51 on %lld fills, %lld counted as stops (%lld%%); clock %zu -> %zu points; old orders left out %lld, set-backs %lld\n", n, L.n.fills, fAfter, sAfter, fAfter ? sAfter * 100 / fAfter : 0, ptsAt, L.clockPoints(), L.idStrays(), L.idSetBacks());
+    CHECK(n > 40000 && fAfter > 500); CHECK(sAfter * 100 < fAfter * 5);          // under 5% (1.2.0: over 90%)
+    CHECK(L.clockPoints() >= ptsAt + 80);                                          // a point nearly every second of the last 90 (1.2.0: none)
+    CHECK(L.idStrays() >= 1 && L.idSetBacks() == 0 && L.idLanes() == 0);
+}
+int main(int argc, char** argv) {
+    effort(); words(); wy(); params(); readings(); mirror(); noLookAhead(); clockAndCaps(); record(); drawing(); mouseAndLabels(); effortEveryCandle(); justEffort(); idClockRunningCount();
+    realFeedCl(argc > 1 ? argv[1] : "cl_20261123_0947.txt");
     std::printf("%d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

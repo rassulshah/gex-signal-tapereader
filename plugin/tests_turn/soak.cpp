@@ -1,4 +1,4 @@
-// tests_turn/soak.cpp -- leak / soak test of lsTurn 1.2.0 (1.2.0: every other cycle runs JUST EFFORT - no display file -, the others the saved full setting; the record must be the same in both; 1.1.0: every candle carries Effort bars and has a strip under the mouse; 1.0.1: the mouse moves over the pane in every cycle). 40 times: add the chart, feed Friday's real ES order events candle by candle
+// tests_turn/soak.cpp -- leak / soak test of lsTurn 1.2.1 (1.2.0: every other cycle runs JUST EFFORT - no display file -, the others the saved full setting; the record must be the same in both; 1.1.0: every candle carries Effort bars and has a strip under the mouse; 1.0.1: the mouse moves over the pane in every cycle). 40 times: add the chart, feed Friday's real ES order events candle by candle
 // (about 2.5 million events a cycle, the reads and the level candles decided and recorded), draw, remove the chart. Memory must not grow.
 // build as test_turn_host.cpp (plain for the RSS numbers, -fsanitize=address,undefined for the leak check); needs TURN_TEST_DATA.
 #define main turn_host_test_main

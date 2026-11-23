@@ -1,5 +1,10 @@
 /*
- *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.2"  1.2.0  (2026-11-23; 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day)
+ *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.2"  1.2.1  (2026-11-23; 1.2.0 and 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day)
+ *
+ *  (1.2.1) Rassul 2026-11-23 11:47 CT "go" on the Stop Run fault (CL counted 81% of its fills as stops since the 9:38 AM load; NQ 42% in
+ *  the session before): the order-ID clock was stopped by ONE old order whose number lies above the new ones (IRT's IDs are an 8-digit
+ *  counter that starts again at 0). TurnLogic.h IdClock follows the running count only now; the status file's LIVE line tells how often
+ *  it had to ("id strays N|id lanes N|id set-backs N"). Nothing is drawn differently. Notes NOTES-TURN121.md.
  *
  *  (1.2.0) Rassul 2026-11-23 CT: 11:00 "show me this indicator with just effort .. show mockup"; 11:04, on the mockup, "meke values that are
  *  less than 1.5 gray"; 11:06 "this look simple and easy  i like it.   lets use this for now.. save other setting because i might change my
@@ -86,7 +91,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.2.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.2.1"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -887,7 +892,8 @@ private:
           << "|faults " << S.feed.faults << "|caps " << S.feed.capHits << "|reconnects " << S.feed.reconnects << "\n";
         o << "LIVE|fills " << S.live.n.fills << "|implied " << S.live.n.implied << "|stop fills " << S.live.n.stopFills << "|candles " << S.live.n.candles << "|complete " << S.live.n.complete
           << "|overflows " << S.live.n.overflows << "|late " << S.live.n.late << "|bad " << S.live.n.bad << "|no aggressor " << S.live.n.noAggr << "|open fills " << S.live.openFills()
-          << "|orders " << S.live.orders() << "|order resets " << S.live.n.shownResets << "|clock " << S.live.clockPoints() << "|sums " << S.live.sums.size() << "\n";
+          << "|orders " << S.live.orders() << "|order resets " << S.live.n.shownResets << "|clock " << S.live.clockPoints() << "|sums " << S.live.sums.size()
+          << "|id strays " << S.live.idStrays() << "|id lanes " << S.live.idLanes() << "|id set-backs " << S.live.idSetBacks() << "\n";   // (1.2.1)
         o << "PARAMS|" << S.P.why << "|stop " << S.P.stopTyp << "|hard " << S.P.hardCut << "|big " << S.P.bigCut << "|cuts " << S.P.q1 << " " << S.P.q2 << "|ranks " << S.P.rkLate.size() << " " << S.P.rkDecay.size()
           << " " << S.P.rkAfter.size() << "|odds " << S.P.odds[1] << " " << S.P.odds[2] << " " << S.P.odds[3] << (S.P.bestProven ? " proven" : "") << "|history " << S.P.hist.size() << "\n";
         o << "SWEEPS|" << S.wyWhy << "|" << S.sweeps.size() << "|levels " << S.levels.size() << "\n";
@@ -919,6 +925,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.2 - Effort on every closed candle: the buyers' Effort at its top (up) and the sellers' Effort at its bottom (down), green / red from 1.5, grey under it. Top line: the candle under the mouse, else the last closed candle. The other pieces of the turn read (Stop Run, Exhaustion, the Answer, the read strip with the verdict and the odds) are still read and recorded and can be switched back on.");
-    p->setVersion("1.2.0");
+    p->setVersion("1.2.1");
     return p;
 }

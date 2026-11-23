@@ -177,9 +177,10 @@ int main() {
     noOverlap(es.H); noOverlap(gc.H);
     if (const char* dump = std::getenv("TURN_DUMP")) { put(std::string(dump) + "_ES.txt", dumpDraws(es.H)); put(std::string(dump) + "_GC.txt", dumpDraws(gc.H)); }
     const std::string stES = get(P("TurnPane\\status-ES-180.txt")); std::cout << stES;
-    CHECK(stES.find("VERSION|1.2.0") == 0 && stES.find("PARAMS|ok") != std::string::npos && stES.find("SWEEPS|ok|2|levels 16") != std::string::npos && stES.find("COVER|last 100%") != std::string::npos);
+    CHECK(stES.find("VERSION|1.2.1") == 0 && stES.find("PARAMS|ok") != std::string::npos && stES.find("SWEEPS|ok|2|levels 16") != std::string::npos && stES.find("COVER|last 100%") != std::string::npos);
     CHECK(stES.find("FEED|ready") != std::string::npos && stES.find("|faults 0|") != std::string::npos && stES.find("RECORD|reads 2|") != std::string::npos);
-    CHECK(stES.find("DISPLAY|1.2.0|strip on the pane top: a sweep|ratios on every bar (wide candles) ") != std::string::npos && stES.find("|mouse not in this pane|mouse moves 0|effort candles ") != std::string::npos);
+    CHECK(lineOf(stES, "LIVE|").find("|id strays ") != std::string::npos && lineOf(stES, "LIVE|").find("|id lanes 0|id set-backs 0") != std::string::npos);   // (1.2.1) the order-ID clock stayed on the running count
+    CHECK(stES.find("DISPLAY|1.2.1|strip on the pane top: a sweep|ratios on every bar (wide candles) ") != std::string::npos && stES.find("|mouse not in this pane|mouse moves 0|effort candles ") != std::string::npos);
     CHECK(stES.find("SHOW|ok|effort stop exhaustion answer read|effort coloured from 0.5\n") != std::string::npos);
     // (1.1.0) EFFORT ON EVERY CLOSED CANDLE. Friday's ES candles 8:42 - 9:06 AM against a calculation made apart from the plugin (pandas, from
     // the same order events: data/eff_ref_ES.csv): buyers' Effort at the top / sellers' at the bottom. At 60 px a candle every bar is 20 px
