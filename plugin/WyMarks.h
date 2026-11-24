@@ -14,7 +14,8 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.5.0";   // (2.5.0, Rassul 2026-11-23 09:25-09:34 CT "implement the AR ... automatic rally bar that occurs after a cx", "the AR bar should also have a strength line", "go"; lsRevRead 0.23.0 / LevelMarks 1.13.0, mockup ar-mockup.html): + the AR badge - "AR" and its strength line (stamp|AR|dir||0|R51), over a green candle, under a red one, as Bk / Sw / Cx
+static const char* const VERSION = "2.6.0";   // (2.6.0, Rassul 2026-11-23 23:20 CT "go" on the live Cx?): + parseLive (the wylive file of lsRevRead 0.25.0)
+// was static const char* const VERSION = "2.5.0";   // (2.5.0, Rassul 2026-11-23 09:25-09:34 CT "implement the AR ... automatic rally bar that occurs after a cx", "the AR bar should also have a strength line", "go"; lsRevRead 0.23.0 / LevelMarks 1.13.0, mockup ar-mockup.html): + the AR badge - "AR" and its strength line (stamp|AR|dir||0|R51), over a green candle, under a red one, as Bk / Sw / Cx
 // was VERSION = "2.4.0";   // (2.4.0, Rassul 2026-11-20 09:20 CT "add it ... add the badge for it also and include the level and strength line", 09:24 "build"; lsRevRead 0.21.2, mockup i-badge-mockup.html): the I badge is back - letter / level / strength like Bk / Sw; a bullish (green) I goes UNDER its candle, a bearish (red) I OVER it; iLine() writes the I line, with a 7th field "Sw" when the same candle is a Sw (recorded for the nightly, never drawn - parseAll reads 3 / 5 / 6 fields only)
 // was VERSION = "2.3.0";   // (2.3.0, Rassul 2026-11-19 15:35-16:58 CT, price-pane-cleanup-mockup.html, "ok"): + FT / Tst / Rev after a Bk (LevelMarks 1.3.0 seq): "FT" (a plain letter), "Tst" (level + %), "Rev" (+ strength); a tag can ask for its side (FT / Rev with the break, Tst on the pivot side)
 // was VERSION = "2.2.0";   // (2.2.0, Rassul 11:30-11:35 CT: the strength line) mark lines may carry a 6th field = the strength ("V45" / "R99+" / ""); 3 / 5 / 6 fields read
@@ -57,6 +58,24 @@ inline int parseAll(const std::string& txt, std::map<long long, std::vector<M> >
         if (c == 'I') v.insert(v.begin(), m); else v.push_back(m); ++n;
     }
     return head ? n : -1;
+}
+
+// (2.6.0) the live Cx? file (RevRead\\wylive-<MKT>-<spb>.txt, lsRevRead 0.25.0): header WYL|1|<MKT>|..., then at most one "stamp|Cx?|dir" line.
+// true + t / dir when there is one for this market; false for none, a foreign header or a garbled line
+inline bool parseLive(const std::string& txt, const std::string& mkt, long long& t, int& dir) {
+    t = 0; dir = 0; size_t a = 0; bool head = false;
+    while (a < txt.size()) {
+        size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size();
+        std::string l = txt.substr(a, e - a); a = e + 1;
+        if (!l.empty() && l[l.size() - 1] == '\r') l.erase(l.size() - 1);
+        if (l.empty()) continue;
+        if (!head) { if (l.compare(0, 6, "WYL|1|") != 0 || l.compare(6, mkt.size() + 1, mkt + "|") != 0 || mkt.empty()) return false; head = true; continue; }
+        const size_t p1 = l.find('|'); if (p1 == std::string::npos || l.compare(p1, 5, "|Cx?|") != 0) return false;
+        char* e1 = nullptr; const long long tt = std::strtoll(l.c_str(), &e1, 10); if (!e1 || *e1 != '|' || tt <= 0) return false;
+        const std::string ds = l.substr(p1 + 5); if (ds != "1" && ds != "-1") return false;
+        t = tt; dir = ds == "1" ? 1 : -1; return true;
+    }
+    return false;
 }
 
 // (2.1.0) the key / volume levels the pane published: L|px(ticks)|name lines (names <= 24 chars)

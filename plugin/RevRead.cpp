@@ -109,7 +109,8 @@ static const bool RV_DRAW_BOOKFLOW = true;   // (0.21.5, Rassul 13:15 CT "lets g
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.24.1"   // (0.24.1, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?", 20:16 "go") LevelMarks 1.15.0: the Cx look-back reaches into the 20 candles before the session (run() preV)
+#define RVS_VERSION "0.25.0"   // (0.25.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?", 23:20 "go") LevelMarks 1.16.0 liveCx: the climax candle shows "Cx?" from its own close while it is the extreme of the running leg (RevRead\\wylive-<MKT>-<spb>.txt, drawn by lsRevReadMarks); the Cx is unchanged
+// was #define RVS_VERSION "0.24.1"   // (0.24.1, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?", 20:16 "go") LevelMarks 1.15.0: the Cx look-back reaches into the 20 candles before the session (run() preV)
 // was #define RVS_VERSION "0.24.0"   // (0.24.0, Rassul 2026-11-23 14:00-14:18 CT 'for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level etc', 'no the bk and tst can also include hourly', 'for the AR badge ,   if the Green bar is bigger than the ATR and its high is above the cmx bar with the hevy volume , it is also valid AR', 'build': LevelMarks 1.14.0. The pane walks the 3-hour S / R (HtfSr.h - the lines lsHtfSR draws, the Limit Profile's levels) over the chart's closed candles and hands every session the levels standing before each candle; no new file, nothing read from another indicator)
 // was "0.23.0"   // (0.23.0, Rassul 2026-11-23 09:25 CT 'i want you to implement the AR which is an automatic rally bar that occurs after a cx . so if there is a climax, and there is a bar that has its low below the pivot high and is within 3 bars of the pivot and has a BRMax of at least 10. so if the cx was in a downwave , the ARbar would have to be green', 09:26 'the AR bar should also have a strength line', 'here is a decent example' (NQ 11-23 6:51 AM, the green candle after the 6:48 pivot low; Cx 6:45), 09:34 'go'; mockup ar-mockup.html) the AR: LevelMarks 1.13.0 arCands (per session, next to seq) + arPick (after the strength lines), written to the wy file as stamp|AR|dir||0|strength and drawn by the marks half as a badge (WyMarks 2.5.0); every other reader of the file skips the new code
 // was "0.22.1"   // (0.22.1, Rassul 2026-11-21 05:51 CT "we can skip data release for sweeps, they shouldnt qualify") LevelMarks 1.12.0: a candle holding a scheduled release (Event Calendar list) is never a Sw   // was "0.22.0"   // (0.22.0, Rassul 2026-11-21 05:40 CT "we need to remove opening candle as a candidate for sweeps") LevelMarks 1.11.0: the RTH opening candle is never a Sw   // was "0.21.8"   // (0.21.8) LevelMarks 1.10.1 - no Sw when the close before the attempt sits exactly on the level   // was "0.21.7"   // (0.21.7) LevelMarks 1.10.0   // was "0.21.6"   // (0.21.6) LevelMarks 1.9.0   // was "0.21.5"   // (0.21.5) the split pane: Book Flow on top, delta change below   // was "0.21.4"   // (0.21.4, Rassul 2026-11-20 11:54 / 11:58 CT "go": NG 8:03 Sw ONH was not drawn - with no order-by-order feed the engine never started and the level marks had no key levels) the key levels for Bk / Sw / I / Cx come from the level files when the order engine is not running; nothing else changes
@@ -118,7 +119,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.24.1");
+    p->setVersion("0.25.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -294,6 +295,7 @@ public:
         long long drawn = 0; std::string lastRead;
         long long wySig = -1; wyr::Out wy; int wyBars = 0;
         wyr::Out wyMore; std::map<long long, std::vector<wyr::SMk> > wyBC;   // (0.21.0) T / P / X of the session (WyRead 1.8.0 more(); drawn per showMore) and the B / C strip letters (the Bk / Cx candle marks)
+        std::pair<long long, int> cxLive = std::make_pair(0LL, 0);   // (0.25.0) the live Cx? of the running leg (LevelMarks liveCx): stamp, side
         std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::vector<lvm::SMark> > lvSeq;   /* (0.20.0) FT / Tst / Rev after a Bk */ std::map<long long, std::pair<std::string, long long> > iLv; std::map<long long, std::string> iSt; std::map<long long, int> iSw;   /* (0.21.2) the I's under a Sw (stamp -> dir): written flagged, not drawn */   /* (0.19.2) the I's strength */ std::vector<std::pair<long long, std::string> > lvKey;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
         // (0.7.0) the six checks
         rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
@@ -724,6 +726,7 @@ public:
                     std::vector<double> preV;   // (0.24.1) the volume of the 20 candles before the session's first: the Cx look-back (LevelMarks 1.15.0)
                     { for (int i = first - 1; i >= 0 && (int)preV.size() < 20; --i) { const rvs::Poc* p = pocAt(i); if (!p) continue; preV.push_back((double)(p->buy + p->sell)); } std::reverse(preV.begin(), preV.end()); }
                     try { const std::map<long long, lvm::Mark> lm = lvm::run(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), lvm::rthOpenMin(!e.mkt.empty() ? e.mkt : rvh::marketOf(S.market)), (long long)S.spb, &relNow, WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr, &preV)   /* (0.24.0) LevelMarks 1.14.0: + the 3h S / R, a Sw only on a major level */   /* (0.22.0) LevelMarks 1.11.0: no Sw on the RTH opening candle; (0.22.1) 1.12.0: nor on a release candle */; for (const auto& kv : lm) lvAll[kv.first] = kv.second;
+                        if (seg == 0) { try { e.cxLive = lvm::liveCx(WB, lm, &preV); } catch (...) { e.cxLive = std::make_pair(0LL, 0); } }   // (0.25.0) the live Cx? (this session, the last closed candle)
                         // (0.20.0, Rassul 15:35-16:58 CT, price-pane-cleanup-mockup.html) Bk -> FT -> Tst -> Rev (LevelMarks 1.3.0 seq), the session by itself
                         const std::map<long long, std::vector<lvm::SMark> > sq = lvm::seq(WB, lm); for (const auto& kv : sq) seqAll[kv.first] = kv.second;
                         { const std::vector<lvm::ArCand> ac = lvm::arCands(WB, lm); arAll.insert(arAll.end(), ac.begin(), ac.end()); }   // (0.23.0) the AR after a Cx: colour + overlap here, BRMax below
@@ -812,7 +815,11 @@ public:
                             {   std::string jx = "WYX|1|" + mk + "|" + std::to_string((long long)S.spb) + "|" + RVS_VERSION + "\n";
                                 for (const auto& kv : e.wyMore.marks) for (const wyr::Mark& m : kv.second) jx += std::to_string(kv.first) + "|" + wyr::label(m) + "|" + std::to_string(m.dir) + "|" + (wyr::showMore(m.k, mk) ? "1" : "0") + "\n";
                                 putFile(rvh::recDir(flex) + "\\wyx-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", jx); }
-                            putFile(rvh::recDir(flex) + "\\wy-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", out); } } catch (...) {} } }
+                            putFile(rvh::recDir(flex) + "\\wy-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", out);
+                            // (0.25.0) the live Cx? in a file of its own (lsRevReadMarks draws it; nothing else reads it; never in the wy / wymarks records):
+                            // RevRead\wylive-<MKT>-<spb>.txt  "WYL|1|<MKT>|<spb>|<version>" then "stamp|Cx?|dir" (or no line)
+                            putFile(rvh::recDir(flex) + "\\wylive-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", "WYL|1|" + mk + "|" + std::to_string((long long)S.spb) + "|" + RVS_VERSION + "\n"
+                                + (e.cxLive.first > 0 && !e.lvMarks.count(e.cxLive.first) ? std::to_string(e.cxLive.first) + "|Cx?|" + std::to_string(e.cxLive.second) + "\n" : std::string())); } } catch (...) {} } }
             {   FONT f7 = fb; f7.size = 7;
                 // (0.17.4, Rassul 09:53 CT "make the signal strip have a dark gray background") a dark gray band behind the letters, from the pane's left
                 // edge to just past the last candle (never under the read text on the right)
@@ -1066,7 +1073,8 @@ extern "C" cppExtension* CreateExtension(void) {
 // be no options") lsRevReadMarks draws ONLY the Reversal Read I on the candle; no settings window, no POC dash, no Cx, no hold dots
 inline long long rmSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 struct RmState { std::map<long long, std::vector<wyi::M> > iMarks; std::string wySig;   // (0.19.0) every candle mark (I / Bk / Sw / Cx with its level)
-    long long wyCk = -100000; int wyRead = -1; long long iDrawn = 0; };   // the I letters (candle stamp -> +1 / -1) from RevRead\\wy-<MKT>-<secs>.txt, looked at every 3 s, re-read only when its size / time changed
+    long long wyCk = -100000; int wyRead = -1; long long iDrawn = 0;
+    std::string liveSig; long long liveT = 0; wyi::M liveM; };   // (0.25.0) the live Cx? (RevRead\\wylive-<MKT>-<spb>.txt): its candle stamp and mark   // the I letters (candle stamp -> +1 / -1) from RevRead\\wy-<MKT>-<secs>.txt, looked at every 3 s, re-read only when its size / time changed
 class RevReadMarks : public cppExtension {
 public:
     HostSlot<RmState> slot_;
@@ -1076,6 +1084,7 @@ public:
         const long long now = rmSteadyMs(); if (now - s.wyCk < 3000 && now >= s.wyCk) return; s.wyCk = now;
         const char* rs = getRootSymbol(); const char* sy = getSymbol(); const std::string mk = rvh::marketOf(rs ? rs : "", sy ? sy : ""); const long spb = (long)getSecondsPerBar();
         const std::string flex = rvh::flexDir(); if (flex.empty() || mk.empty() || spb <= 0) return;
+        try { pumpLive(s, flex, mk, spb); } catch (...) { s.liveT = 0; }   // (0.25.0)
         const std::string path = rvh::recDir(flex) + "\\wy-" + mk + "-" + std::to_string((long long)spb) + ".txt";
         struct stat st; if (stat(path.c_str(), &st) != 0) { if (!s.wySig.empty()) { s.wySig.clear(); s.iMarks.clear(); } s.wyRead = -1; return; }
         const std::string sig = path + ":" + std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sig == s.wySig) return;
@@ -1085,11 +1094,21 @@ public:
         std::map<long long, std::vector<wyi::M> > m; const int n = wyi::parseAll(txt, m); if (n < 0) return;
         s.iMarks.swap(m); s.wySig = sig; s.wyRead = n;
     }
+    // (0.25.0) the live Cx? the pane wrote for this market and candle size: one "stamp|Cx?|dir" line or none (a missing / foreign file = none)
+    void pumpLive(RmState& s, const std::string& flex, const std::string& mk, long spb) {
+        const std::string path = rvh::recDir(flex) + "\\wylive-" + mk + "-" + std::to_string((long long)spb) + ".txt";
+        struct stat st; if (stat(path.c_str(), &st) != 0 || st.st_size > 4096) { s.liveSig.clear(); s.liveT = 0; return; }
+        const std::string sig = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sig == s.liveSig) return;
+        std::ifstream f(path.c_str(), std::ios::binary); if (!f) return;
+        const std::string txt((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        s.liveSig = sig; s.liveT = 0; long long t = 0; int d = 0;
+        if (wyi::parseLive(txt, mk, t, d)) { s.liveT = t; s.liveM = wyi::M(); s.liveM.code = 'C'; s.liveM.dir = d; }
+    }
     virtual int draw(void) {
         LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         RmState* sp = slot_.get(this, false); if (!sp) return RTX_OK; RmState& s = *sp;
         try {
-            if (s.iMarks.empty()) return RTX_OK;
+            if (s.iMarks.empty() && s.liveT <= 0) return RTX_OK;
             const long count = getBarCount(); if (count < 2) return RTX_OK;
             RTARRAYI times(barDateTime); if (times.count < count) return RTX_OK;
             int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) return RTX_OK; v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1);
@@ -1108,7 +1127,12 @@ public:
                 const double o = (double)op[i], h = (double)hi[i], l = (double)lo[i], c = (double)cl[i]; if (!std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c)) continue;
                 PNT p; p.set(i, 0.0f, kBarCenter); wyi::Candle cd; cd.x = (int)p.h; cd.yHigh = (int)getVerticalDrawPosition((float)h); cd.yLow = (int)getVerticalDrawPosition((float)l); cd.halfW = std::max(1, dx * 32 / 100); cd.green = c >= o;
                 C.push_back(cd); barOf.push_back(i);
-                const auto it = s.iMarks.find((long long)times[i]); if (it == s.iMarks.end()) continue;
+                const auto it = s.iMarks.find((long long)times[i]);
+                if (s.liveT > 0 && (long long)times[i] == s.liveT) {   // (0.25.0) the live Cx?: a badge like the Cx, "Cx?", no level / strength; not where a Cx already is
+                    bool hasCx = false; if (it != s.iMarks.end()) for (const wyi::M& m : it->second) if (m.code == 'C') hasCx = true;
+                    if (!hasCx) { setFont(f1); wyi::Want wt; wt.candle = (int)C.size() - 1; wt.side = wyi::sideOf(s.liveM); wt.w = (int)getTextWidth("Cx?", -1) + 2 * wyi::PAD_X; wt.h = wyi::LINE1_H;
+                        W.push_back(wt); WM.push_back(&s.liveM); l1.push_back("Cx?"); l2.push_back(std::string()); l3.push_back(std::string()); } }
+                if (it == s.iMarks.end()) continue;
                 for (const wyi::M& m : it->second) {
                     const std::string a1 = wyi::textOf(m.code), a2 = m.lv, a3 = m.code == 'C' ? std::string() : m.st; setFont(f1); int w = (int)getTextWidth(a1.c_str(), -1); if (!a2.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a2.c_str(), -1)); }
                     if (!a3.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a3.c_str(), -1)); }   // (0.19.2) the strength: a 3rd line, same font as the level

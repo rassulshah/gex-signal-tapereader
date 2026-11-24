@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?" - GC 5:51 PM, the pivot low on 324 lots, the biggest in 35 candles: the Cx look-back counted only the session's own candles, so no Cx could come in the first hour after 5:00 PM; 20:16 "go"): the Cx's "biggest volume in 20+" reaches into the candles BEFORE the session (run() preV = their volumes, oldest first), as the Volume pane's BVMax does. Nothing else changes
+static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?" (HG 11:03 PM climax, drawn 11:12 PM when the 3-bar ZigZag confirmed the low), 23:20 "go" on the live Cx?): liveCx() below - the climax candle shows "Cx?" from its own close while it is still the low (high) of the running leg; the Cx itself is unchanged
+// was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?" - GC 5:51 PM, the pivot low on 324 lots, the biggest in 35 candles: the Cx look-back counted only the session's own candles, so no Cx could come in the first hour after 5:00 PM; 20:16 "go"): the Cx's "biggest volume in 20+" reaches into the candles BEFORE the session (run() preV = their volumes, oldest first), as the Volume pane's BVMax does. Nothing else changes
 // was VERSION = "1.14.0";   // (1.14.0, Rassul 2026-11-23 14:00-14:18 CT "for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level etc", "no the 3h is  the S1 S2 R1 R2  levels", "no the bk and tst can also include hourly", "ok so you are just adding to bk right ?", "and for SW you are limiting to major levels right", "for the AR badge ,   if the Green bar is bigger than the ATR and its high is above the cmx bar with the hevy volume , it is also valid AR", "build") (a) + the 3-HOUR S / R (R1 R2 S1 S2 of HtfSr.h, the lines lsHtfSR draws) as levels of every mark: the host hands run() the levels standing before each candle (H3); (b) a Sw is kept only when the level it is LABELLED with is MAJOR (swMajor: session ON / London / Asia, PD, PF, weekly, the 3h S / R) - the hour highs / lows, the pre-open hour (PhrH / PhrL) and VAH / VAL no longer name a Sw; what makes a sweep (a level nobody traded through, the close back, colour, strength 20+, no opening / release candle) is unchanged; Bk / Tst / Cx keep every level they had and gain the 3h S / R; (c) the AR's second way in: range > ATR(13) of the candle before AND beyond the Cx candle's extreme (AR_ATR) - see THE AR
 // was VERSION = "1.13.0";   // (1.13.0, Rassul 2026-11-23 09:25 CT "i want you to implement the AR which is an automatic rally bar that occurs after a cx . so if there is a climax, and there is a bar that has its low below the pivot high and is within 3 bars of the pivot and has a BRMax of at least 10. so if the cx was in a downwave , the ARbar would have to be green", 09:26 "the AR bar should also have a strength line", "here is a decent example" (NQ 11-23 6:51 AM, the green candle after the 6:48 pivot low; Cx 6:45), 09:34 "go"; mockup ar-mockup.html): the AR - arCands() / arPick() below; Bk / Sw / Cx / FT / Tst / Rev untouched
 // was VERSION = "1.12.0";   // (1.12.0, Rassul 2026-11-21 05:51 CT "we can skip data release for sweeps, they shouldnt qualify" - 6E 2026-01-09 7:33 Sw LonLO was the 7:30 data-release candle, V99+ / R99+ from the news): no Sw on a candle that holds a scheduled release (the Event Calendar list: the nightly LRA-Calendar-ALL.csv + its weekly rules), any impact, any market row ALL or this market - newsCandle()
@@ -517,4 +518,29 @@ inline bool iPick(const std::vector<wyr::Lvl>& c, int side, wyr::Lvl& out) {
 // (1.7.0) the I candle is also a Sw of the same direction: only the Sw is drawn (badge and strip); the I is still recorded (flagged)
 inline bool iUnderSw(const std::map<long long, Mark>& lv, long long t, int dir) { const auto it = lv.find(t); return it != lv.end() && it->second.code == 'S' && it->second.dir == dir; }
 inline std::string iLevel(const std::string& name, int hb, bool high) { if (pri(name, hb) < 0) return ""; return shortName(name, hb, high); }
+// (1.16.0) THE LIVE Cx? - the candle that WILL be the Cx if the running leg's extreme holds: the same test as the Cx in run() (the leg's
+// extreme candle or the one before it, the biggest volume of the 20 candles before it, preV reaching before the session), made on the
+// last CLOSED candle instead of when the 3-bar ZigZag confirms the pivot. It is not a decided mark: it moves or goes when a later candle
+// makes a new extreme or fails the test, and the real Cx replaces it once the pivot is confirmed (a candle that is already a mark of
+// run() - Sw / Bk / Cx - gets no Cx?). Never recorded. Returns {candle stamp, side +1 at a low / -1 at a high} or {0, 0}.
+inline std::pair<long long, int> liveCx(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks, const std::vector<double>* preV = nullptr) {
+    const int n = (int)B.size(); if (n < 6) return std::make_pair(0LL, 0);
+    std::vector<double> v((size_t)n); for (int i = 0; i < n; ++i) v[(size_t)i] = (double)(B[(size_t)i].buy + B[(size_t)i].sell);
+    int zd = B[1].h >= B[0].h ? 1 : -1, zext = 0;                      // = wyr::legs, to the last candle: the running leg and its extreme
+    for (int i = 1; i < n; ++i) {
+        long long pl = B[(size_t)i - 1].l, ph = B[(size_t)i - 1].h; for (int j = std::max(0, i - 3); j < i; ++j) { pl = std::min(pl, B[(size_t)j].l); ph = std::max(ph, B[(size_t)j].h); }
+        if (zd == 1) { if (B[(size_t)i].h > B[(size_t)zext].h) zext = i; else if (B[(size_t)i].l < pl && i != zext) { zext = i; zd = -1; } }
+        else         { if (B[(size_t)i].l < B[(size_t)zext].l) zext = i; else if (B[(size_t)i].h > ph && i != zext) { zext = i; zd = 1; } }
+    }
+    const int side = zd == 1 ? -1 : 1;                                  // an up leg ends at a high (side -1), a down leg at a low (+1)
+    const int pn = preV ? (int)preV->size() : 0;
+    for (int kk : { zext, zext - 1 }) {
+        if (kk < 0 || kk + pn < 20 || marks.count(B[(size_t)kk].t)) continue;
+        double mb = 0; for (int k = std::max(0, kk - 20); k < kk; ++k) mb = std::max(mb, v[(size_t)k]);
+        for (int j = kk - 20; j < 0; ++j) { const int q = pn + j; if (q >= 0) mb = std::max(mb, (*preV)[(size_t)q]); }
+        if (v[(size_t)kk] < mb || v[(size_t)kk] <= 0) continue;
+        return std::make_pair(B[(size_t)kk].t, side);
+    }
+    return std::make_pair(0LL, 0);
+}
 } // namespace lvm

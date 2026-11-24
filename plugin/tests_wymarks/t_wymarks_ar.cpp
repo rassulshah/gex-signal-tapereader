@@ -34,6 +34,6 @@ int main() {
     bool clear = !wyi::hit(P[0], P[1]); for (const wyi::Candle& c : C) { wyi::Box q; q.l = c.x - c.halfW; q.r = c.x + c.halfW; q.t = c.yHigh; q.b = c.yLow; if (wyi::hit(P[1], q)) clear = false; }
     CHECK(clear, "the AR tag covers no candle and not the Cx tag");
     { std::vector<wyi::Candle> R = C; R[2].green = false; const std::vector<wyi::Box> Q = wyi::layout(R, W, 0, 600, 100 + 5 * 24 + 6); CHECK(Q[1].ok && Q[1].t >= R[2].yLow + wyi::GAP, "a red AR candle: the tag under it"); }
-    CHECK(std::string(wyi::VERSION) == "2.5.0", "WyMarks 2.5.0");
+    CHECK(std::string(wyi::VERSION) == "2.6.0", "WyMarks 2.6.0");
     std::cout << (fail ? "FAILED " : "ALL PASS ") << pass << " pass, " << fail << " fail\n"; return fail;
 }
