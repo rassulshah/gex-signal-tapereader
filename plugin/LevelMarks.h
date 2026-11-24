@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.19.0";   // (1.19.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): tstL3() - the Tst badge's 3rd line A+E / E / A! / blank instead of the retrace % (research TST-REVERSE 2026-11-24, tst.py / tst2.py ported line by line). Everything else unchanged
+static const char* const VERSION = "1.20.0";   // (1.20.0, Rassul 2026-11-24 16:01 CT "the bk here says it is a bullish break of a higher low ? bullish breaks are of highs and bearish breaks are of lows" - GC 13:15 Bk 2hL): a bullish Bk names / counts only a HIGH level (or a two-sided one: Open, POC, VWAP), a bearish Bk only a LOW one (levelSide)
+// was static const char* const VERSION = "1.19.0";   // (1.19.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): tstL3() - the Tst badge's 3rd line A+E / E / A! / blank instead of the retrace % (research TST-REVERSE 2026-11-24, tst.py / tst2.py ported line by line). Everything else unchanged
 // was static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-24 11:12 CT "ok. build this" - the Abs badge, abs-badge-mockup.html v15): absMarks() - effort without result at the FIRST test of a Bk level (research ABS-ORDERBOOK 2026-11-24, ported line by line) with its position line, and the next-candle Ex (ABS-EXHAUSTION part 2). Bk / Sw / Cx / FT / Tst / Rev / AR / I unchanged
 // was static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-24 08:33 CT "go for hourly pivots and 4h high and lows", 08:34 "absorption levels should match bk levels", 09:01 "go for bk with hourly pivots and 4 hour highs and lows"): Bk (and the Tst / FT / Rev that follow it) gains two level groups - the HOURLY PIVOTS (HpH / HpL: his 1-bar High / Low ZigZag on 1-hour bars, R1 R2 / S1 S2 as HtfSr.h walks the 3-hour ones, standing only) and the last completed 4-HOUR bar's high / low (4hH / 4hL, 4-hour bars from 5 PM CT). Both rank after every older level (4h 65, pivots 70) so no earlier mark changes its name, and a Bk made only by them never takes a candle from a Cx, need the hour levels' rule (the Bk candle's volume the biggest in 5+) and never make or name a Sw, Cx or I (Sw stays major-only)
 // was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?" (HG 11:03 PM climax, drawn 11:12 PM when the 3-bar ZigZag confirmed the low), 23:20 "go" on the live Cx?): liveCx() below - the climax candle shows "Cx?" from its own close while it is still the low (high) of the running leg; the Cx itself is unchanged
@@ -228,6 +229,22 @@ inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std
     return v;
 }
 
+// (1.20.0) which side a level is: +1 a high (ONH, PDH, LonHI, VAH, R1, HpH, 4hH, an hour high ...), -1 a low, 0 two-sided (Open, POC, VWAP ...).
+// A merged name ("ONL/LonLO") takes its parts' side; mixed parts = two-sided.
+inline int levelSide(const std::string& name, bool hourHigh, int hb) {
+    if (hb > 0) return hourHigh ? 1 : -1;
+    int hi = 0, lo = 0; std::string t;
+    for (size_t k = 0; k <= name.size(); ++k) { const char c = k < name.size() ? name[k] : '/';
+        if (c == '/' || c == ' ') { if (!t.empty()) { std::string u; for (char x : t) u += (char)std::toupper((unsigned char)x);
+                const size_t L = u.size();
+                if (u == "R1" || u == "R2" || u == "HPH" || u == "4HH" || u == "HIGH" || (L >= 2 && u.compare(L - 2, 2, "HI") == 0) || (L >= 3 && u.compare(L - 3, 3, "HRH") == 0) || (L >= 2 && u[L - 1] == 'H' && u.compare(0, 4, "OPEN") != 0)) ++hi;
+                else if (u == "S1" || u == "S2" || u == "HPL" || u == "4HL" || u == "LOW" || (L >= 2 && u.compare(L - 2, 2, "LO") == 0) || (L >= 3 && u.compare(L - 3, 3, "HRL") == 0) || (L >= 2 && u[L - 1] == 'L' && u.compare(0, 4, "OPEN") != 0)) ++lo; }
+            t.clear(); }
+        else t += c; }
+    if (name.find("hour high") != std::string::npos) return 1;
+    if (name.find("hour low") != std::string::npos) return -1;
+    return hi > 0 && lo == 0 ? 1 : lo > 0 && hi == 0 ? -1 : 0;
+}
 struct Cand { long long px = 0; std::string name; int hb = 0; bool high = false; bool bkOnly = false; };
 // the one level a mark shows: the best priority among its candidates (ties: the first given); none labels -> empty
 inline bool pick(const std::vector<Cand>& c, Cand& out) {
@@ -314,6 +331,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
         for (const Lv& z : levelsAt(B, i, key, h3)) {
             const long long pc = B[(size_t)i - 1].c, c = B[(size_t)i].c;
             if (!((pc > z.px && c < z.px) || (pc < z.px && c > z.px))) continue;
+            { const int sd = levelSide(z.name, z.high, z.hb); const bool up = c > z.px; if ((up && sd < 0) || (!up && sd > 0)) continue; }   // (1.20.0) a bullish break is of a high, a bearish one of a low
             if ((z.hb > 0 || z.bkOnly) && !big) continue;   // (1.17.0) the hourly pivots / 4-hour levels: the hour levels' volume rule
             bool chop = false; for (int k = std::max(1, i - 10); k < i; ++k) if ((B[(size_t)k - 1].c > z.px) != (B[(size_t)k].c > z.px)) { chop = true; break; }
             if (chop) continue;
