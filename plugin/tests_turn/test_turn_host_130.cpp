@@ -94,9 +94,14 @@ static void noOverlap(const mock::Host& H) {
 static bool isRatio(const std::string& s) { if (s == "99+") return true; if (s.empty()) return false; int dots = 0; for (char c : s) { if (c == '.') ++dots; else if (!std::isdigit((unsigned char)c)) return false; } return dots <= 1; }
 static bool isMarks(const std::string& s) { return s.size() == 3 && s[1] == '/' && s[2] == '3' && s[0] >= '0' && s[0] <= '3'; }
 // the labels below the strip: each is a ratio or the Answer's marks, 9 pt; none lies over a bar of ANOTHER candle (bars = boxes below the strip, not the axis)
+static int g_readLines = 0;   // (1.4.0) read lines seen below the strip
 static int barLabels(const mock::Host& H, int bw) {
     int n = 0;
-    for (const mock::Draw& d : H.draws) { if (d.type != "text" || d.t <= H.paneTop + 21) continue; ++n;
+    int maxBar = -1; for (const mock::Draw& b : H.draws) if (b.type == "box" && b.t > H.paneTop + 21 && b.b - b.t > 1 && b.r - b.l <= 20) maxBar = std::max(maxBar, b.r);
+    for (const mock::Draw& d : H.draws) { if (d.type != "text" || d.t <= H.paneTop + 21) continue;
+        if (maxBar >= 0 && d.l > maxBar + 8) { ++g_readLines; CHECK(d.fsize == 9); CHECK(d.r <= H.paneRight); continue; }   // (1.4.0) a line of the read: right of every bar
+        CHECK(d.text.find(' ') == std::string::npos);                    // a read line never lands among the bars
+        ++n;
         CHECK(isRatio(d.text) || isMarks(d.text)); CHECK(d.fsize == 9); CHECK(d.text.find('x') == std::string::npos);
         const int cx = (d.l + d.r) / 2;
         for (const mock::Draw& b : H.draws) { if (b.type != "box" || b.t <= H.paneTop + 21 || b.b - b.t <= 1 || b.r - b.l > 20) continue;
@@ -135,7 +140,7 @@ int main() {
     for (long long forming = K0; forming <= KEND - 180; forming += 180) { es.chartTo(forming); es.feedTo(forming); drain1(); }
     es.chartTo(KEND); es.feedTo(KEND - 150); drain1(); for (int i = 0; i < 6; ++i) cycle(x, es.H);
     const std::string st = get(P("TurnPane\\status-ES-180.txt")), rec0 = get(P("TurnPane\\turn-ES-180.txt"));
-    CHECK(st.find("VERSION|1.3.0") != std::string::npos && std::string(TURN_VERSION) == "1.3.0" && std::string(turn::VERSION) == "1.3.0");
+    CHECK(st.find("VERSION|1.4.0") != std::string::npos && std::string(TURN_VERSION) == "1.4.0" && std::string(turn::VERSION) == "1.4.0");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----
@@ -200,6 +205,8 @@ int main() {
     put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|0\nexhaustion|x\nEND\n"); for (int i = 0; i < 8; ++i) cycle(x, es.H);
     CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|display line 3 garbled (the defaults)|absorption stop exhaustion initiative read|") != std::string::npos); CHECK(barsOnly(es.H) == bars0);
     std::remove(P("TurnPane\\display.txt").c_str()); for (int i = 0; i < 8; ++i) cycle(x, es.H); CHECK(barsOnly(es.H) == bars0 && stripText(es.H) == s0);
+    { const std::string r = lineOf(get(P("TurnPane\\status-ES-180.txt")), "READ|"); std::cout << "(1.4.0) " << r << "\n"; CHECK(r.compare(0, 5, "READ|") == 0); CHECK(r.find("lines drawn ") != std::string::npos);
+      std::cout << "(1.4.0) read lines seen right of the bars: " << g_readLines << "\n"; }
     mock::current = &es.H; x->destroy(); drop(x); (void)&drain; (void)&lineOf;
     std::printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }

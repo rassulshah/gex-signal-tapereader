@@ -69,7 +69,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-23 18:15 CT "can you update my turn indicator to this .  so update effort to absrobtion also", 18:28 "i want you to do the absorbtion the right way", 18:38 "Research first before building so you do it right", 19:48 "build" on turn-four-pieces-mockup.html v3): the four pieces Stop Run / Absorption / Exhaustion / Initiative, all shown by default. ABSORPTION replaces Effort on the bars and in the strip: the lots at the heaviest single price in the end quarter / its average over the 20 closed candles before; coloured (the winner: red at a high, green at a low) from 2.0 AND only when the candle closes outside that end quarter. "Answer" is called Initiative. The record file and its Effort column are unchanged
+static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-23 20:47 CT "build the read to the right llike you do for all the other indicators", 20:48 "i need something more specific because i already have the ratios on the bars", 20:52 "what else can you add that would be a bullish or bearish indication or telling me about direciton", 20:53 "lets go with this"): THE ABSORPTION READ right of the last candle - absRead() below: the direction from where price stands against the absorbed prices that still hold (or the one that just failed), the price, the lots, held / tested, rising lows / falling highs, and what to watch
+// was static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-23 18:15 CT "can you update my turn indicator to this .  so update effort to absrobtion also", 18:28 "i want you to do the absorbtion the right way", 18:38 "Research first before building so you do it right", 19:48 "build" on turn-four-pieces-mockup.html v3): the four pieces Stop Run / Absorption / Exhaustion / Initiative, all shown by default. ABSORPTION replaces Effort on the bars and in the strip: the lots at the heaviest single price in the end quarter / its average over the 20 closed candles before; coloured (the winner: red at a high, green at a low) from 2.0 AND only when the candle closes outside that end quarter. "Answer" is called Initiative. The record file and its Effort column are unchanged
 // was static const char* const VERSION = "1.2.1";
 static const size_t FILL_CAP = 150000;      // fills of one candle (more = the candle is not decided live)
 static const size_t SHOWN_CAP = 50000;      // resting orders tracked (is the aggressor a known resting order?)
@@ -158,22 +159,22 @@ inline std::string clockText(int hour, int minute) {   // 12-hour clock: "9:03 A
 // EFFORT (IRT volume at price), as lsEffortRewardPane 0.2.0
 // ---------------------------------------------------------------------------------------------------------------------------------
 struct Row { long long tick = 0, buy = 0, sell = 0; };       // buy = traded at the offer, sell = traded at the bid
-struct Bars { bool topOk = false, botOk = false; double top = 0, bot = 0; long long levels = 0, zone = 0; long long topMax = -1, botMax = -1; };   // (1.3.0) topMax / botMax = the lots at the heaviest single price in the end quarter (buys at the top, sells at the bottom); -1 = no candle
+struct Bars { bool topOk = false, botOk = false; double top = 0, bot = 0; long long levels = 0, zone = 0; long long topMax = -1, botMax = -1; long long topMaxTick = 0, botMaxTick = 0; };   // (1.4.0) + the price (tick) of that heaviest price: the highest such price at the top, the lowest at the bottom   // (1.3.0) topMax / botMax = the lots at the heaviest single price in the end quarter (buys at the top, sells at the bottom); -1 = no candle
 inline long long zoneOf(long long L) { const long long z = (L + 2) / 4; return z < 1 ? 1 : z; }   // round(0.25 L), half up
 inline Bars barRatios(const std::vector<Row>& rows, long long lo, long long hi) {
     Bars b; if (hi < lo) return b;
     const long long L = hi - lo + 1; if (L < 4 || L > 200000) return b;
     const long long z = zoneOf(L); b.levels = L; b.zone = z;
-    long long bt = 0, br = 0, st = 0, sr = 0, bmx = 0, smx = 0;
+    long long bt = 0, br = 0, st = 0, sr = 0, bmx = 0, smx = 0, bmt = 0, smt = 0;
     for (const Row& r : rows) {
         if (r.tick < lo || r.tick > hi || r.buy < 0 || r.sell < 0) continue;
         if (r.tick > hi - z) bt += r.buy; else br += r.buy;
         if (r.tick < lo + z) st += r.sell; else sr += r.sell;
-        if (r.tick > hi - z && r.buy > bmx) bmx = r.buy;
-        if (r.tick < lo + z && r.sell > smx) smx = r.sell;
+        if (r.tick > hi - z && (r.buy > bmx || (r.buy == bmx && bmx > 0 && r.tick > bmt))) { bmx = r.buy; bmt = r.tick; }
+        if (r.tick < lo + z && (r.sell > smx || (r.sell == smx && smx > 0 && r.tick < smt))) { smx = r.sell; smt = r.tick; }
     }
     const double nz = (double)z, nr = (double)(L - z);
-    b.topMax = bmx; b.botMax = smx;
+    b.topMax = bmx; b.botMax = smx; b.topMaxTick = bmx > 0 ? bmt : hi; b.botMaxTick = smx > 0 ? smt : lo;
     if (br > 0) { b.top = ((double)bt / nz) / ((double)br / nr); b.topOk = std::isfinite(b.top); }
     if (sr > 0) { b.bot = ((double)st / nz) / ((double)sr / nr); b.botOk = std::isfinite(b.bot); }
     return b;
@@ -790,6 +791,81 @@ inline long long absX1000(long long cur, const std::vector<long long>& prior) {
 // Heavy = it counts (from10 or more)
 inline int absClass10(long long t, bool away, long long from10) { return !away || t < 10 ? 0 : t >= from10 ? 3 : t < 15 ? 1 : 2; }
 inline Bar1 absBar(const Abs& a, long long from10) { Bar1 b = ratioBar(a.x1000, 0); b.on = b.show && a.away && shown10(b.label) >= from10; return b; }
+// ---------------------------------------------------------------------------------------------------------------------------------
+// (1.4.0) THE ABSORPTION READ - three plain lines right of the last candle (the panes' PlainRead format: head / why / watch).
+// It says what the bars cannot: the PRICE where the push was absorbed, the LOTS there, what price did SINCE, and the DIRECTION.
+//   event   = a closed candle side whose Absorption counts (number >= from10 AND closed outside that end quarter), in the last
+//             ARD_WIN closed candles: low side = selling absorbed (bullish), high side = buying absorbed (bearish); px = the heaviest price.
+//   failed  = a later candle CLOSED beyond px (below an absorbed low / above an absorbed high). tested = a later candle traded back
+//             to px and closed on the right side. held = candles since.
+//   head    = the NEWEST information: an absorbed low that holds = "Bullish ?", an absorbed high that holds = "Bearish ?", both hold
+//             = "Range ?", the newest thing is a failure = the other way ("the absorbed low at P failed" = Bearish ?). "?" = LEARNING:
+//             only the close test at major levels is measured (73% held); the rest is not. Nothing = "Quiet".
+//   why     = "<lots> lots sold there, 5.2x normal. Held N candles, tested K times." (+ "Absorbed lows are rising." / "highs are falling.")
+//   watch   = the close that changes the read.
+static const int ARD_WIN = 20;
+struct ACandle { long long key = 0, hi = 0, lo = 0, cl = 0; Abs up, dn; long long upPx = 0, upLots = -1, dnPx = 0, dnLots = -1; std::string lvUp, lvDn, swUp, swDn; };   // lv = a named level in that end quarter; sw = the level the candle swept at that end
+struct AEvent { int i = 0, side = 0; long long px = 0, lots = 0, x1000 = 0; bool failed = false; int failAt = -1, tested = 0, held = 0; std::string lv, sw; };   // side +1 = an absorbed low (bullish), -1 = an absorbed high
+struct ARead { int verdict = 0; std::string head, why, watch; std::vector<AEvent> ev; };   // verdict +1 bullish / -1 bearish / 2 range / 0 quiet
+inline std::string pxText(long long ticks, double tick) {
+    if (!(tick > 0) || !std::isfinite(tick)) return std::to_string(ticks);
+    int d = 0; double t = tick; while (d < 7 && (std::round(t) < 1.0 || std::fabs(t - std::round(t)) > 1e-3)) { t *= 10.0; ++d; }
+    double sc = 1.0; for (int k = 0; k < d; ++k) sc *= 10.0;
+    const long long v = std::llround((double)ticks * tick * sc); const long long a = v < 0 ? -v : v; long long p = 1; for (int k = 0; k < d; ++k) p *= 10;   // whole units of the last decimal: no 1.16804 for 1.16805
+    std::string fr = std::to_string(a % p); while ((int)fr.size() < d) fr.insert(fr.begin(), '0');
+    return (v < 0 ? std::string("-") : std::string()) + std::to_string(a / p) + (d > 0 ? "." + fr : std::string());
+}
+inline std::string plural(long long n, const char* one, const char* many) { return std::to_string(n) + " " + (n == 1 ? one : many); }
+inline ARead absRead(const std::vector<ACandle>& all, long long from10, double tick) {
+    ARead R; const int total = (int)all.size(); const int a0 = std::max(0, total - ARD_WIN);
+    std::vector<ACandle> C(all.begin() + a0, all.end()); const int n = (int)C.size();
+    for (int i = 0; i < n; ++i) for (int sd = -1; sd <= 1; sd += 2) {
+        const Abs& a = sd < 0 ? C[(size_t)i].up : C[(size_t)i].dn; if (!absBar(a, from10).on) continue;
+        AEvent e; e.i = i; e.side = sd; e.px = sd < 0 ? C[(size_t)i].upPx : C[(size_t)i].dnPx; e.lots = sd < 0 ? C[(size_t)i].upLots : C[(size_t)i].dnLots; e.x1000 = a.x1000;
+        e.lv = sd < 0 ? C[(size_t)i].lvUp : C[(size_t)i].lvDn; e.sw = sd < 0 ? C[(size_t)i].swUp : C[(size_t)i].swDn; if (e.px <= 0) continue;
+        for (int j = i + 1; j < n; ++j) { const ACandle& q = C[(size_t)j];
+            if (sd > 0 ? q.cl < e.px : q.cl > e.px) { e.failed = true; e.failAt = j; break; }
+            if (sd > 0 ? q.lo <= e.px : q.hi >= e.px) ++e.tested; }
+        e.held = (e.failed ? e.failAt : n) - 1 - i; R.ev.push_back(e);
+    }
+    const AEvent *hl = nullptr, *hh = nullptr, *fl = nullptr; int flAt = -1;   // the newest holding low / high, the newest failure
+    for (const AEvent& e : R.ev) { if (!e.failed) { if (e.side > 0) hl = &e; else hh = &e; } else if (e.failAt >= flAt) { fl = &e; flAt = e.failAt; } }
+    const int holdAt = std::max(hl ? hl->i : -1, hh ? hh->i : -1);
+    auto what = [&](const AEvent& e) { return std::to_string(e.lots) + (e.side > 0 ? " lots sold there, " : " lots bought there, ") + ratioText((double)e.x1000 / 1000.0) + " normal."; };
+    auto since = [&](const AEvent& e) { return e.held <= 0 ? std::string(" On the last candle.") : " Held " + plural(e.held, "candle", "candles") + (e.tested > 0 ? ", tested " + plural(e.tested, "time", "times") : std::string()) + "."; };
+    auto at = [&](const AEvent& e) { return pxText(e.px, tick) + (e.lv.empty() ? std::string() : " (" + e.lv + ")"); };
+    auto swp = [&](const AEvent& e) { return e.sw.empty() ? std::string() : "At the " + e.sw + " sweep. "; };
+    if (!hl && !hh && !fl) { R.verdict = 0; R.head = "Quiet"; R.why = "No absorption in the last " + std::to_string(ARD_WIN) + " candles."; R.watch = "Nothing to act on."; return R; }
+    if (fl && flAt > holdAt) {                                            // the newest thing is a failure: the side that absorbed is trapped
+        const AEvent& e = *fl; R.verdict = e.side > 0 ? -1 : 1;
+        R.head = std::string(e.side > 0 ? "Bearish ? - the absorbed low at " : "Bullish ? - the absorbed high at ") + at(e) + " failed";
+        { const int ago = n - 1 - e.failAt; R.why = swp(e) + what(e) + (e.side > 0 ? " Closed below it " : " Closed above it ") + (ago <= 0 ? std::string("on the last candle.") : plural(ago, "candle", "candles") + " ago."); }
+        const AEvent* o = e.side > 0 ? hh : hl;                          // an absorbed price of the same direction that still holds
+        R.watch = std::string("Watch: a close back ") + (e.side > 0 ? "above " : "below ") + pxText(e.px, tick) + " = the failure is undone." + (o ? std::string(e.side > 0 ? " The absorbed high at " : " The absorbed low at ") + pxText(o->px, tick) + " still holds." : std::string());
+        return R; }
+    if (hl && hh) {                                                       // both hold: price is between them
+        R.verdict = 2; R.head = "Range ? - absorbed low " + at(*hl) + " / absorbed high " + at(*hh);
+        const AEvent& nw = hl->i >= hh->i ? *hl : *hh; const AEvent& od = hl->i >= hh->i ? *hh : *hl;
+        R.why = std::string(nw.side > 0 ? "Newest, the low: " : "Newest, the high: ") + swp(nw) + what(nw) + since(nw) + (od.side > 0 ? " The low: " : " The high: ") + std::to_string(od.lots) + " lots, " + ratioText((double)od.x1000 / 1000.0) + ".";
+        R.watch = "Watch: a close above " + pxText(hh->px, tick) + " = bullish; a close below " + pxText(hl->px, tick) + " = bearish."; return R; }
+    const AEvent& e = hl ? *hl : *hh; R.verdict = e.side;
+    R.head = std::string(e.side > 0 ? "Bullish ? - above the absorbed low at " : "Bearish ? - below the absorbed high at ") + at(e);
+    R.why = swp(e) + what(e) + since(e);
+    { int k = 0; long long last = 0; bool mono = true; for (const AEvent& q : R.ev) { if (q.failed || q.side != e.side) continue; if (k > 0 && !(e.side > 0 ? q.px > last : q.px < last)) mono = false; last = q.px; ++k; }
+      if (k >= 2 && mono) R.why += e.side > 0 ? " Absorbed lows are rising." : " Absorbed highs are falling."; }
+    R.watch = std::string("Watch: a close ") + (e.side > 0 ? "below " : "above ") + pxText(e.px, tick) + (e.side > 0 ? " = failed, bearish." : " = failed, bullish.");
+    return R;
+}
+// word-wrap for the read: whole words, lines no wider than width px (tw = text width); at most maxLines (the last one ends in "..." when cut)
+template <class TW> std::vector<std::string> wrapRead(const std::string& s, int width, int maxLines, TW tw) {
+    std::vector<std::string> L; if (maxLines <= 0 || width <= 0 || s.empty()) return L; std::string line, w; bool cut = false;
+    auto flush = [&](const std::string& word) { if (cut) return; const std::string t = line.empty() ? word : line + " " + word;
+        if (!line.empty() && tw(t) > width) { if ((int)L.size() + 1 >= maxLines) { cut = true; return; } L.push_back(line); line = word; } else line = t; };
+    for (size_t i = 0; i <= s.size(); ++i) { if (i == s.size() || s[i] == ' ') { if (!w.empty()) flush(w); w.clear(); } else w += s[i]; }
+    if (cut) { while (!line.empty() && tw(line + "...") > width) { const size_t sp = line.find_last_of(' '); if (sp == std::string::npos) break; line.erase(sp); } line += "..."; }
+    if (!line.empty()) L.push_back(line);
+    return L;
+}
 inline const char* verdictText(int v, bool bestProven) {
     return v == V_UNCLEAR ? "UNCLEAR" : v == V_ASIDE ? "STAND ASIDE" : v == V_WAIT ? "WAIT" : v == V_BEST ? (bestProven ? "BEST ODDS" : "BEST ODDS ?") : "NO READ";
 }

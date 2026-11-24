@@ -105,7 +105,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.3.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.4.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -332,7 +332,7 @@ inline int vapRows(RTARRAYP& vap, int bar, double tick, std::vector<turn::Row>& 
 }
 
 // ---- per-chart state ---------------------------------------------------------------------------------------------------------
-struct BarVal { turn::Bars b; bool have = false; bool awayUp = false, awayDn = false; };   // (1.3.0) awayUp / awayDn = the candle closed outside its top / bottom quarter (Absorption's close test), read with the bar
+struct BarVal { turn::Bars b; bool have = false; bool awayUp = false, awayDn = false; bool hlc = false; long long hiT = 0, loT = 0, clT = 0; };   // (1.4.0) hlc: the candle's high / low / close in ticks, for the Absorption read   // (1.3.0) awayUp / awayDn = the candle closed outside its top / bottom quarter (Absorption's close test), read with the bar
 struct State {
     bool busy = false;
     std::string identity, market, symbol, note; int spb = 0; double tick = 0; bool supported = false;
@@ -355,6 +355,7 @@ struct State {
     long long statusMs = -100000; std::string lastStatus, lastRead; long long draws = 0, calcs = 0, lastClosedKey = 0, decidedLive = 0, candsLive = 0;
     // (1.0.1) the mouse: the chart bar it is on while it is inside this pane (-1 = not in the pane), where it is, the axis row of the last draw
     pc::Tracker cur; int hov = -1, hovY = 0, axisY = 0; long long mouseMoves = 0;
+    int readVerdict = 0, readLines = 0; std::string readHead, readWhy, readWatch;   // (1.4.0) the Absorption read right of the last candle, as last drawn (the status file)
     int stripKind = 0, labMode = 0, labOffered = 0, labDrawn = 0;      // what the last draw showed (the status file): strip 0 none / 1 a sweep / 2 a level candle / (1.1.0) 3 a plain candle
     int effCandles = 0;                                                // (1.1.0) candles the last draw gave an Effort bar; (1.2.0) every such candle
     // (1.2.0) what the pane shows besides Effort: lsFlexLevels\TurnPane\display.txt (no file = Effort only), re-read when its stamp changes
@@ -518,6 +519,7 @@ private:
                 if (r == 0) ++S.vapMissing;
                 else { const long long lt = (long long)std::llround(l / S.tick), ht = (long long)std::llround(h / S.tick); v.b = turn::barRatios(S.rows, lt, ht);
                     const double c = (double)cl[i];   // (1.3.0) the close test of Absorption
+                    if (std::isfinite(c)) { v.hlc = true; v.hiT = ht; v.loT = lt; v.clT = (long long)std::llround(c / S.tick); }
                     if (std::isfinite(c) && v.b.zone > 0) { const long long ct = (long long)std::llround(c / S.tick); v.awayUp = turn::absAway(ht, lt, ct, v.b.zone, true); v.awayDn = turn::absAway(ht, lt, ct, v.b.zone, false); } }
             }
             S.bars[(long long)times[i]] = v; return true;
@@ -755,10 +757,11 @@ private:
         RCT pane; pane.getPaneRect(false);
         const int L = pane.left, R = pane.right, T = pane.top, B = pane.bottom;
         S.cur.pane.l = L; S.cur.pane.t = T; S.cur.pane.r = R; S.cur.pane.b = B;   // (1.0.1) where the pane is: is the mouse inside, has it left
+        S.readVerdict = 0; S.readLines = 0; S.readHead.clear(); S.readWhy.clear(); S.readWatch.clear();
         S.stripKind = 0; S.labMode = 0; S.labOffered = 0; S.labDrawn = 0; S.effCandles = 0; labW_.clear();
         if (B - T < 40 || R - L < 40) return;
         FONT f10; f10.id = HELVETICA; f10.size = 10; f10.style = PLAIN; FONT f10b = f10; f10b.style = BOLD;
-        FONT f9b = f10b; f9b.size = 9;                                   // (1.0.1) the ratios on the bars
+        FONT f9b = f10b; f9b.size = 9; FONT f9 = f10; f9.size = 9;                                   // (1.0.1) the ratios on the bars
         // nothing to read: say why in one grey line (the wrong kind of chart, or lsRevRead's sweep file is missing), never an empty pane.
         // (1.0.1) on the pane's top row, and only when no strip is drawn there
         const std::string why = !S.note.empty() ? S.note : (S.sweeps.empty() && S.wyWhy != "ok") ? S.wyWhy : std::string();
@@ -792,6 +795,50 @@ private:
                 prior.push_back(top ? bj->second.b.topMax : bj->second.b.botMax); }
             a.x1000 = turn::absX1000(top ? bi->second.b.topMax : bi->second.b.botMax, prior); a.away = top ? bi->second.awayUp : bi->second.awayDn; return a; };
         const auto indexOf = [&](long long key) -> int { int lo2 = 0, hi2 = (int)count - 1; while (lo2 <= hi2) { const int m = lo2 + (hi2 - lo2) / 2; const long long t = (long long)times[m]; if (t == key) return m; if (t < key) lo2 = m + 1; else hi2 = m - 1; } return -1; };
+        // (1.4.0) THE ABSORPTION READ, right of the last candle (the other panes' read format: time + verdict in colour, why, Watch). As of
+        // the last closed candle in view; from the bars calc read and the named levels only; nothing is recorded (a read, not a mark).
+        {
+            const int iEnd = indexOf(atKey);
+            if (iEnd >= 0) {
+                std::vector<turn::ACandle> cs; cs.reserve(turn::ARD_WIN);
+                for (int i = std::max(0, iEnd - turn::ARD_WIN + 1); i <= iEnd; ++i) {
+                    const long long key = (long long)times[i];
+                    const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
+                    if (bi == S.bars.end() || !bi->second.hlc) { cs.clear(); continue; }   // a candle not read: only the unbroken run after it counts
+                    const BarVal& v = bi->second; turn::ACandle c; c.key = key; c.hi = v.hiT; c.lo = v.loT; c.cl = v.clT;
+                    c.up = absAt(i, true); c.dn = absAt(i, false); c.upPx = v.b.topMaxTick; c.upLots = v.b.topMax; c.dnPx = v.b.botMaxTick; c.dnLots = v.b.botMax;
+                    const std::map<long long, size_t>::const_iterator si = S.swAt.find(key);
+                    if (si != S.swAt.end() && si->second < S.sweeps.size()) { const turn::Sw& w = S.sweeps[si->second]; (w.dir < 0 ? c.lvUp : c.lvDn) = w.lv; }
+                    if (v.b.zone > 0) for (size_t q = 0; q < S.levels.size(); ++q) { const turn::Level& lv = S.levels[q];   // a named level inside that end quarter
+                        if (c.lvUp.empty() && lv.tick > v.hiT - v.b.zone && lv.tick <= v.hiT) c.lvUp = lv.name;
+                        if (c.lvDn.empty() && lv.tick < v.loT + v.b.zone && lv.tick >= v.loT) c.lvDn = lv.name; }
+                    cs.push_back(c);
+                }
+                const turn::ARead ar = turn::absRead(cs, W.effFrom10, S.tick);
+                S.readVerdict = ar.verdict; S.readHead = ar.head; S.readWhy = ar.why; S.readWatch = ar.watch;
+                const int x0 = xLast + 16, wAv = R - 6 - x0, rh = 13, rows = (B - T - 2) / rh;
+                if (wAv >= 150 && rows >= 3) {
+                    const std::string tm = prefixText(std::string(), atKey, false, 0);
+                    const COLOR vc = ar.verdict == 1 ? C_GREEN : ar.verdict == -1 ? C_RED : ar.verdict == 2 ? C_TEXT : C_MUTED;
+                    const auto tw = [&](const std::string& t) { return (int)getTextWidth(t.c_str(), -1); };
+                    setFont(f9b);
+                    const std::vector<std::string> hl = turn::wrapRead((tm.empty() ? std::string() : tm + " ") + ar.head, wAv, std::max(1, std::min(2, rows - 2)), tw);
+                    int y = T + 1, used = 0;
+                    for (size_t q = 0; q < hl.size(); ++q, ++used, y += rh) {
+                        int x = x0; std::string rest = hl[q];
+                        if (q == 0 && !tm.empty() && rest.compare(0, tm.size(), tm) == 0) { text(tm, x, y, x + tw(tm) + 2, y + rh, C_TEXT, false); x += tw(tm + " "); rest = rest.size() > tm.size() + 1 ? rest.substr(tm.size() + 1) : std::string(); }
+                        if (!rest.empty()) text(rest, x, y, R - 2, y + rh, vc, false);
+                    }
+                    setFont(f9);
+                    const int left = rows - used, nWatch = left >= 2 ? std::min(2, left - 1) : 0;
+                    const std::vector<std::string> wl = turn::wrapRead(ar.why, wAv, std::max(0, std::min(3, left - nWatch)), tw);
+                    for (size_t q = 0; q < wl.size(); ++q, ++used, y += rh) text(wl[q], x0, y, R - 2, y + rh, C_TEXT, false);
+                    const std::vector<std::string> tl = turn::wrapRead(ar.watch, wAv, std::min(2, rows - used), tw);
+                    for (size_t q = 0; q < tl.size(); ++q, ++used, y += rh) text(tl[q], x0, y, R - 2, y + rh, C_TEXT, false);
+                    S.readLines = used;
+                }
+            }
+        }
         int kind = 0; turn::Read rd; long long cStop = -1; turn::Abs cAbs, aUp, aDn, rAbs; int cSide = 0; std::string cPrefix;
         const int hv = (S.hov >= v0 && S.hov <= v1) ? S.hov : -1;
         // the two Absorptions of a closed candle, as its bars say them (x1000 -1 = no bar)
@@ -932,6 +979,7 @@ private:
         o << "DISPLAY|" << TURN_VERSION << "|strip on the pane top: " << (S.stripKind == 1 ? "a sweep" : S.stripKind == 2 ? "a candle at a level" : S.stripKind == 3 ? "a candle" : "none")
           << "|ratios " << (S.labMode == 2 ? "on every bar (wide candles)" : S.labMode == 1 ? "one per candle side" : "none") << " " << S.labDrawn << " of " << S.labOffered
           << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "|effort candles " << S.effCandles << "\n";
+        o << "READ|" << (S.readVerdict == 1 ? "bullish" : S.readVerdict == -1 ? "bearish" : S.readVerdict == 2 ? "range" : "quiet") << "|" << S.readHead << "|" << S.readWhy << "|" << S.readWatch << "|lines drawn " << S.readLines << "\n";   // (1.4.0) the Absorption read right of the last candle
         o << "SHOW|" << S.show.why << "|" << turn::showText(S.show) << "\n";   // (1.2.0) what the pane draws: Effort + the pieces the display file switched on
         const std::string t = o.str();
         S.statusMs = now;
@@ -953,6 +1001,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.3 - Stop Run / Absorption / Exhaustion / Initiative. Absorption on every closed candle: the heaviest price at its high (up) and at its low (down) against the 20 candles before; red at a high / green at a low from 2.0 when the candle closed away from that end, grey otherwise. Top line: the last sweep's read, or the candle under the mouse.");
-    p->setVersion("1.3.0");
+    p->setVersion("1.4.0");
     return p;
 }
