@@ -1,5 +1,19 @@
 /*
- *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.2"  1.2.1  (2026-11-23; 1.2.0 and 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day)
+ *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.3"  1.3.0  (2026-11-23; 1.2.1, 1.2.0 and 1.1.0 the same day; 1.0.1 2026-11-22; 1.0.0 the same day)
+ *
+ *  (1.3.0) Rassul 2026-11-23 CT: 18:15 "is this similar to  stoprun absorbtion exhaustion intiative" ... "can you update my turn indicator to
+ *  this .  so update effort to absrobtion also"; 18:28 "i want you to do the absorbtion the right way"; 18:38 "Research first before
+ *  building so you do it right"; 19:48 "build" (turn-four-pieces-mockup.html v3 + the research report of 19:10). THE PANE SHOWS THE FOUR
+ *  PIECES by default: Stop Run / Absorption / Exhaustion / Initiative (= the full setting of 1.2.0; Initiative is the old Answer).
+ *  ABSORPTION replaces Effort on every closed candle and in the top line: the lots at the HEAVIEST SINGLE PRICE in the candle's end quarter
+ *  (buys at its top, sells at its bottom) against the average of the same over the 20 closed candles before (10 at least); coloured from
+ *  2.0 AND only when the candle CLOSED OUTSIDE that end quarter - in the winner's colour: absorbed at the high = red, at the low = green;
+ *  grey otherwise (the number stays). The top line of a plain candle: "<time>   High: <word> Absorption 8.6x / Low: <word> Absorption 4.3x".
+ *  Research (603 first RTH tests of a major level, 7 markets, 09-10 .. 11-20): the close test separates turned from failed (73% vs 46%),
+ *  Effort does not (0.48); volume adds only after the close test. Per market the volume step is LEARNING (under 20 a side).
+ *  The record file, the reads and their Effort column are UNCHANGED (Absorption is drawn from the chart's volume at price; calc reads the
+ *  close with each bar, draw reads no bars). display.txt can still switch pieces off (absorption_from|2.0; effort_from still read).
+ *  Notes NOTES-TURN130.md.
  *
  *  (1.2.1) Rassul 2026-11-23 11:47 CT "go" on the Stop Run fault (CL counted 81% of its fills as stops since the 9:38 AM load; NQ 42% in
  *  the session before): the order-ID clock was stopped by ONE old order whose number lies above the new ones (IRT's IDs are an 8-digit
@@ -91,7 +105,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.2.1"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.3.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -318,7 +332,7 @@ inline int vapRows(RTARRAYP& vap, int bar, double tick, std::vector<turn::Row>& 
 }
 
 // ---- per-chart state ---------------------------------------------------------------------------------------------------------
-struct BarVal { turn::Bars b; bool have = false; };
+struct BarVal { turn::Bars b; bool have = false; bool awayUp = false, awayDn = false; };   // (1.3.0) awayUp / awayDn = the candle closed outside its top / bottom quarter (Absorption's close test), read with the bar
 struct State {
     bool busy = false;
     std::string identity, market, symbol, note; int spb = 0; double tick = 0; bool supported = false;
@@ -492,7 +506,7 @@ private:
     // ---- Effort from IRT's volume at price: closed bars once (newest first, BAR_PASS a pass), the forming bar once a second ----
     template <class TA> void barsPass(State& S, long count, TA& times, long long now) {
         if (S.vapFault) return;
-        RTARRAY hi(barHigh), lo(barLow); if (hi.count < count || lo.count < count) return;
+        RTARRAY hi(barHigh), lo(barLow), cl(barClose); if (hi.count < count || lo.count < count || cl.count < count) return;
         if (S.barsCount > count) { S.bars.clear(); S.recheck.clear(); }   // the chart was reloaded (keys are bar times: a rolling window keeps them)
         S.barsCount = count; S.barsFirstKey = (long long)times[0];
         RTARRAYP vap(barVolumeProfile);
@@ -502,7 +516,9 @@ private:
                 const int r = vapRows(vap, i, S.tick, S.rows, S.scratch);
                 if (r < 0) { S.vapFault = true; S.note = "volume at price fault"; return false; }
                 if (r == 0) ++S.vapMissing;
-                else v.b = turn::barRatios(S.rows, (long long)std::llround(l / S.tick), (long long)std::llround(h / S.tick));
+                else { const long long lt = (long long)std::llround(l / S.tick), ht = (long long)std::llround(h / S.tick); v.b = turn::barRatios(S.rows, lt, ht);
+                    const double c = (double)cl[i];   // (1.3.0) the close test of Absorption
+                    if (std::isfinite(c) && v.b.zone > 0) { const long long ct = (long long)std::llround(c / S.tick); v.awayUp = turn::absAway(ht, lt, ct, v.b.zone, true); v.awayDn = turn::absAway(ht, lt, ct, v.b.zone, false); } }
             }
             S.bars[(long long)times[i]] = v; return true;
         };
@@ -705,7 +721,7 @@ private:
         const int xl = one ? x - w / 2 : x - gap / 2 - w, xr = one ? x - w / 2 : x + (gap - gap / 2);
         const bool pushUp = dir < 0;                                    // a swept high: the buyers' bars go up, the turn's bars down
         struct One { const turn::Bar1* b; int left; bool up; COLOR c; };
-        const One all[4] = { { &bs.stop, xl, pushUp, pushUp ? C_LGREEN : C_LRED }, { &bs.eff, xr, pushUp, pushUp ? C_GREEN : C_RED },
+        const One all[4] = { { &bs.stop, xl, pushUp, pushUp ? C_LGREEN : C_LRED }, { &bs.eff, xr, pushUp, pushUp ? C_RED : C_GREEN },   // (1.3.0) Absorption in the winner's colour: absorbed at a high = red, at a low = green
                              { &bs.exh, xl, !pushUp, pushUp ? C_LRED : C_LGREEN }, { &bs.ans, xr, !pushUp, pushUp ? C_RED : C_GREEN } };
         int drawn = 0, bestH[2] = { 0, 0 }; const One* best[2] = { nullptr, nullptr };   // [0] the bars going up, [1] the bars going down
         for (const One& o : all) {
@@ -763,11 +779,23 @@ private:
         const int sTop = T + 2, sBot = sTop + 18; int areaTop = T + 2;
         const long long viewKey = (long long)times[v1];
         const long long atKey = std::min(viewKey, S.lastClosedKey);
-        int kind = 0; turn::Read rd; long long cStop = -1, cEff = -1, eUp = -1, eDn = -1; std::string cPrefix;
+        // (1.3.0) Absorption of chart bar i at its top / bottom, from the bars calc read (no bar is read here): the heaviest price against
+        // its average over the 20 candles before. A candle whose earlier candles are not read yet (or are older than the kept window)
+        // gives none, so a number never changes once shown.
+        const auto absAt = [&](int i, bool top) -> turn::Abs {
+            turn::Abs a; if (i < 0 || i >= (int)count) return a;
+            const std::map<long long, BarVal>::const_iterator bi = S.bars.find((long long)times[i]); if (bi == S.bars.end() || bi->second.b.levels < 4) return a;
+            std::vector<long long> prior; prior.reserve(turn::ABS_AVG);
+            for (int j = i - 1; j >= 0 && j >= i - turn::ABS_BACK && (int)prior.size() < turn::ABS_AVG; --j) {
+                const std::map<long long, BarVal>::const_iterator bj = S.bars.find((long long)times[j]); if (bj == S.bars.end()) return a;
+                if (bj->second.b.levels < 4) continue;
+                prior.push_back(top ? bj->second.b.topMax : bj->second.b.botMax); }
+            a.x1000 = turn::absX1000(top ? bi->second.b.topMax : bi->second.b.botMax, prior); a.away = top ? bi->second.awayUp : bi->second.awayDn; return a; };
+        const auto indexOf = [&](long long key) -> int { int lo2 = 0, hi2 = (int)count - 1; while (lo2 <= hi2) { const int m = lo2 + (hi2 - lo2) / 2; const long long t = (long long)times[m]; if (t == key) return m; if (t < key) lo2 = m + 1; else hi2 = m - 1; } return -1; };
+        int kind = 0; turn::Read rd; long long cStop = -1; turn::Abs cAbs, aUp, aDn, rAbs; int cSide = 0; std::string cPrefix;
         const int hv = (S.hov >= v0 && S.hov <= v1) ? S.hov : -1;
-        // the two Efforts of a closed candle, as its bars say them (-1 = no bar)
-        const auto effortsOf = [&](long long key) { eUp = eDn = -1; const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
-            if (bi != S.bars.end()) { const turn::EffPair e = turn::effOf(bi->second.b, W.effFrom10); if (e.up.show) eUp = turn::x1000(bi->second.b.top); if (e.dn.show) eDn = turn::x1000(bi->second.b.bot); } };
+        // the two Absorptions of a closed candle, as its bars say them (x1000 -1 = no bar)
+        const auto effortsOf = [&](long long key) { const int i = indexOf(key); aUp = absAt(i, true); aDn = absAt(i, false); };
         if (!W.read) {
             // (1.2.0) no read strip: the top line is about Effort only - the closed candle under the mouse, else the last closed candle in
             // view. Always there (a dash where a side has no bar), so the bars never jump while the mouse moves.
@@ -787,14 +815,13 @@ private:
             const bool plain = !kind && key <= S.lastClosedKey && (ci == S.rec.cands.end() || turn::candPlainSide(ci->second, above));
             if (plain) {
                 effortsOf(key);
-                if (eUp >= 0 || eDn >= 0) { cPrefix = prefixText(std::string(), key, false, viewKey); kind = 3; }
+                if (aUp.x1000 >= 0 || aDn.x1000 >= 0) { cPrefix = prefixText(std::string(), key, false, viewKey); kind = 3; }
             }
             if (!kind && ci != S.rec.cands.end()) {
                 const turn::Cand& c = ci->second; const int side = turn::candSide(c, S.hovY < S.axisY);
                 if (side) {
                     cStop = side < 0 ? c.hiX1000 : c.loX1000;
-                    const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
-                    if (bi != S.bars.end() && (side < 0 ? bi->second.b.topOk : bi->second.b.botOk)) cEff = turn::x1000(side < 0 ? bi->second.b.top : bi->second.b.bot);
+                    cAbs = absAt(hv, side < 0); cSide = side;
                     cPrefix = prefixText(turn::levelNameAt(S.levels, side < 0 ? c.hiL : c.loL), key, false, viewKey);
                     kind = 2;
                 }
@@ -808,10 +835,11 @@ private:
         if (kind && xLast - L >= 220 && B - T >= 90) {
             const int l = L + 4, r = xLast, dir = kind == 1 ? rd.dir : 0;
             const std::string px = kind == 1 ? prefixOf(rd, viewKey) : cPrefix;
+            if (kind == 1) rAbs = absAt(indexOf(rd.stamp), rd.dir < 0);   // (1.3.0) the sweep's Absorption: at the end it pushed into
             const auto make = [&](bool numbers, bool withPrefix) {
-                return kind == 1 ? turn::stripOf(rd, S.P.bestProven, numbers, withPrefix ? px : std::string())
-                     : kind == 3 ? turn::stripOfEffort(eUp, eDn, numbers, withPrefix ? px : std::string(), W.effFrom10)
-                     : turn::stripOfCand(cStop, cEff, numbers, withPrefix ? px : std::string()); };
+                return kind == 1 ? turn::stripOf(rd, S.P.bestProven, numbers, withPrefix ? px : std::string(), rAbs, W.effFrom10)
+                     : kind == 3 ? turn::stripOfAbs(aUp, aDn, numbers, withPrefix ? px : std::string(), W.effFrom10)
+                     : turn::stripOfCand(cStop, cAbs, cSide, numbers, withPrefix ? px : std::string(), W.effFrom10); };
             turn::Strip st = make(!wide, true);                           // the ratios in words where not every bar carries its own
             setFont(f10b); const int pw = W.read ? (int)getTextWidth(st.pill.c_str(), -1) + 14 : 0;   // (1.2.0) the odds pill belongs to the read strip
             const int tx0 = l + 10, avail = r - pw - 14 - tx0;
@@ -855,11 +883,11 @@ private:
             const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
             if (!isSw && ci == S.rec.cands.end() && bi == S.bars.end()) continue;
             PNT p; p.set(i, 0.0f, kBarCenter); const int x = p.h; if (x < L || x > R) continue;
-            const turn::EffPair e = bi != S.bars.end() ? turn::effOf(bi->second.b, W.effFrom10) : turn::EffPair();
+            turn::EffPair e; e.up = turn::absBar(absAt(i, true), W.effFrom10); e.dn = turn::absBar(absAt(i, false), W.effFrom10);   // (1.3.0) Absorption at the candle's high / low
             if (isSw) {
                 const turn::Sw& w = S.sweeps[si->second]; const turn::Read sr = readFor(S, w);
                 if (sr.src != '-') {                                    // a sweep candle with its read: the push on its side, the turn on the other
-                    turn::BarSet bs = turn::barsOf(sr); bs.eff.on = turn::effOn(bs.eff, W.effFrom10);
+                    turn::BarSet bs = turn::barsOf(sr); bs.eff = w.dir < 0 ? e.up : e.dn;   // (1.3.0) the Absorption at the end the sweep pushed into
                     if (!W.stop) bs.stop = turn::Bar1();
                     if (!W.exh) bs.exh = turn::Bar1();
                     if (!W.ans) bs.ans = turn::Bar1();
@@ -924,7 +952,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Turn v1.2 - Effort on every closed candle: the buyers' Effort at its top (up) and the sellers' Effort at its bottom (down), green / red from 1.5, grey under it. Top line: the candle under the mouse, else the last closed candle. The other pieces of the turn read (Stop Run, Exhaustion, the Answer, the read strip with the verdict and the odds) are still read and recorded and can be switched back on.");
-    p->setVersion("1.2.1");
+    p->setDescription("LRA Turn v1.3 - Stop Run / Absorption / Exhaustion / Initiative. Absorption on every closed candle: the heaviest price at its high (up) and at its low (down) against the 20 candles before; red at a high / green at a low from 2.0 when the candle closed away from that end, grey otherwise. Top line: the last sweep's read, or the candle under the mouse.");
+    p->setVersion("1.3.0");
     return p;
 }

@@ -69,7 +69,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.2.1";
+static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-23 18:15 CT "can you update my turn indicator to this .  so update effort to absrobtion also", 18:28 "i want you to do the absorbtion the right way", 18:38 "Research first before building so you do it right", 19:48 "build" on turn-four-pieces-mockup.html v3): the four pieces Stop Run / Absorption / Exhaustion / Initiative, all shown by default. ABSORPTION replaces Effort on the bars and in the strip: the lots at the heaviest single price in the end quarter / its average over the 20 closed candles before; coloured (the winner: red at a high, green at a low) from 2.0 AND only when the candle closes outside that end quarter. "Answer" is called Initiative. The record file and its Effort column are unchanged
+// was static const char* const VERSION = "1.2.1";
 static const size_t FILL_CAP = 150000;      // fills of one candle (more = the candle is not decided live)
 static const size_t SHOWN_CAP = 50000;      // resting orders tracked (is the aggressor a known resting order?)
 static const long long NEAR_TICKS = 64;     // only orders within this many ticks of the last trade are tracked
@@ -157,19 +158,22 @@ inline std::string clockText(int hour, int minute) {   // 12-hour clock: "9:03 A
 // EFFORT (IRT volume at price), as lsEffortRewardPane 0.2.0
 // ---------------------------------------------------------------------------------------------------------------------------------
 struct Row { long long tick = 0, buy = 0, sell = 0; };       // buy = traded at the offer, sell = traded at the bid
-struct Bars { bool topOk = false, botOk = false; double top = 0, bot = 0; long long levels = 0, zone = 0; };
+struct Bars { bool topOk = false, botOk = false; double top = 0, bot = 0; long long levels = 0, zone = 0; long long topMax = -1, botMax = -1; };   // (1.3.0) topMax / botMax = the lots at the heaviest single price in the end quarter (buys at the top, sells at the bottom); -1 = no candle
 inline long long zoneOf(long long L) { const long long z = (L + 2) / 4; return z < 1 ? 1 : z; }   // round(0.25 L), half up
 inline Bars barRatios(const std::vector<Row>& rows, long long lo, long long hi) {
     Bars b; if (hi < lo) return b;
     const long long L = hi - lo + 1; if (L < 4 || L > 200000) return b;
     const long long z = zoneOf(L); b.levels = L; b.zone = z;
-    long long bt = 0, br = 0, st = 0, sr = 0;
+    long long bt = 0, br = 0, st = 0, sr = 0, bmx = 0, smx = 0;
     for (const Row& r : rows) {
         if (r.tick < lo || r.tick > hi || r.buy < 0 || r.sell < 0) continue;
         if (r.tick > hi - z) bt += r.buy; else br += r.buy;
         if (r.tick < lo + z) st += r.sell; else sr += r.sell;
+        if (r.tick > hi - z && r.buy > bmx) bmx = r.buy;
+        if (r.tick < lo + z && r.sell > smx) smx = r.sell;
     }
     const double nz = (double)z, nr = (double)(L - z);
+    b.topMax = bmx; b.botMax = smx;
     if (br > 0) { b.top = ((double)bt / nz) / ((double)br / nr); b.topOk = std::isfinite(b.top); }
     if (sr > 0) { b.bot = ((double)st / nz) / ((double)sr / nr); b.botOk = std::isfinite(b.bot); }
     return b;
@@ -754,11 +758,43 @@ inline int barPx(double v, int half) {
 enum { T_TEXT = 0, T_MUTED = 1, T_DIR = 2, T_AMBER = 3, T_BUY = 4, T_SELL = 5 };   // T_DIR = the colour of the turn: red at a swept high, green at a swept low; (1.1.0) T_BUY green, T_SELL red
 struct Seg { std::string text; int tone = T_TEXT; bool bold = false; };
 struct Strip { std::vector<Seg> segs; std::string pill, flat; int pillTone = T_MUTED, edgeTone = T_MUTED; };
+// the number WRITTEN on a bar, in tenths ("1.5" -> 15, "0.5" -> 5, "14" -> 140, "99+" -> 990); -1 = no number. The colour of an Effort
+// bar follows what the bar says: a bar that reads 1.5 is coloured, whatever the digits behind it.
+inline long long shown10(const std::string& label) {
+    if (label.empty()) return -1;
+    char* e = nullptr; const double x = std::strtod(label.c_str(), &e);
+    if (e == label.c_str() || !std::isfinite(x) || x < 0) return -1;
+    return (long long)std::llround(x * 10.0);
+}
+// ---------------------------------------------------------------------------------------------------------------------------------
+// (1.3.0) ABSORPTION. Research 2026-11-23 (603 first RTH tests of a major level, 7 markets, 2026-09-10 .. 11-20; turned = 2 ATR away
+// before 0.5 ATR through, within 10 candles): the CLOSE test separates (closes outside the tested end quarter 73% turned, 319 / 435; in
+// it 46%, 78 / 168); Effort does not (AUC 0.48); volume adds only after the close test, and the heaviest single price does it best
+// (2.0x or more: 80%, 126 / 157, against 69%). Per market the volume step is under 20 a side: LEARNING.
+//   number  = the lots at the heaviest single price in the candle's end quarter (buys at the top, sells at the bottom) / the average of
+//             the same over the ABS_AVG closed candles before it that have 4+ price levels (ABS_MIN at least, else no bar)
+//   away    = the candle closed OUTSIDE that end quarter (top: close <= high - zone; bottom: close >= low + zone): no result for the push
+//   counts  = number written >= from10 (2.0) AND away. Colour = the winner: absorbed at the high = red, at the low = green.
+static const int ABS_AVG = 20, ABS_MIN = 10, ABS_BACK = 80; static const long long ABS_FROM10 = 20;
+struct Abs { long long x1000 = -1; bool away = false; };                 // x1000 -1 = not known / no bar
+inline bool absAway(long long hi, long long lo, long long cl, long long zone, bool top) { return zone > 0 && hi >= lo && (top ? cl <= hi - zone : cl >= lo + zone); }
+// cur = this candle's heaviest-price lots; prior = the same of the candles before it, newest first (only candles with 4+ levels)
+inline long long absX1000(long long cur, const std::vector<long long>& prior) {
+    double sum = 0; int n = 0;
+    if (cur < 0) return -1;
+    for (size_t k = 0; k < prior.size() && n < ABS_AVG; ++k) { if (prior[k] < 0) continue; sum += (double)prior[k]; ++n; }
+    if (n < ABS_MIN || !(sum > 0)) return -1;
+    return x1000((double)cur / (sum / n));
+}
+// No / Light / Moderate / Heavy by the number written (tenths): No when the candle closed in that end quarter or the number is under 1.0;
+// Heavy = it counts (from10 or more)
+inline int absClass10(long long t, bool away, long long from10) { return !away || t < 10 ? 0 : t >= from10 ? 3 : t < 15 ? 1 : 2; }
+inline Bar1 absBar(const Abs& a, long long from10) { Bar1 b = ratioBar(a.x1000, 0); b.on = b.show && a.away && shown10(b.label) >= from10; return b; }
 inline const char* verdictText(int v, bool bestProven) {
     return v == V_UNCLEAR ? "UNCLEAR" : v == V_ASIDE ? "STAND ASIDE" : v == V_WAIT ? "WAIT" : v == V_BEST ? (bestProven ? "BEST ODDS" : "BEST ODDS ?") : "NO READ";
 }
 // prefix = which sweep ("PhrH 9:03 AM"); numbers = add the ratios to the words (when the bars are too narrow for labels)
-inline Strip stripOf(const Read& r, bool bestProven, bool numbers, const std::string& prefix) {
+inline Strip stripOf(const Read& r, bool bestProven, bool numbers, const std::string& prefix, const Abs& ab = Abs(), long long from10 = ABS_FROM10) {
     Strip s;
     struct Add { Strip& s; void operator()(const std::string& t, int tone, bool bold) const { Seg g; g.text = t; g.tone = tone; g.bold = bold; s.segs.push_back(g); s.flat += t; } } add = { s };
     const std::string sep = " / ";
@@ -767,16 +803,16 @@ inline Strip stripOf(const Read& r, bool bestProven, bool numbers, const std::st
         add(std::string(word4(k)) + " Stop Run" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_TEXT, true); }
     else add("\x96 Stop Run", T_MUTED, true);
     add(sep, T_MUTED, false);
-    if (r.eff1000 >= 0) { const double x = (double)r.eff1000 / 1000.0; const int k = effClass(x);
-        add(std::string(word4(k)) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_TEXT, true); }
-    else add("\x96 Effort", T_MUTED, true);
+    if (ab.x1000 >= 0) { const double x = (double)ab.x1000 / 1000.0; const long long t = shown10(labelText(x)); const int k = absClass10(t, ab.away, from10);   // (1.3.0) Absorption, the turn's colour when it counts
+        add(std::string(word4(k)) + " Absorption" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : k == 3 ? T_DIR : T_TEXT, true); }
+    else add("\x96 Absorption", T_MUTED, true);
     add(sep, T_MUTED, false);
     if (r.dem1e4 >= 0 && r.exh >= 0) {
         add(std::string(word4(r.exh)) + " Exhaustion" + (numbers ? " " + ratioText(exhBar((double)r.dem1e4 / 1e4)) : std::string()) + (r.verdict == V_UNCLEAR ? " ?" : ""), r.exh == 0 ? T_MUTED : T_DIR, true); }
     else add("\x96 Exhaustion", T_MUTED, true);
     add(sep, T_MUTED, false);
-    if (r.marks >= 0 && r.ansOk) add(std::string(word4(r.marks)) + " Answer" + (numbers ? " " + std::to_string(r.marks) + "/3" : std::string()), r.marks == 0 ? T_MUTED : T_DIR, true);
-    else add("\x96 Answer", T_MUTED, true);
+    if (r.marks >= 0 && r.ansOk) add(std::string(word4(r.marks)) + " Initiative" + (numbers ? " " + std::to_string(r.marks) + "/3" : std::string()), r.marks == 0 ? T_MUTED : T_DIR, true);
+    else add("\x96 Initiative", T_MUTED, true);
     const int vt = r.verdict == V_BEST ? T_DIR : r.verdict == V_WAIT ? T_AMBER : T_MUTED;
     add("   \xBB ", T_MUTED, false);
     add(verdictText(r.verdict, bestProven), vt, true);
@@ -805,7 +841,7 @@ inline int candSide(const Cand& c, bool mouseAboveAxis) {
 }
 // the strip of a candle at a named level that is not a sweep: what is drawn on it - its Stop Run and its Effort, nothing else (no
 // Exhaustion, no Answer, no verdict: those are read on a sweep candle only). -1 = not known. prefix = "VAH 9:57 PM".
-inline Strip stripOfCand(long long stopX1000, long long eff1000, bool numbers, const std::string& prefix) {
+inline Strip stripOfCand(long long stopX1000, const Abs& ab, int side, bool numbers, const std::string& prefix, long long from10 = ABS_FROM10) {   // (1.3.0) side -1 = the candle's high (absorbed there = red), +1 = its low (green)
     Strip s;
     struct Add { Strip& s; void operator()(const std::string& t, int tone, bool bold) const { Seg g; g.text = t; g.tone = tone; g.bold = bold; s.segs.push_back(g); s.flat += t; } } add = { s };
     if (!prefix.empty()) add(prefix + "   ", T_MUTED, false);
@@ -813,9 +849,9 @@ inline Strip stripOfCand(long long stopX1000, long long eff1000, bool numbers, c
         add(std::string(word4(k)) + " Stop Run" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_TEXT, true); }
     else add("\x96 Stop Run", T_MUTED, true);
     add(" / ", T_MUTED, false);
-    if (eff1000 >= 0) { const double x = (double)eff1000 / 1000.0; const int k = effClass(x);
-        add(std::string(word4(k)) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : T_TEXT, true); }
-    else add("\x96 Effort", T_MUTED, true);
+    if (ab.x1000 >= 0) { const double x = (double)ab.x1000 / 1000.0; const long long t = shown10(labelText(x)); const int k = absClass10(t, ab.away, from10);
+        add(std::string(word4(k)) + " Absorption" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : k == 3 ? (side < 0 ? T_SELL : T_BUY) : T_TEXT, true); }
+    else add("\x96 Absorption", T_MUTED, true);
     s.pill = "\x96"; s.pillTone = T_MUTED; s.edgeTone = T_MUTED;
     return s;
 }
@@ -831,39 +867,31 @@ inline Strip stripOfCand(long long stopX1000, long long eff1000, bool numbers, c
 // key that is missing keeps its default, an unknown key is ignored, a bad value = the defaults for everything + why.
 static const size_t SHOW_MAX_BYTES = 4096;
 struct Show {
-    bool stop = false, exh = false, ans = false, read = false;
-    long long effFrom10 = 15;                                             // tenths
-    bool fromFile = false; std::string why = "no display file (Effort only)";
+    bool stop = true, exh = true, ans = true, read = true;                // (1.3.0) the four pieces are the default
+    long long effFrom10 = ABS_FROM10;                                     // tenths: an Absorption bar is coloured from this number
+    bool fromFile = false; std::string why = "no display file (the defaults)";
     bool twoCol() const { return stop || exh || ans; }                    // two columns a candle; else ONE centred Effort bar a side
 };
 inline Show parseShow(const std::string& txt) {
     Show d; if (txt.empty()) return d;
-    if (txt.size() > SHOW_MAX_BYTES) { d.why = "display file too big (Effort only)"; return d; }
+    if (txt.size() > SHOW_MAX_BYTES) { d.why = "display file too big (the defaults)"; return d; }
     const std::vector<std::string> L = lines(txt, false);
-    if (L.empty() || L[0] != "TURNSHOW|1") { d.why = "display file header (Effort only)"; return d; }
-    if (L.size() < 2 || L.back() != "END") { d.why = "display file not whole (Effort only)"; return d; }
+    if (L.empty() || L[0] != "TURNSHOW|1") { d.why = "display file header (the defaults)"; return d; }
+    if (L.size() < 2 || L.back() != "END") { d.why = "display file not whole (the defaults)"; return d; }
     Show s;
     for (size_t i = 1; i + 1 < L.size(); ++i) {
         const std::vector<std::string> c = split(L[i], '|'); bool ok = true; bool* f = nullptr;
         if (c[0] == "stop") f = &s.stop; else if (c[0] == "exhaustion") f = &s.exh; else if (c[0] == "answer") f = &s.ans; else if (c[0] == "read") f = &s.read;
         if (f) { long long b = 0; ok = c.size() == 2 && toLL(c[1], b) && (b == 0 || b == 1); if (ok) *f = b == 1; }
-        else if (c[0] == "effort_from") { double x = 0; ok = c.size() == 2 && toD(c[1], x) && x >= 0 && x <= 99; if (ok) s.effFrom10 = (long long)std::llround(x * 10.0); }
+        else if (c[0] == "absorption_from" || c[0] == "effort_from") { double x = 0; ok = c.size() == 2 && toD(c[1], x) && x >= 0 && x <= 99; if (ok) s.effFrom10 = (long long)std::llround(x * 10.0); }
         else continue;
-        if (!ok) { d.why = "display line " + std::to_string(i + 1) + " garbled (Effort only)"; return d; }
+        if (!ok) { d.why = "display line " + std::to_string(i + 1) + " garbled (the defaults)"; return d; }
     }
     s.fromFile = true; s.why = "ok"; return s;
 }
 inline std::string showText(const Show& s) {                             // the status file: "effort stop exhaustion answer read|effort coloured from 1.5"
-    char b[48]; std::snprintf(b, sizeof b, "|effort coloured from %lld.%lld", s.effFrom10 / 10, s.effFrom10 % 10);
-    return std::string("effort") + (s.stop ? " stop" : "") + (s.exh ? " exhaustion" : "") + (s.ans ? " answer" : "") + (s.read ? " read" : "") + b;
-}
-// the number WRITTEN on a bar, in tenths ("1.5" -> 15, "0.5" -> 5, "14" -> 140, "99+" -> 990); -1 = no number. The colour of an Effort
-// bar follows what the bar says: a bar that reads 1.5 is coloured, whatever the digits behind it.
-inline long long shown10(const std::string& label) {
-    if (label.empty()) return -1;
-    char* e = nullptr; const double x = std::strtod(label.c_str(), &e);
-    if (e == label.c_str() || !std::isfinite(x) || x < 0) return -1;
-    return (long long)std::llround(x * 10.0);
+    char b[56]; std::snprintf(b, sizeof b, "|absorption coloured from %lld.%lld", s.effFrom10 / 10, s.effFrom10 % 10);
+    return std::string("absorption") + (s.stop ? " stop" : "") + (s.exh ? " exhaustion" : "") + (s.ans ? " initiative" : "") + (s.read ? " read" : "") + b;
 }
 inline bool effOn(const Bar1& b, long long from10) { return b.show && shown10(b.label) >= from10; }
 inline int effClass10(long long t) { return t < 5 ? 0 : t < 10 ? 1 : t < 15 ? 2 : 3; }   // No / Light / Moderate / Heavy by the number written (tenths)
@@ -879,20 +907,20 @@ inline EffPair effOf(const Bars& b, long long from10) {
     e.up.on = effOn(e.up, from10); e.dn.on = effOn(e.dn, from10);
     return e;
 }
-// the strip of a plain candle: "<time>   Buyers <word> Effort 1.2x / Sellers <word> Effort 1.9x" - what is drawn on it, nothing else.
-// (1.2.0) The word and the colour follow the number written on the bar: buyers green / sellers red when it is from10 tenths or more,
-// grey under it. -1 = no bar on that side (a dash).
-inline Strip stripOfEffort(long long up1000, long long dn1000, bool numbers, const std::string& prefix, long long from10) {
+// (1.3.0) the strip of a plain candle: "<time>   High: <word> Absorption 8.6x / Low: <word> Absorption 4.3x" - what is drawn on it. The
+// word and the colour follow the number written on the bar AND the close test: red at the high / green at the low when the number is
+// from10 tenths or more and the candle closed outside that end quarter; "No" and grey when it closed in it. x1000 -1 = no bar (a dash).
+inline Strip stripOfAbs(const Abs& up, const Abs& dn, bool numbers, const std::string& prefix, long long from10) {
     Strip s;
     struct Add { Strip& s; void operator()(const std::string& t, int tone, bool bold) const { Seg g; g.text = t; g.tone = tone; g.bold = bold; s.segs.push_back(g); s.flat += t; } } add = { s };
     if (!prefix.empty()) add(prefix + "   ", T_MUTED, false);
-    if (up1000 >= 0) { const double x = (double)up1000 / 1000.0; const long long t = shown10(labelText(x));
-        add(std::string("Buyers ") + word4(effClass10(t)) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), t >= from10 ? T_BUY : T_MUTED, true); }
-    else add("Buyers \x96 Effort", T_MUTED, true);
+    if (up.x1000 >= 0) { const double x = (double)up.x1000 / 1000.0; const long long t = shown10(labelText(x)); const int k = absClass10(t, up.away, from10);
+        add(std::string("High: ") + word4(k) + " Absorption" + (numbers ? " " + ratioText(x) : std::string()), k == 3 ? T_SELL : T_MUTED, true); }
+    else add("High: \x96 Absorption", T_MUTED, true);
     add(" / ", T_MUTED, false);
-    if (dn1000 >= 0) { const double x = (double)dn1000 / 1000.0; const long long t = shown10(labelText(x));
-        add(std::string("Sellers ") + word4(effClass10(t)) + " Effort" + (numbers ? " " + ratioText(x) : std::string()), t >= from10 ? T_SELL : T_MUTED, true); }
-    else add("Sellers \x96 Effort", T_MUTED, true);
+    if (dn.x1000 >= 0) { const double x = (double)dn.x1000 / 1000.0; const long long t = shown10(labelText(x)); const int k = absClass10(t, dn.away, from10);
+        add(std::string("Low: ") + word4(k) + " Absorption" + (numbers ? " " + ratioText(x) : std::string()), k == 3 ? T_BUY : T_MUTED, true); }
+    else add("Low: \x96 Absorption", T_MUTED, true);
     s.pill = "\x96"; s.pillTone = T_MUTED; s.edgeTone = T_MUTED;
     return s;
 }

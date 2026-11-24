@@ -1,3 +1,4 @@
+// (1.3.0) SUPERSEDED by test_turn_host_130.cpp: this file pins lsTurn 1.2.1 (the words Effort / Answer, the Effort-only default) and no longer passes.
 // tests_turn/test_turn_host.cpp -- the WHOLE plugin (Turn.cpp) on the mock SDK, fed like a live morning: the real 2026-11-20 order events
 // (ES / GC, Databento -> IRT event form, tests_turn/mk_events.py) arrive candle by candle on two charts of one DLL while the charts grow.
 // Checks: the sweep reads and the level candles are decided once and recorded, the strip and the bars, scrolling back, a restart without

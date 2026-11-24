@@ -1,4 +1,4 @@
-// tests_turn/soak.cpp -- leak / soak test of lsTurn 1.2.1 (1.2.0: every other cycle runs JUST EFFORT - no display file -, the others the saved full setting; the record must be the same in both; 1.1.0: every candle carries Effort bars and has a strip under the mouse; 1.0.1: the mouse moves over the pane in every cycle). 40 times: add the chart, feed Friday's real ES order events candle by candle
+// tests_turn/soak.cpp -- leak / soak test of lsTurn 1.3.0 (1.3.0: every other cycle runs the DEFAULT = the four pieces, the others Absorption only by the display file; was) lsTurn 1.2.1 (1.2.0: every other cycle runs JUST EFFORT - no display file -, the others the saved full setting; the record must be the same in both; 1.1.0: every candle carries Effort bars and has a strip under the mouse; 1.0.1: the mouse moves over the pane in every cycle). 40 times: add the chart, feed Friday's real ES order events candle by candle
 // (about 2.5 million events a cycle, the reads and the level candles decided and recorded), draw, remove the chart. Memory must not grow.
 // build as test_turn_host.cpp (plain for the RSS numbers, -fsanitize=address,undefined for the leak check); needs TURN_TEST_DATA.
 #define main turn_host_test_main
@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
     for (int rep = 0; rep < reps; ++rep) {
         std::remove(P("TurnPane\\turn-ES-180.txt").c_str());
         const bool full = rep % 2 == 1;                                // (1.2.0) the display file: every piece on / none (Effort only)
-        if (full) put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|1\nexhaustion|1\nanswer|1\nread|1\neffort_from|0.5\nEND\n"); else std::remove(P("TurnPane\\display.txt").c_str());
+        if (!full) put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|0\nexhaustion|0\nanswer|0\nread|0\nEND\n"); else std::remove(P("TurnPane\\display.txt").c_str());   // (1.3.0) no file = the four pieces
         Sim s; s.tick = base.tick; s.k0 = base.k0; s.ev = base.ev; s.vap = base.vap; Sim idle; idle.tick = 0.1; idle.k0 = base.k0;   // a second, quiet chart of another market on the same DLL
         for (Sim* q : { &s, &idle }) { q->H.feedp = &q->F; q->H.tick = (float)q->tick; q->H.seconds = 180; q->H.barW = 60; q->H.barX0 = 600; q->H.paneTop = 0; q->H.paneBottom = 300; q->H.paneRight = 1400; q->H.textPx = 0.6; }
         s.H.symbol = "ESZ6"; s.H.root = "ES"; idle.H.symbol = "GCZ6"; idle.H.root = "GC";
@@ -31,8 +31,8 @@ int main(int argc, char** argv) {
         turn_test_window = nullptr; cycle(x, s.H);                     // ... and out of the pane again
         const std::string rec = get(P("TurnPane\\turn-ES-180.txt")); if (rep == 0) rec0 = rec;
         CHECK(countLines(rec, "T|") == 2 && rec == rec0);              // every cycle decides the same reads, byte for byte
-        if (full) CHECK(stripText(s.H).find("ONH 9:03 AM   Heavy Stop Run / Heavy Effort / ") == 0);
-        else CHECK(stripText(s.H) == "9:06 AM   Buyers No Effort 0.3x / Sellers Moderate Effort 1.1x");
+        if (full) CHECK(stripText(s.H).find("ONH 9:03 AM   Heavy Stop Run / ") == 0 && stripText(s.H).find(" Absorption / ") != std::string::npos && stripText(s.H).find(" Initiative   ") != std::string::npos);
+        else CHECK(stripText(s.H).find("9:06 AM   High: ") == 0 && stripText(s.H).find(" Absorption / Low: ") != std::string::npos && stripText(s.H).find("Effort") == std::string::npos);
         mock::current = &s.H; x->destroy(); CHECK(s.F.live == 0); CHECK(s.H.data == nullptr); CHECK(s.H.timers.empty());
         mock::current = &idle.H; x->destroy(); CHECK(idle.F.live == 0 && idle.H.data == nullptr);
         const long r = rssKb(); if (rep == 4) first = r; last = r; if (r > peak) peak = r;

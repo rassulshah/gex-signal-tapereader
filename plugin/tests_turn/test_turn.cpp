@@ -13,6 +13,7 @@ static int fails = 0, checks = 0;
 #define CHECK(c) do { ++checks; if (!(c)) { ++fails; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
 static bool near(double a, double b, double e = 1e-9) { return std::fabs(a - b) <= e; }
 using namespace turn;
+static Abs mkAbs(long long x, bool away) { Abs a; a.x1000 = x; a.away = away; return a; }
 
 static void effort() {
     CHECK(zoneOf(4) == 1); CHECK(zoneOf(5) == 1); CHECK(zoneOf(6) == 2); CHECK(zoneOf(10) == 3); CHECK(zoneOf(12) == 3); CHECK(zoneOf(14) == 4); CHECK(zoneOf(1) == 1);
@@ -322,31 +323,35 @@ static void drawing() {
     CHECK(bs.eff.show && bs.eff.on && bs.eff.label == "1.8");
     CHECK(bs.exh.show && bs.exh.on && bs.exh.label == "1.1" && near(bs.exh.v, (1 - 0.4667) / 0.5));
     CHECK(bs.ans.show && bs.ans.on && bs.ans.label == "2/3" && near(bs.ans.v, 2.0));
-    Strip s = stripOf(a, false, false, "ONH 9:03 AM");
-    CHECK(s.flat == "ONH 9:03 AM   Heavy Stop Run / Heavy Effort / Moderate Exhaustion / Moderate Answer   \xBB BEST ODDS ?");
-    CHECK(s.pill == "?" && s.pillTone == T_DIR && s.edgeTone == T_DIR && s.segs.size() == 10 && s.segs[1].tone == T_TEXT && s.segs[5].tone == T_DIR && s.segs[7].tone == T_DIR && s.segs[9].tone == T_DIR && s.segs[9].bold);
-    CHECK(stripOf(a, false, true, "").flat == "Heavy Stop Run 5.2x / Heavy Effort 1.8x / Moderate Exhaustion 1.1x / Moderate Answer 2/3   \xBB BEST ODDS ?");
+    const Abs AH = mkAbs(2400, true), AM = mkAbs(1200, true), AN = mkAbs(2400, false);   // (1.3.0) Absorption: heavy and closed away / moderate / heavy number but closed in the end quarter
+    Strip s = stripOf(a, false, false, "ONH 9:03 AM", AH);
+    CHECK(s.flat == "ONH 9:03 AM   Heavy Stop Run / Heavy Absorption / Moderate Exhaustion / Moderate Initiative   \xBB BEST ODDS ?");
+    CHECK(s.pill == "?" && s.pillTone == T_DIR && s.edgeTone == T_DIR && s.segs.size() == 10 && s.segs[1].tone == T_TEXT && s.segs[3].tone == T_DIR && s.segs[5].tone == T_DIR && s.segs[7].tone == T_DIR && s.segs[9].tone == T_DIR && s.segs[9].bold);
+    CHECK(stripOf(a, false, true, "", AH).flat == "Heavy Stop Run 5.2x / Heavy Absorption 2.4x / Moderate Exhaustion 1.1x / Moderate Initiative 2/3   \xBB BEST ODDS ?");
+    CHECK(stripOf(a, false, true, "", AN).flat == "Heavy Stop Run 5.2x / No Absorption 2.4x / Moderate Exhaustion 1.1x / Moderate Initiative 2/3   \xBB BEST ODDS ?" && stripOf(a, false, true, "", AN).segs[2].tone == T_MUTED);   // closed in the end quarter: No, grey, the number stays
+    CHECK(stripOf(a, false, true, "", AM).flat.find("Light Absorption 1.2x") != std::string::npos && stripOf(a, false, true, "", AM).segs[2].tone == T_TEXT && stripOf(a, false, true, "", mkAbs(1700, true)).flat.find("Moderate Absorption 1.7x") != std::string::npos && stripOf(a, false, true, "", mkAbs(900, true)).flat.find("No Absorption 0.9x") != std::string::npos);
+    CHECK(stripOf(a, false, true, "").flat.find("\x96 Absorption") != std::string::npos);   // not known: a dash - the recorded Effort is never shown as Absorption
     Strip sp = stripOf(a, true, false, ""); CHECK(sp.flat.find("BEST ODDS ?") == std::string::npos && sp.flat.find("BEST ODDS") != std::string::npos && sp.pill == "?");   // proven but no odds number: still "?"
     a.odds = 70; CHECK(stripOf(a, true, false, "").pill == "70% turn" && stripOf(a, false, false, "").pill == "?");
-    Read w = a; w.verdict = V_WAIT; w.marks = 1; w.odds = 52; Strip sw = stripOf(w, false, false, "");
-    CHECK(sw.flat == "Heavy Stop Run / Heavy Effort / Moderate Exhaustion / Light Answer   \xBB WAIT" && sw.pill == "52% turn" && sw.pillTone == T_AMBER && sw.edgeTone == T_AMBER);
-    Read n = a; n.verdict = V_ASIDE; n.exh = 0; n.dem1e4 = 7000; n.marks = 0; n.odds = 26; n.stopX1000 = 300; n.eff1000 = 400; Strip sn = stripOf(n, false, false, "");
-    CHECK(sn.flat == "No Stop Run / No Effort / No Exhaustion / No Answer   \xBB STAND ASIDE" && sn.pill == "26% turn" && sn.pillTone == T_MUTED);
+    Read w = a; w.verdict = V_WAIT; w.marks = 1; w.odds = 52; Strip sw = stripOf(w, false, false, "", AH);
+    CHECK(sw.flat == "Heavy Stop Run / Heavy Absorption / Moderate Exhaustion / Light Initiative   \xBB WAIT" && sw.pill == "52% turn" && sw.pillTone == T_AMBER && sw.edgeTone == T_AMBER);
+    Read n = a; n.verdict = V_ASIDE; n.exh = 0; n.dem1e4 = 7000; n.marks = 0; n.odds = 26; n.stopX1000 = 300; n.eff1000 = 400; Strip sn = stripOf(n, false, false, "", mkAbs(400, true));
+    CHECK(sn.flat == "No Stop Run / No Absorption / No Exhaustion / No Initiative   \xBB STAND ASIDE" && sn.pill == "26% turn" && sn.pillTone == T_MUTED);
     for (const Seg& g : sn.segs) CHECK(g.tone == T_MUTED);              // everything that reads No is grey
     const BarSet bn = barsOf(n); CHECK(bn.stop.show && !bn.stop.on && bn.eff.show && !bn.eff.on && bn.exh.show && !bn.exh.on && near(bn.exh.v, 0.6) && bn.ans.show && !bn.ans.on && near(bn.ans.v, 0.06) && bn.ans.label == "0/3");
-    Read uu = a; uu.verdict = V_UNCLEAR; uu.why = WHY_EARLY; uu.odds = -1; Strip su = stripOf(uu, false, false, "");
-    CHECK(su.flat == "Heavy Stop Run / Heavy Effort / Moderate Exhaustion ? / Moderate Answer   \xBB UNCLEAR" && su.pill == "\x96" && su.pillTone == T_MUTED);
+    Read uu = a; uu.verdict = V_UNCLEAR; uu.why = WHY_EARLY; uu.odds = -1; Strip su = stripOf(uu, false, false, "", AH);
+    CHECK(su.flat == "Heavy Stop Run / Heavy Absorption / Moderate Exhaustion ? / Moderate Initiative   \xBB UNCLEAR" && su.pill == "\x96" && su.pillTone == T_MUTED);
     // nothing known but the chart's Effort (a sweep from before the pane was loaded)
-    Read z; z.stamp = 5; z.dir = 1; z.lv = "PDL"; z.lvt = 100; z.eff1000 = 1200; Strip sz = stripOf(z, false, false, "PDL 9:03 AM");
-    CHECK(sz.flat == "PDL 9:03 AM   \x96 Stop Run / Moderate Effort / \x96 Exhaustion / \x96 Answer   \xBB NO READ" && sz.pill == "\x96");
+    Read z; z.stamp = 5; z.dir = 1; z.lv = "PDL"; z.lvt = 100; z.eff1000 = 1200; Strip sz = stripOf(z, false, false, "PDL 9:03 AM", AM);
+    CHECK(sz.flat == "PDL 9:03 AM   \x96 Stop Run / Light Absorption / \x96 Exhaustion / \x96 Initiative   \xBB NO READ" && sz.pill == "\x96");
     const BarSet bz = barsOf(z); CHECK(!bz.stop.show && bz.eff.show && !bz.exh.show && !bz.ans.show);
     // a Stop Run under 0.05x is not drawn; the Answer without its normals is not drawn
-    Read t = a; t.stopX1000 = 49; t.ansOk = 0; const BarSet bt = barsOf(t); CHECK(!bt.stop.show && !bt.ans.show); CHECK(stripOf(t, false, false, "").flat.find("\x96 Answer") != std::string::npos);
+    Read t = a; t.stopX1000 = 49; t.ansOk = 0; const BarSet bt = barsOf(t); CHECK(!bt.stop.show && !bt.ans.show); CHECK(stripOf(t, false, false, "").flat.find("\x96 Initiative") != std::string::npos);
     CHECK(ratioBar(-1, 0).show == false && ratioBar(0, 0).show && !ratioBar(0, 0).on && ratioBar(500, 0).on);
 }
 // (1.0.1) the ratio on a bar, the strip of a candle at a named level, and which labels narrow candles keep
 static void mouseAndLabels() {
-    CHECK(std::string(VERSION) == "1.2.1");
+    CHECK(std::string(VERSION) == "1.3.0");
     // the ratio ON a bar: no x, one decimal under 10, none from 10 up, 99+ cap; the strip's ratioText is unchanged
     CHECK(labelText(0) == "0.0" && labelText(0.522) == "0.5" && labelText(2.435) == "2.4" && labelText(2.87) == "2.9" && labelText(9.94) == "9.9" && labelText(9.95) == "10" && labelText(13.652) == "14");
     CHECK(labelText(99.4) == "99" && labelText(99.5) == "99+" && labelText(1e9) == "99+" && labelText(-1).empty() && labelText(std::nan("")).empty() && labelText(1.0 / 0.0).empty());
@@ -359,17 +364,19 @@ static void mouseAndLabels() {
     { Cand h; h.hiL = 8328; Cand l; l.loL = 8078; Cand b; b.hiL = 8328; b.loL = 8078; Cand n;
       CHECK(candSide(h, true) == -1 && candSide(h, false) == -1 && candSide(l, true) == 1 && candSide(l, false) == 1 && candSide(b, true) == -1 && candSide(b, false) == 1 && candSide(n, true) == 0 && candSide(n, false) == 0); }
     // the strip of a candle at a level: his CL chart 2026-11-22 (VAH / PDH, the record's Stop Run and the Effort read off his screenshot)
-    { const Strip a = stripOfCand(2435, 160, true, "VAH 9:36 PM"); CHECK(a.flat == "VAH 9:36 PM   Moderate Stop Run 2.4x / No Effort 0.2x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
+    { const Strip a = stripOfCand(2435, mkAbs(160, true), -1, true, "VAH 9:36 PM"); CHECK(a.flat == "VAH 9:36 PM   Moderate Stop Run 2.4x / No Absorption 0.2x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
       CHECK(a.segs.size() == 4 && a.segs[0].tone == T_MUTED && !a.segs[0].bold && a.segs[1].tone == T_TEXT && a.segs[1].bold && a.segs[2].tone == T_MUTED && a.segs[3].tone == T_MUTED && a.segs[3].bold);   // what reads No is grey
-      CHECK(stripOfCand(13652, 440, true, "VAH 9:57 PM").flat == "VAH 9:57 PM   Heavy Stop Run 13.7x / No Effort 0.4x");
-      CHECK(stripOfCand(2870, 2780, true, "VAH 10:00 PM").flat == "VAH 10:00 PM   Moderate Stop Run 2.9x / Heavy Effort 2.8x");
-      CHECK(stripOfCand(522, 1640, true, "PDH 10:12 PM").flat == "PDH 10:12 PM   Light Stop Run 0.5x / Heavy Effort 1.6x");
-      CHECK(stripOfCand(522, 1640, false, "PDH 10:12 PM").flat == "PDH 10:12 PM   Light Stop Run / Heavy Effort");                 // wide candles: the bars carry the numbers
-      CHECK(stripOfCand(522, 1640, false, "").flat == "Light Stop Run / Heavy Effort" && stripOfCand(522, 1640, false, "").segs.size() == 3);
-      CHECK(stripOfCand(-1, -1, true, "PDL 9:00 AM").flat == "PDL 9:00 AM   \x96 Stop Run / \x96 Effort");                       // not known: a dash, never a number
-      CHECK(stripOfCand(0, 0, true, "").flat == "No Stop Run 0.0x / No Effort 0.0x");
-      for (const Strip& q : { stripOfCand(2435, 160, true, "VAH"), stripOfCand(-1, 900, false, "") }) { CHECK(q.flat.find("Exhaustion") == std::string::npos && q.flat.find("Answer") == std::string::npos && q.flat.find("\xBB") == std::string::npos);
-          std::string f; for (const Seg& g : q.segs) { CHECK(g.tone == T_TEXT || g.tone == T_MUTED); f += g.text; } CHECK(f == q.flat); } }   // never a turn colour, never a verdict
+      CHECK(stripOfCand(13652, mkAbs(440, true), -1, true, "VAH 9:57 PM").flat == "VAH 9:57 PM   Heavy Stop Run 13.7x / No Absorption 0.4x");
+      { const Strip h = stripOfCand(2870, mkAbs(2780, true), -1, true, "VAH 10:00 PM"); CHECK(h.flat == "VAH 10:00 PM   Moderate Stop Run 2.9x / Heavy Absorption 2.8x" && h.segs[3].tone == T_SELL);   // absorbed at the high: red
+        const Strip l = stripOfCand(2870, mkAbs(2780, true), 1, true, ""); CHECK(l.segs[2].tone == T_BUY);                                                                              // at the low: green
+        const Strip c = stripOfCand(2870, mkAbs(2780, false), -1, true, ""); CHECK(c.flat == "Moderate Stop Run 2.9x / No Absorption 2.8x" && c.segs[2].tone == T_MUTED); }             // closed in that quarter: No
+      CHECK(stripOfCand(522, mkAbs(1640, true), -1, true, "PDH 10:12 PM").flat == "PDH 10:12 PM   Light Stop Run 0.5x / Moderate Absorption 1.6x");
+      CHECK(stripOfCand(522, mkAbs(1640, true), -1, false, "PDH 10:12 PM").flat == "PDH 10:12 PM   Light Stop Run / Moderate Absorption");                 // wide candles: the bars carry the numbers
+      CHECK(stripOfCand(522, mkAbs(1640, true), -1, false, "").flat == "Light Stop Run / Moderate Absorption" && stripOfCand(522, mkAbs(1640, true), -1, false, "").segs.size() == 3);
+      CHECK(stripOfCand(-1, Abs(), 0, true, "PDL 9:00 AM").flat == "PDL 9:00 AM   \x96 Stop Run / \x96 Absorption");                       // not known: a dash, never a number
+      CHECK(stripOfCand(0, mkAbs(0, true), 1, true, "").flat == "No Stop Run 0.0x / No Absorption 0.0x");
+      for (const Strip& q : { stripOfCand(2435, mkAbs(160, true), -1, true, "VAH"), stripOfCand(-1, mkAbs(900, true), 1, false, "") }) { CHECK(q.flat.find("Exhaustion") == std::string::npos && q.flat.find("Initiative") == std::string::npos && q.flat.find("\xBB") == std::string::npos);
+          std::string f; for (const Seg& g : q.segs) { CHECK(g.tone == T_TEXT || g.tone == T_MUTED); f += g.text; } CHECK(f == q.flat); } }   // never a verdict
     // which bar of a candle side carries the label
     CHECK(tallerOf(10, 11) == 1 && tallerOf(11, 10) == 0 && tallerOf(10, 10) == 0 && tallerOf(0, 0) == 0);
     // labels: boxes are [l, r) x [t, b)
@@ -433,15 +440,15 @@ static void effortEveryCandle() {
       const EffPair e = effOf(barRatios(rows, 100, 107), 5); CHECK(e.up.show && e.up.on && e.up.label == "6.0" && e.dn.show && !e.dn.on && e.dn.label == "0.1");
       const EffPair f = effOf(barRatios(rows, 100, 102), 5); CHECK(!f.up.show && !f.dn.show); }     // 3 price levels: none
     // the strip of a plain candle: buyers green, sellers red, No = grey; a dash where there is no bar; never a verdict, a level or a pill
-    { const Strip a = stripOfEffort(610, 1800, true, "9:27 AM", 5); CHECK(a.flat == "9:27 AM   Buyers Light Effort 0.6x / Sellers Heavy Effort 1.8x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
-      CHECK(a.segs.size() == 4 && a.segs[0].tone == T_MUTED && !a.segs[0].bold && a.segs[1].tone == T_BUY && a.segs[1].bold && a.segs[2].tone == T_MUTED && a.segs[3].tone == T_SELL && a.segs[3].bold);
-      CHECK(stripOfEffort(610, 1800, false, "9:27 AM", 5).flat == "9:27 AM   Buyers Light Effort / Sellers Heavy Effort");
-      CHECK(stripOfEffort(1957, 490, true, "", 5).flat == "Buyers Heavy Effort 2.0x / Sellers Light Effort 0.5x" && stripOfEffort(1957, 490, true, "", 5).segs.size() == 3 && stripOfEffort(1957, 490, true, "", 5).segs[2].tone == T_SELL);   /* (1.2.0) the word by the number written */
-      CHECK(stripOfEffort(1957, 440, true, "", 5).flat == "Buyers Heavy Effort 2.0x / Sellers No Effort 0.4x" && stripOfEffort(1957, 440, true, "", 5).segs[2].tone == T_MUTED);
-      CHECK(stripOfEffort(1000, 1499, true, "", 5).flat == "Buyers Moderate Effort 1.0x / Sellers Heavy Effort 1.5x" && stripOfEffort(1500, 999, true, "", 5).flat == "Buyers Heavy Effort 1.5x / Sellers Moderate Effort 1.0x");
-      CHECK(stripOfEffort(-1, 3160, true, "10:06 AM", 5).flat == "10:06 AM   Buyers \x96 Effort / Sellers Heavy Effort 3.2x" && stripOfEffort(230, -1, true, "", 5).flat == "Buyers No Effort 0.2x / Sellers \x96 Effort");
-      for (const Strip& q : { stripOfEffort(610, 1800, true, "9:27 AM", 5), stripOfEffort(-1, -1, false, "", 5), stripOfEffort(0, 99999000, true, "x", 5) }) {
-          CHECK(q.flat.find("Stop Run") == std::string::npos && q.flat.find("Exhaustion") == std::string::npos && q.flat.find("Answer") == std::string::npos && q.flat.find("\xBB") == std::string::npos && q.flat.find("%") == std::string::npos);
+    { const Strip a = stripOfAbs(mkAbs(610, true), mkAbs(2800, true), true, "9:27 AM", 20); CHECK(a.flat == "9:27 AM   High: No Absorption 0.6x / Low: Heavy Absorption 2.8x" && a.pill == "\x96" && a.pillTone == T_MUTED && a.edgeTone == T_MUTED);
+      CHECK(a.segs.size() == 4 && a.segs[0].tone == T_MUTED && !a.segs[0].bold && a.segs[1].tone == T_MUTED && a.segs[1].bold && a.segs[2].tone == T_MUTED && a.segs[3].tone == T_BUY && a.segs[3].bold);   // absorbed at the low: green
+      CHECK(stripOfAbs(mkAbs(610, true), mkAbs(2800, true), false, "9:27 AM", 20).flat == "9:27 AM   High: No Absorption / Low: Heavy Absorption");
+      CHECK(stripOfAbs(mkAbs(8600, true), mkAbs(4300, false), true, "12:00 PM", 20).flat == "12:00 PM   High: Heavy Absorption 8.6x / Low: No Absorption 4.3x");   // copper 2026-11-23 12:00 PM, the 845-lot climax (the mockup)
+      { const Strip c = stripOfAbs(mkAbs(8600, true), mkAbs(4300, false), true, "", 20); CHECK(c.segs.size() == 3 && c.segs[0].tone == T_SELL && c.segs[2].tone == T_MUTED); }   // at the high: red; closed in the bottom quarter: grey
+      CHECK(stripOfAbs(mkAbs(1000, true), mkAbs(1499, true), true, "", 20).flat == "High: Light Absorption 1.0x / Low: Moderate Absorption 1.5x" && stripOfAbs(mkAbs(1940, true), mkAbs(1960, true), true, "", 20).flat == "High: Moderate Absorption 1.9x / Low: Heavy Absorption 2.0x");   // the word by the number WRITTEN
+      CHECK(stripOfAbs(Abs(), mkAbs(3160, true), true, "10:06 AM", 20).flat == "10:06 AM   High: \x96 Absorption / Low: Heavy Absorption 3.2x" && stripOfAbs(mkAbs(230, true), Abs(), true, "", 20).flat == "High: No Absorption 0.2x / Low: \x96 Absorption");
+      for (const Strip& q : { stripOfAbs(mkAbs(610, true), mkAbs(1800, true), true, "9:27 AM", 20), stripOfAbs(Abs(), Abs(), false, "", 20), stripOfAbs(mkAbs(0, true), mkAbs(99999000, true), true, "x", 20) }) {
+          CHECK(q.flat.find("Stop Run") == std::string::npos && q.flat.find("Exhaustion") == std::string::npos && q.flat.find("Initiative") == std::string::npos && q.flat.find("Effort") == std::string::npos && q.flat.find("\xBB") == std::string::npos && q.flat.find("%") == std::string::npos);
           std::string f; for (const Seg& g : q.segs) { CHECK(g.tone == T_BUY || g.tone == T_SELL || g.tone == T_MUTED); f += g.text; } CHECK(f == q.flat); } }
     // a candle at a level under the mouse: the half that has a level keeps the level's strip; the half with only the other side's Effort is plain
     { Cand h; h.hiL = 8328; Cand l; l.loL = 8078; Cand b; b.hiL = 8328; b.loL = 8078; Cand n;
@@ -482,22 +489,21 @@ static void effortEveryCandle() {
 }
 // (1.2.0) just Effort: the display file, the colour and the word by the number WRITTEN on the bar
 static void justEffort() {
-    // the defaults = no file = Effort only, coloured from 1.5
-    { const Show d; CHECK(!d.stop && !d.exh && !d.ans && !d.read && d.effFrom10 == 15 && !d.fromFile && !d.twoCol() && showText(d) == "effort|effort coloured from 1.5");
-      const Show e = parseShow(""); CHECK(!e.fromFile && !e.twoCol() && e.effFrom10 == 15 && e.why == "no display file (Effort only)"); }
-    // the saved full setting (display-full.txt): every piece on, coloured from 0.5 = the 1.1.0 pane
-    { const Show f = parseShow("TURNSHOW|1\nstop|1\nexhaustion|1\nanswer|1\nread|1\neffort_from|0.5\nEND\n");
-      CHECK(f.fromFile && f.why == "ok" && f.stop && f.exh && f.ans && f.read && f.effFrom10 == 5 && f.twoCol() && showText(f) == "effort stop exhaustion answer read|effort coloured from 0.5");
-      const Show g = parseShow("TURNSHOW|1\r\nstop|1\r\nexhaustion|1\r\nanswer|1\r\nread|1\r\neffort_from|0.5\r\nEND\r\n"); CHECK(g.fromFile && g.stop && g.read && g.effFrom10 == 5);   // Windows line ends
-      const Show h = parseShow("TURNSHOW|1\nstop|1\nEND"); CHECK(h.fromFile && h.stop && !h.exh && !h.ans && !h.read && h.effFrom10 == 15 && h.twoCol());   // one piece; no newline after END
-      const Show k = parseShow("TURNSHOW|1\nEND\n"); CHECK(k.fromFile && !k.twoCol() && k.effFrom10 == 15);                                             // nothing switched
-      const Show u = parseShow("TURNSHOW|1\nfuture_piece|7\nread|1\neffort_from|2\nEND\n"); CHECK(u.fromFile && u.read && !u.stop && u.effFrom10 == 20 && showText(u) == "effort read|effort coloured from 2.0"); }
-    // anything wrong = Effort only for everything, with the reason (never half a file)
-    for (const char* bad : { "stop|1\nEND\n", "TURNSHOW|2\nstop|1\nEND\n", "TURNSHOW|1\nstop|1\n", "TURNSHOW|1\nstop|1\nEN", "TURNSHOW|1", "TURNSHOW|1\nstop|2\nEND\n", "TURNSHOW|1\nstop|\nEND\n", "TURNSHOW|1\nstop|1|1\nEND\n",
-                             "TURNSHOW|1\nread|yes\nEND\n", "TURNSHOW|1\nstop|1\neffort_from|abc\nEND\n", "TURNSHOW|1\neffort_from|-1\nEND\n", "TURNSHOW|1\neffort_from|100\nEND\n", "TURNSHOW|1\neffort_from|nan\nEND\n", "\n\n", "garbage" }) {
-        const Show x = parseShow(bad); CHECK(!x.fromFile && !x.stop && !x.exh && !x.ans && !x.read && x.effFrom10 == 15 && x.why.find("(Effort only)") != std::string::npos && x.why != "ok"); }
-    { const Show x = parseShow(std::string(SHOW_MAX_BYTES + 1, ' ')); CHECK(!x.fromFile && x.why == "display file too big (Effort only)"); }
-    CHECK(parseShow("TURNSHOW|1\nstop|1\nexhaustion|x\nEND\n").why == "display line 3 garbled (Effort only)");
+    // (1.3.0) the defaults = no file = the four pieces, Absorption coloured from 2.0
+    { const Show d; CHECK(d.stop && d.exh && d.ans && d.read && d.effFrom10 == 20 && !d.fromFile && d.twoCol() && showText(d) == "absorption stop exhaustion initiative read|absorption coloured from 2.0");
+      const Show e = parseShow(""); CHECK(!e.fromFile && e.twoCol() && e.effFrom10 == 20 && e.why == "no display file (the defaults)"); }
+    { const Show f = parseShow("TURNSHOW|1\nstop|0\nexhaustion|0\nanswer|0\nread|0\nabsorption_from|1.5\nEND\n");
+      CHECK(f.fromFile && f.why == "ok" && !f.stop && !f.exh && !f.ans && !f.read && f.effFrom10 == 15 && !f.twoCol() && showText(f) == "absorption|absorption coloured from 1.5");   // Absorption only
+      const Show g = parseShow("TURNSHOW|1\r\nstop|1\r\nexhaustion|1\r\nanswer|1\r\nread|1\r\neffort_from|0.5\r\nEND\r\n"); CHECK(g.fromFile && g.stop && g.read && g.effFrom10 == 5);   // Windows line ends; the 1.2.0 key still read (his saved display-full.txt)
+      const Show h = parseShow("TURNSHOW|1\nstop|0\nEND"); CHECK(h.fromFile && !h.stop && h.exh && h.ans && h.read && h.effFrom10 == 20 && h.twoCol());   // one piece off; no newline after END
+      const Show k = parseShow("TURNSHOW|1\nEND\n"); CHECK(k.fromFile && k.twoCol() && k.effFrom10 == 20);                                             // nothing switched = the defaults
+      const Show u = parseShow("TURNSHOW|1\nfuture_piece|7\nread|0\neffort_from|3\nEND\n"); CHECK(u.fromFile && !u.read && u.stop && u.effFrom10 == 30 && showText(u) == "absorption stop exhaustion initiative|absorption coloured from 3.0"); }
+    // anything wrong = the defaults for everything, with the reason (never half a file)
+    for (const char* bad : { "stop|1\nEND\n", "TURNSHOW|2\nstop|1\nEND\n", "TURNSHOW|1\nstop|0\n", "TURNSHOW|1\nstop|0\nEN", "TURNSHOW|1", "TURNSHOW|1\nstop|2\nEND\n", "TURNSHOW|1\nstop|\nEND\n", "TURNSHOW|1\nstop|1|1\nEND\n",
+                             "TURNSHOW|1\nread|yes\nEND\n", "TURNSHOW|1\nstop|0\neffort_from|abc\nEND\n", "TURNSHOW|1\neffort_from|-1\nEND\n", "TURNSHOW|1\nabsorption_from|100\nEND\n", "TURNSHOW|1\neffort_from|nan\nEND\n", "\n\n", "garbage" }) {
+        const Show x = parseShow(bad); CHECK(!x.fromFile && x.stop && x.exh && x.ans && x.read && x.effFrom10 == 20 && x.why.find("(the defaults)") != std::string::npos && x.why != "ok"); }
+    { const Show x = parseShow(std::string(SHOW_MAX_BYTES + 1, ' ')); CHECK(!x.fromFile && x.why == "display file too big (the defaults)"); }
+    CHECK(parseShow("TURNSHOW|1\nstop|1\nexhaustion|x\nEND\n").why == "display line 3 garbled (the defaults)");
     // the number written on a bar, in tenths
     CHECK(shown10("1.5") == 15 && shown10("0.5") == 5 && shown10("0.0") == 0 && shown10("9.9") == 99 && shown10("14") == 140 && shown10("99") == 990 && shown10("99+") == 990 && shown10("") == -1 && shown10("x") == -1 && shown10("3/3") == 30);
     for (double v = 0; v < 120; v += 0.0037) { const std::string t = labelText(v); const long long s10 = shown10(t); CHECK(s10 >= 0); char b[16]; std::snprintf(b, sizeof b, s10 >= 100 ? "%lld" : "%lld.%lld", s10 >= 100 ? s10 / 10 : s10 / 10, s10 % 10); CHECK(t == b || t == "99+"); }   // = the label, digit for digit
@@ -512,16 +518,24 @@ static void justEffort() {
     { Bars b; const EffPair e = effOf(b, 15); CHECK(!e.up.show && !e.dn.show && !e.up.on && !e.dn.on); Bar1 none; CHECK(!effOn(none, 0) && !effOn(none, 15)); }
     { Bars b; b.topOk = true; b.top = 0.2; CHECK(effOf(b, 0).up.on && !effOf(b, 5).up.on && !effOf(b, 990).up.on); b.top = 500; CHECK(effOf(b, 990).up.on); }
     CHECK(effClass10(0) == 0 && effClass10(4) == 0 && effClass10(5) == 1 && effClass10(9) == 1 && effClass10(10) == 2 && effClass10(14) == 2 && effClass10(15) == 3 && effClass10(990) == 3);
-    // the top line of a candle: the word and the colour by the number written; green / red only from 1.5
-    { const Strip a = stripOfEffort(230, 3160, true, "10:06 AM", 15); CHECK(a.flat == "10:06 AM   Buyers No Effort 0.2x / Sellers Heavy Effort 3.2x" && a.segs.size() == 4 && a.segs[1].tone == T_MUTED && a.segs[3].tone == T_SELL);
-      const Strip b = stripOfEffort(560, 600, true, "10:30 AM", 15); CHECK(b.flat == "10:30 AM   Buyers Light Effort 0.6x / Sellers Light Effort 0.6x" && b.segs[1].tone == T_MUTED && b.segs[3].tone == T_MUTED);   // his mockup's top line: both grey
-      const Strip c = stripOfEffort(1957, 490, true, "9:51 AM", 15); CHECK(c.flat == "9:51 AM   Buyers Heavy Effort 2.0x / Sellers Light Effort 0.5x" && c.segs[1].tone == T_BUY && c.segs[3].tone == T_MUTED);
-      const Strip d = stripOfEffort(1290, 1490, true, "9:30 AM", 15); CHECK(d.flat == "9:30 AM   Buyers Moderate Effort 1.3x / Sellers Heavy Effort 1.5x" && d.segs[1].tone == T_MUTED && d.segs[3].tone == T_SELL);   // 1.49 reads 1.5: Heavy, red - as its bar
-      const Strip e = stripOfEffort(1440, 1449, true, "", 15); CHECK(e.flat == "Buyers Moderate Effort 1.4x / Sellers Moderate Effort 1.4x" && e.segs[0].tone == T_MUTED && e.segs[2].tone == T_MUTED);
-      const Strip f = stripOfEffort(-1, -1, true, "8:24 AM", 15); CHECK(f.flat == "8:24 AM   Buyers \x96 Effort / Sellers \x96 Effort" && f.segs[1].tone == T_MUTED && f.segs[3].tone == T_MUTED);
-      const Strip g = stripOfEffort(1957, 490, true, "", 5); CHECK(g.segs[0].tone == T_BUY && g.segs[2].tone == T_SELL);        // the saved full setting: coloured from 0.5
-      for (long long m = 0; m <= 9000; m += 13) { const Strip q = stripOfEffort(m, m, true, "", 15); Bars bb; bb.topOk = true; bb.top = (double)m / 1000.0; const bool on = effOf(bb, 15).up.on;
-          CHECK((q.segs[0].tone == T_BUY) == on && (q.segs[2].tone == T_SELL) == on && (q.flat.find("Heavy") != std::string::npos) == on); } }   // the strip never disagrees with the bar
+    // (1.3.0) ABSORPTION: the heaviest price against its 20-candle average, the close test, the word and the colour
+    { std::vector<Row> rows; for (int k = 0; k < 8; ++k) { Row r; r.tick = 100 + k; r.buy = k == 7 ? 120 : k == 6 ? 300 : 10; r.sell = k == 0 ? 55 : k == 1 ? 90 : 20; rows.push_back(r); }
+      const Bars b = barRatios(rows, 100, 107); CHECK(b.zone == 2 && b.topMax == 300 && b.botMax == 90);          // the heaviest single price in the end quarter (2 of 8 levels)
+      Row big; big.tick = 103; big.buy = 9999; big.sell = 9999; rows.push_back(big); const Bars c = barRatios(rows, 100, 107); CHECK(c.topMax == 300 && c.botMax == 90);   // a heavy price in the middle is not the end
+      const Bars n = barRatios(rows, 100, 102); CHECK(n.levels == 0 && n.topMax == -1 && n.botMax == -1); }       // under 4 levels: no candle
+    { std::vector<long long> p(20, 100); CHECK(absX1000(250, p) == 2500 && absX1000(0, p) == 0 && absX1000(-1, p) == -1);
+      p.resize(9); CHECK(absX1000(250, p) == -1); p.resize(10, 100); CHECK(absX1000(250, p) == 2500);                    // 10 candles at least
+      std::vector<long long> q(40, 100); for (int k = 20; k < 40; ++k) q[(size_t)k] = 100000; CHECK(absX1000(250, q) == 2500);   // only the 20 newest
+      std::vector<long long> z(20, 0); CHECK(absX1000(250, z) == -1);                                              // nothing traded at the ends before: no number
+      std::vector<long long> m(25, 100); m[3] = -1; m[7] = -1; CHECK(absX1000(100, m) == 1000); }
+    CHECK(absAway(110, 100, 107, 3, true) && !absAway(110, 100, 108, 3, true) && absAway(110, 100, 103, 3, false) && !absAway(110, 100, 102, 3, false));   // top: close <= high - zone; bottom: close >= low + zone
+    CHECK(!absAway(110, 100, 105, 0, true) && !absAway(100, 110, 105, 3, true));
+    CHECK(absClass10(25, false, 20) == 0 && absClass10(9, true, 20) == 0 && absClass10(10, true, 20) == 1 && absClass10(14, true, 20) == 1 && absClass10(15, true, 20) == 2 && absClass10(19, true, 20) == 2 && absClass10(20, true, 20) == 3 && absClass10(990, true, 20) == 3 && absClass10(15, true, 15) == 3);
+    { const Bar1 a = absBar(mkAbs(1960, true), 20); CHECK(a.show && a.on && a.label == "2.0"); const Bar1 b = absBar(mkAbs(1940, true), 20); CHECK(b.show && !b.on && b.label == "1.9");   // the colour follows the number WRITTEN
+      const Bar1 c = absBar(mkAbs(8600, false), 20); CHECK(c.show && !c.on && c.label == "8.6"); const Bar1 d = absBar(Abs(), 20); CHECK(!d.show && !d.on); }                            // closed in that quarter: grey, the number stays
+    for (long long m = 0; m <= 9000; m += 13) for (int aw = 0; aw < 2; ++aw) { const Abs x = mkAbs(m, aw == 1); const Strip q = stripOfAbs(x, x, true, "", 20); const bool on = absBar(x, 20).on;
+        CHECK((q.segs[0].tone == T_SELL) == on && (q.segs[2].tone == T_BUY) == on && (q.flat.find("Heavy") != std::string::npos) == on);          // the strip never disagrees with the bar
+        const Strip r = stripOf(Read(), false, true, "", x); CHECK((r.flat.find("Heavy Absorption") != std::string::npos) == on); }
 }
 // (1.2.1) THE ORDER-ID CLOCK FOLLOWS THE RUNNING COUNT ONLY. IRT's IDs are an 8-digit counter that starts again at 0, so an old order can
 // carry a higher number than every new one; on CL 2026-11-23 9:49:52 AM one such order stopped the 1.0.0 - 1.2.0 clock for hours.
