@@ -1,5 +1,5 @@
 #!/bin/bash
-# lsTurn 1.4.0: rebuild and run every check (research machine; P = this plugin folder, H = hostdata, EV = ES events to 10:33 AM)
+# lsTurn 1.4.1: rebuild and run every check (research machine; P = this plugin folder, H = hostdata, EV = ES events to 10:33 AM)
 set -e
 P=${P:-/home/claude/t13/p2}; T=$P/tests_turn; W=/home/claude/turn/work; H=$W/hostdata; EV=${EV:-/home/claude/eff/data/ev_ES.txt}
 export TMPDIR=/tmp/claude-0; mkdir -p $TMPDIR
@@ -11,4 +11,4 @@ $CXX -O2 $T/replay.cpp -o $T/replay; python3 $T/golden.py $W/an $W/repo/data/tur
 (cd $T && $CXX $SAN -DLSPERF_FAKE -Imock -I.. test_turn_host_130.cpp -o t_host130 && TURN_TEST_DATA=$H TURN_EV=$EV ./t_host130 2>&1 | grep -a "Absorption bars\|checks\|FAIL\|overlap\|LeakSanitizer\|ERROR")
 (cd $T && $CXX -O2 -DLSPERF_FAKE -Imock -I.. soak.cpp -o soak_plain && TURN_TEST_DATA=$H ./soak_plain 40 | tail -2 && $CXX $SAN -DLSPERF_FAKE -Imock -I.. soak.cpp -o soak_asan && TURN_TEST_DATA=$H ./soak_asan 8 2>&1 | grep -a "checks\|rss after\|LeakSanitizer\|ERROR")
 (cd $T && $CXX $SAN t_read140.cpp -o t_read140 && ./t_read140 | tail -1)
-echo ALL DONE 1.4.0
+echo ALL DONE 1.4.1

@@ -105,7 +105,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.4.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.4.1"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -875,8 +875,11 @@ private:
             }
         }
         if (!kind && W.read) {
+            // (1.4.1, Rassul 2026-11-23 22:40 "fix everything"; the HG pane showed "1hL 1:03 PM ... NO READ" all evening) the newest sweep
+            // of THIS Globex session (17:00 CT on) at or before the last candle in view; none yet = the last closed candle's Absorption
             const turn::Sw* sw = nullptr; for (size_t k = S.sweeps.size(); k-- > 0;) if (S.sweeps[k].stamp <= atKey) { sw = &S.sweeps[k]; break; }
-            if (sw) { rd = readFor(S, *sw); kind = 1; }
+            if (sw && turn::sessionOf(sw->stamp) == turn::sessionOf(atKey)) { rd = readFor(S, *sw); kind = 1; }
+            else if (atKey > 0 && atKey <= S.lastClosedKey) { effortsOf(atKey); if (aUp.x1000 >= 0 || aDn.x1000 >= 0) { cPrefix = prefixText(std::string(), atKey, false, viewKey); kind = 3; } }
         }
         bool stripDrawn = false;
         if (kind && xLast - L >= 220 && B - T >= 90) {
@@ -1001,6 +1004,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.3 - Stop Run / Absorption / Exhaustion / Initiative. Absorption on every closed candle: the heaviest price at its high (up) and at its low (down) against the 20 candles before; red at a high / green at a low from 2.0 when the candle closed away from that end, grey otherwise. Top line: the last sweep's read, or the candle under the mouse.");
-    p->setVersion("1.4.0");
+    p->setVersion("1.4.1");
     return p;
 }

@@ -56,5 +56,8 @@ int main() {
     // the heaviest price's tick: highest such price at the top, lowest at the bottom; none = the candle's end
     { std::vector<Row> rs; for (long long t = 100; t <= 107; ++t) { Row r; r.tick = t; r.buy = t == 106 || t == 107 ? 9 : 1; r.sell = t == 100 || t == 101 ? 7 : 1; rs.push_back(r); }
       const Bars b = barRatios(rs, 100, 107); CHECK(b.topMax == 9 && b.topMaxTick == 107 && b.botMax == 7 && b.botMaxTick == 100); }
+    // (1.4.1) sessionOf: 17:00 CT starts a session (RT seconds since 1904, CT clock)
+    { const long long d = 45000LL * 86400; CHECK(sessionOf(d + 16 * 3600 + 3599) == sessionOf(d + 9 * 3600)); CHECK(sessionOf(d + 17 * 3600) == sessionOf(d + 9 * 3600) + 1);
+      CHECK(sessionOf(d + 17 * 3600) == sessionOf(d + 86400 + 15 * 3600)); CHECK(sessionOf(100) == -1); }
     std::printf("%d checks, %d failed\n", nCheck, nFail); return nFail ? 1 : 0;
 }

@@ -69,7 +69,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-23 20:47 CT "build the read to the right llike you do for all the other indicators", 20:48 "i need something more specific because i already have the ratios on the bars", 20:52 "what else can you add that would be a bullish or bearish indication or telling me about direciton", 20:53 "lets go with this"): THE ABSORPTION READ right of the last candle - absRead() below: the direction from where price stands against the absorbed prices that still hold (or the one that just failed), the price, the lots, held / tested, rising lows / falling highs, and what to watch
+static const char* const VERSION = "1.4.1";   // (1.4.1, 2026-11-23 22:40 "fix everything") the top line shows a sweep of the current Globex session only (sessionOf); before, the newest sweep of an earlier session stayed there all evening
+// was static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-23 20:47 CT "build the read to the right llike you do for all the other indicators", 20:48 "i need something more specific because i already have the ratios on the bars", 20:52 "what else can you add that would be a bullish or bearish indication or telling me about direciton", 20:53 "lets go with this"): THE ABSORPTION READ right of the last candle - absRead() below: the direction from where price stands against the absorbed prices that still hold (or the one that just failed), the price, the lots, held / tested, rising lows / falling highs, and what to watch
 // was static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-23 18:15 CT "can you update my turn indicator to this .  so update effort to absrobtion also", 18:28 "i want you to do the absorbtion the right way", 18:38 "Research first before building so you do it right", 19:48 "build" on turn-four-pieces-mockup.html v3): the four pieces Stop Run / Absorption / Exhaustion / Initiative, all shown by default. ABSORPTION replaces Effort on the bars and in the strip: the lots at the heaviest single price in the end quarter / its average over the 20 closed candles before; coloured (the winner: red at a high, green at a low) from 2.0 AND only when the candle closes outside that end quarter. "Answer" is called Initiative. The record file and its Effort column are unchanged
 // was static const char* const VERSION = "1.2.1";
 static const size_t FILL_CAP = 150000;      // fills of one candle (more = the candle is not decided live)
@@ -803,6 +804,8 @@ inline Bar1 absBar(const Abs& a, long long from10) { Bar1 b = ratioBar(a.x1000, 
 //             only the close test at major levels is measured (73% held); the rest is not. Nothing = "Quiet".
 //   why     = "<lots> lots sold there, 5.2x normal. Held N candles, tested K times." (+ "Absorbed lows are rising." / "highs are falling.")
 //   watch   = the close that changes the read.
+// (1.4.1) the Globex session of an IRT time (CT clock seconds since 1904): sessions start at 17:00 CT
+inline long long sessionOf(long long rt) { const long long x = rt - 17LL * 3600; return x >= 0 ? x / 86400 : -((-x + 86399) / 86400); }
 static const int ARD_WIN = 20;
 struct ACandle { long long key = 0, hi = 0, lo = 0, cl = 0; Abs up, dn; long long upPx = 0, upLots = -1, dnPx = 0, dnLots = -1; std::string lvUp, lvDn, swUp, swDn; };   // lv = a named level in that end quarter; sw = the level the candle swept at that end
 struct AEvent { int i = 0, side = 0; long long px = 0, lots = 0, x1000 = 0; bool failed = false; int failAt = -1, tested = 0, held = 0; std::string lv, sw; };   // side +1 = an absorbed low (bullish), -1 = an absorbed high

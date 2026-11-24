@@ -140,7 +140,7 @@ int main() {
     for (long long forming = K0; forming <= KEND - 180; forming += 180) { es.chartTo(forming); es.feedTo(forming); drain1(); }
     es.chartTo(KEND); es.feedTo(KEND - 150); drain1(); for (int i = 0; i < 6; ++i) cycle(x, es.H);
     const std::string st = get(P("TurnPane\\status-ES-180.txt")), rec0 = get(P("TurnPane\\turn-ES-180.txt"));
-    CHECK(st.find("VERSION|1.4.0") != std::string::npos && std::string(TURN_VERSION) == "1.4.0" && std::string(turn::VERSION) == "1.4.0");
+    CHECK(st.find("VERSION|1.4.1") != std::string::npos && std::string(TURN_VERSION) == "1.4.1" && std::string(turn::VERSION) == "1.4.1");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----

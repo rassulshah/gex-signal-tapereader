@@ -30,3 +30,8 @@ would be a bullish or bearish indication or telling me about direciton"; 20:53 "
 
 ## Not verified - needs his IRT
 - The read on the live chart (room right of the last candle: needs about 150 px; fewer = not drawn).
+
+## 1.4.1 (2026-11-23 22:45 CT, Rassul "fix everything")
+- The top line falls back only to a sweep of the CURRENT Globex session (17:00 CT on, turn::sessionOf); with none yet it shows the last
+  closed candle's Absorption. Before, the newest sweep of an earlier session ("1hL 1:03 PM ... NO READ") stayed there all evening.
+- Tests: t_read140 262 (+ sessionOf), logic 3,287,189, host 36,999, golden 2017, soak; real irtsdk.h C++14 / C++17 clean.
