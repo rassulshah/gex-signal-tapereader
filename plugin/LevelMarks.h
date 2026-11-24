@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-24 08:33 CT "go for hourly pivots and 4h high and lows", 08:34 "absorption levels should match bk levels", 09:01 "go for bk with hourly pivots and 4 hour highs and lows"): Bk (and the Tst / FT / Rev that follow it) gains two level groups - the HOURLY PIVOTS (HpH / HpL: his 1-bar High / Low ZigZag on 1-hour bars, R1 R2 / S1 S2 as HtfSr.h walks the 3-hour ones, standing only) and the last completed 4-HOUR bar's high / low (4hH / 4hL, 4-hour bars from 5 PM CT). Both rank after every older level (4h 65, pivots 70) so no earlier mark changes its name, and a Bk made only by them never takes a candle from a Cx, need the hour levels' rule (the Bk candle's volume the biggest in 5+) and never make or name a Sw, Cx or I (Sw stays major-only)
+static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-24 11:12 CT "ok. build this" - the Abs badge, abs-badge-mockup.html v15): absMarks() - effort without result at the FIRST test of a Bk level (research ABS-ORDERBOOK 2026-11-24, ported line by line) with its position line, and the next-candle Ex (ABS-EXHAUSTION part 2). Bk / Sw / Cx / FT / Tst / Rev / AR / I unchanged
+// was static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-24 08:33 CT "go for hourly pivots and 4h high and lows", 08:34 "absorption levels should match bk levels", 09:01 "go for bk with hourly pivots and 4 hour highs and lows"): Bk (and the Tst / FT / Rev that follow it) gains two level groups - the HOURLY PIVOTS (HpH / HpL: his 1-bar High / Low ZigZag on 1-hour bars, R1 R2 / S1 S2 as HtfSr.h walks the 3-hour ones, standing only) and the last completed 4-HOUR bar's high / low (4hH / 4hL, 4-hour bars from 5 PM CT). Both rank after every older level (4h 65, pivots 70) so no earlier mark changes its name, and a Bk made only by them never takes a candle from a Cx, need the hour levels' rule (the Bk candle's volume the biggest in 5+) and never make or name a Sw, Cx or I (Sw stays major-only)
 // was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?" (HG 11:03 PM climax, drawn 11:12 PM when the 3-bar ZigZag confirmed the low), 23:20 "go" on the live Cx?): liveCx() below - the climax candle shows "Cx?" from its own close while it is still the low (high) of the running leg; the Cx itself is unchanged
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?" - GC 5:51 PM, the pivot low on 324 lots, the biggest in 35 candles: the Cx look-back counted only the session's own candles, so no Cx could come in the first hour after 5:00 PM; 20:16 "go"): the Cx's "biggest volume in 20+" reaches into the candles BEFORE the session (run() preV = their volumes, oldest first), as the Volume pane's BVMax does. Nothing else changes
 // was VERSION = "1.14.0";   // (1.14.0, Rassul 2026-11-23 14:00-14:18 CT "for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level etc", "no the 3h is  the S1 S2 R1 R2  levels", "no the bk and tst can also include hourly", "ok so you are just adding to bk right ?", "and for SW you are limiting to major levels right", "for the AR badge ,   if the Green bar is bigger than the ATR and its high is above the cmx bar with the hevy volume , it is also valid AR", "build") (a) + the 3-HOUR S / R (R1 R2 S1 S2 of HtfSr.h, the lines lsHtfSR draws) as levels of every mark: the host hands run() the levels standing before each candle (H3); (b) a Sw is kept only when the level it is LABELLED with is MAJOR (swMajor: session ON / London / Asia, PD, PF, weekly, the 3h S / R) - the hour highs / lows, the pre-open hour (PhrH / PhrL) and VAH / VAL no longer name a Sw; what makes a sweep (a level nobody traded through, the close back, colour, strength 20+, no opening / release candle) is unchanged; Bk / Tst / Cx keep every level they had and gain the 3h S / R; (c) the AR's second way in: range > ATR(13) of the candle before AND beyond the Cx candle's extreme (AR_ATR) - see THE AR
@@ -608,4 +609,74 @@ inline std::pair<long long, int> liveCx(const std::vector<wyr::Bar>& B, const st
     }
     return std::make_pair(0LL, 0);
 }
+
+// ---- (1.18.0) THE ABS BADGE - effort without result at the first test of a Bk level (Rassul 2026-11-24 09:00-11:12 CT: "absorption levels should
+// match bk levels", "In the bade the 2nd line will be candle location and the third line will be biggest print", "The badge can be updated like
+// ABS/Ex when there is evidence of exhaustion", "ok. build this"; research ABS-ORDERBOOK / ABS-EXHAUSTION 2026-11-24, mockup abs-badge-mockup.html).
+// The research rule, ported line by line (absx/tests_bk.py + ways.py, 43 sessions x 7 markets: 57% vs 49% at 1R, +6 / +12 on both halves, n 187):
+//   candle i in the research RTH window (candle END: ES / NQ 8:33-15:00, CL / NG 8:03-13:30, GC 7:23-12:30, HG 7:13-12:00, EU 7:23-14:00)
+//   a level of levelsAt(i) (the Bk set) inside the end quarter widened by tol = max(1 tick, 0.15 x ATR13 of the candle before):
+//     bullish (a low tested): lo - tol <= level <= lo + zone + tol and level <= close; bearish: hi - zone - tol <= level <= hi + tol and level >= close
+//   the FIRST test of that level today: no earlier RTH candle of the day came within tol of it ([lo - tol, hi + tol])
+//   effort without result: volume >= 1.5x the mean of the 20 candles before (10+ needed), range <= 1.3x theirs, closed in the half away
+//     (bullish (c - l) / (h - l) > 0.5, bearish (h - c) / (h - l) > 0.5)
+//   line 2 = where the heaviest price of that end quarter sits: "Low 21%" = (qBot - lo) / (hi - lo), "Top 21%" = (hi - qTop) / (hi - lo)
+// THE NEXT-CANDLE Ex (ABS-EXHAUSTION part 2: 32% exhausted vs 13%, held 77% vs 59%, both halves, n 152): the candle after the Abs - the
+//   attackers (sellers after a bullish Abs) traded <= 0.5x their lots in the Abs candle, it closed further away (beyond the Abs close) and did
+//   not trade past the Abs extreme by more than 1 tick. Drawn "Ex" on that candle; decided at its close, never changed.
+struct AbsMk { int dir = 0; std::string lv; long long lvPx = 0; int pos = -1; bool ex = false; long long exT = 0; };
+inline bool absWindow(const std::string& mkt, long long t, int& endMin) {
+    int a = -1, b = -1;
+    if (mkt == "ES" || mkt == "NQ" || mkt == "MES" || mkt == "MNQ") { a = 8 * 60 + 33; b = 15 * 60; }
+    else if (mkt == "CL" || mkt == "NG" || mkt == "MCL") { a = 8 * 60 + 3; b = 13 * 60 + 30; }
+    else if (mkt == "GC" || mkt == "MGC") { a = 7 * 60 + 23; b = 12 * 60 + 30; }
+    else if (mkt == "HG") { a = 7 * 60 + 13; b = 12 * 60; }
+    else if (mkt == "EU" || mkt == "6E") { a = 7 * 60 + 23; b = 14 * 60; }
+    endMin = b; if (a < 0) return false;
+    long long q = t % 86400; if (q < 0) q += 86400; const int m = (int)(q / 60);
+    return m >= a && m <= b;
+}
+inline std::map<long long, AbsMk> absMarks(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, const std::string& mkt, const std::vector<H3>* h3 = nullptr, const std::vector<double>* preV = nullptr, const std::vector<double>* preR = nullptr) {
+    std::map<long long, AbsMk> out; const int n = (int)B.size(); if (n < 2) return out;
+    const std::vector<double> atr = wyr::atr13(B);
+    std::vector<double> V, R; const size_t np = preV ? preV->size() : 0;   // the candles before the session first (look-back only), then B
+    for (size_t k = 0; k < np; ++k) { V.push_back((*preV)[k]); R.push_back(preR && preR->size() == np ? (*preR)[k] : -1.0); }
+    for (const wyr::Bar& b : B) { V.push_back((double)(b.buy + b.sell)); R.push_back((double)(b.h - b.l)); }
+    auto mean20 = [](const std::vector<double>& x, size_t at, double& m) { double s = 0; int c = 0; for (size_t k = at; k > 0 && c < 20; --k) { const double v = x[k - 1]; if (v < 0) continue; s += v; ++c; } if (c < 10) return false; m = s / c; return true; };
+    std::set<std::pair<long long, std::string> > touched; long long day = -1; int endMin = 0;
+    for (int i = 1; i < n; ++i) {
+        const wyr::Bar& b = B[(size_t)i]; long long d = b.t >= 0 ? b.t / 86400 : -((-b.t + 86399) / 86400);
+        if (!absWindow(mkt, b.t, endMin)) continue;
+        if (d != day) { day = d; touched.clear(); }
+        const double a = atr[(size_t)i - 1]; const double tol = std::max(1.0, 0.15 * a);
+        const std::vector<Lv> L = levelsAt(B, i, key, h3);
+        const long long lv = b.h - b.l + 1; const long long z = lv >= 4 ? std::max(1LL, (lv + 2) / 4) : 0;
+        if (z > 0 && a > 0) {
+            const size_t at = np + (size_t)i; double mv = 0, mr = 0;
+            const bool ok = mean20(V, at, mv) && mean20(R, at, mr) && mv > 0 && mr > 0;
+            const double volr = ok ? V[at] / mv : 0, rngr = ok ? R[at] / mr : 99, rg = (double)(b.h - b.l);
+            for (int side : { 1, -1 }) {
+                const double cp = rg > 0 ? (side > 0 ? (double)(b.c - b.l) / rg : (double)(b.h - b.c) / rg) : 0.5;
+                if (!(ok && volr >= 1.5 && rngr <= 1.3 && cp > 0.5)) continue;
+                const double b0 = side > 0 ? (double)b.l - tol : (double)(b.h - z) - tol, b1 = side > 0 ? (double)(b.l + z) + tol : (double)b.h + tol;
+                std::vector<Cand> cs;
+                for (const Lv& q : L) { if (q.px <= 0) continue;
+                    if (side > 0 ? q.px > b.c : q.px < b.c) continue;
+                    if ((double)q.px < b0 || (double)q.px > b1) continue;
+                    if (touched.count(std::make_pair(q.px, shortName(q.name, q.hb, q.high)))) continue;   // keyed by the SHORT name as the research was ("2hL": an hour level renamed by the clock is a new level)
+                    Cand c; c.px = q.px; c.name = q.name; c.hb = q.hb; c.high = q.high; c.bkOnly = q.bkOnly; cs.push_back(c); }
+                Cand best; if (!pick(cs, best)) continue;
+                AbsMk m; m.dir = side; m.lvPx = best.px; m.lv = shortName(best.name, best.hb, best.high);
+                if (rg > 0) { const long long qp = side > 0 ? b.qBot : b.qTop;
+                    if (qp > 0 && qp >= b.l && qp <= b.h) m.pos = (int)std::llround(100.0 * (side > 0 ? (double)(qp - b.l) : (double)(b.h - qp)) / rg); }
+                if (i + 1 < n) { const wyr::Bar& x = B[(size_t)i + 1];
+                    const long long att0 = side > 0 ? b.sell : b.buy, att1 = side > 0 ? x.sell : x.buy;
+                    const bool held = side > 0 ? x.l >= b.l - 1 : x.h <= b.h + 1;
+                    if (att0 > 0 && 2 * att1 <= att0 && (x.c - b.c) * side > 0 && held) { m.ex = true; m.exT = x.t; } }
+                out[b.t] = m; break; } }
+        for (const Lv& q : L) if (q.px > 0 && (double)b.l - tol <= (double)q.px && (double)q.px <= (double)b.h + tol) touched.insert(std::make_pair(q.px, shortName(q.name, q.hb, q.high)));
+    }
+    (void)endMin; return out;
+}
+inline std::string absPos(const AbsMk& m) { if (m.pos < 0) return std::string(); return std::string(m.dir > 0 ? "Low " : "Top ") + std::to_string(m.pos) + "%"; }
 } // namespace lvm

@@ -14,7 +14,8 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.6.0";   // (2.6.0, Rassul 2026-11-23 23:20 CT "go" on the live Cx?): + parseLive (the wylive file of lsRevRead 0.25.0)
+static const char* const VERSION = "2.7.0";   // (2.7.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15): + the Abs badge (code Q: "Abs" / position / P) and its next-candle "Ex" (code E), drawn at the absorbed end; + parseTurnAbs (lsTurn's RevRead\\turnabs-<MKT>-<spb>.txt: the biggest print P and the same-candle Ex?)
+// was static const char* const VERSION = "2.6.0";   // (2.6.0, Rassul 2026-11-23 23:20 CT "go" on the live Cx?): + parseLive (the wylive file of lsRevRead 0.25.0)
 // was static const char* const VERSION = "2.5.0";   // (2.5.0, Rassul 2026-11-23 09:25-09:34 CT "implement the AR ... automatic rally bar that occurs after a cx", "the AR bar should also have a strength line", "go"; lsRevRead 0.23.0 / LevelMarks 1.13.0, mockup ar-mockup.html): + the AR badge - "AR" and its strength line (stamp|AR|dir||0|R51), over a green candle, under a red one, as Bk / Sw / Cx
 // was VERSION = "2.4.0";   // (2.4.0, Rassul 2026-11-20 09:20 CT "add it ... add the badge for it also and include the level and strength line", 09:24 "build"; lsRevRead 0.21.2, mockup i-badge-mockup.html): the I badge is back - letter / level / strength like Bk / Sw; a bullish (green) I goes UNDER its candle, a bearish (red) I OVER it; iLine() writes the I line, with a 7th field "Sw" when the same candle is a Sw (recorded for the nightly, never drawn - parseAll reads 3 / 5 / 6 fields only)
 // was VERSION = "2.3.0";   // (2.3.0, Rassul 2026-11-19 15:35-16:58 CT, price-pane-cleanup-mockup.html, "ok"): + FT / Tst / Rev after a Bk (LevelMarks 1.3.0 seq): "FT" (a plain letter), "Tst" (level + %), "Rev" (+ strength); a tag can ask for its side (FT / Rev with the break, Tst on the pivot side)
@@ -25,11 +26,11 @@ static const int LINE1_H = 13, LINE2_H = 11;   // (2.0.0) a two-line tag: 13 px 
 static const size_t MAX_BYTES = 1024 * 1024;
 
 struct M { char code = 0; int dir = 0; std::string lv; long long px = 0; std::string st; };   // (2.2.0) st = the strength line ("" = none)   // code 'I' / 'B' (Bk) / 'S' (Sw) / 'C' (Cx)
-inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : s == "FT" ? 'F' : s == "Tst" ? 'T' : s == "Rev" ? 'R' : s == "AR" ? 'A' : 0; }   // (2.5.0) 'A' = AR (the file's "A" lines - absorbed - are another letter: not a mark here)
-inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : ""; }
+inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : s == "FT" ? 'F' : s == "Tst" ? 'T' : s == "Rev" ? 'R' : s == "AR" ? 'A' : s == "Abs" ? 'Q' : s == "Ex" ? 'E' : 0; }   // (2.7.0) 'Q' = the Abs badge, 'E' = its next-candle Ex   // (2.5.0) 'A' = AR (the file's "A" lines - absorbed - are another letter: not a mark here)
+inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : c == 'Q' ? "Abs" : c == 'E' ? "Ex" : ""; }
 // (2.3.0) where a tag wants to sit: 0 = by the candle (over green, under red); +1 over / -1 under. FT and Rev go with the break (over for a
 // bullish one), a Tst on its pivot's side (under a bullish Tst's pivot low, over a bearish one's high) - as the BO indicator's FT / Pb / Rev
-inline int sideOf(const M& m) { return m.code == 'F' || m.code == 'R' ? m.dir : m.code == 'T' || m.code == 'I' ? -m.dir : 0; }   // (2.4.0) I: under a bullish one, over a bearish one
+inline int sideOf(const M& m) { return m.code == 'F' || m.code == 'R' ? m.dir : m.code == 'T' || m.code == 'I' || m.code == 'Q' || m.code == 'E' ? -m.dir : 0; }   // (2.7.0) Abs / Ex: at the end that was absorbed (under a bullish one, over a bearish one)   // (2.4.0) I: under a bullish one, over a bearish one
 // (2.4.0) one I line of the wy file: stamp|I|dir|lv|px|st (6 fields; the level is always named since 0.19.4); underSw = the same candle is a Sw of
 // the same direction -> a 7th field "Sw": kept for the nightly score, skipped by every reader that draws (parseAll, VolRead, HodLod, TopSignals)
 inline std::string iLine(long long t, int dir, const std::string& lv, long long px, const std::string& st, bool underSw) {
@@ -141,4 +142,30 @@ inline std::vector<Box> layout(const std::vector<Candle>& C, const std::vector<W
     }
     return out;
 }
+
+// (2.7.0) lsTurn's line per Abs candle (RevRead\\turnabs-<MKT>-<spb>.txt): header "TAB|1|<MKT>|<spb>|<ver>", then "stamp|dir|P|plus|exq":
+// P = the biggest single attacking order inside the absorbed end quarter was the biggest of its side in P candles (-1 = not known: no order
+// feed for that candle); plus 1 = the pane's history ran out first ("P12+"); exq 1 = the attackers' last minute fell to 0.5x or less (Ex?)
+struct TurnAbs { int dir = 0; int p = -1; bool plus = false; bool exq = false; };
+inline bool parseTurnAbs(const std::string& txt, const std::string& mkt, std::map<long long, TurnAbs>& out) {
+    out.clear(); size_t a = 0; bool head = false;
+    while (a < txt.size()) {
+        size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size();
+        std::string l = txt.substr(a, e - a); a = e + 1;
+        if (!l.empty() && l[l.size() - 1] == '\r') l.erase(l.size() - 1);
+        if (l.empty()) continue;
+        std::vector<std::string> f; size_t p = 0; while (true) { const size_t q = l.find('|', p); f.push_back(l.substr(p, q == std::string::npos ? std::string::npos : q - p)); if (q == std::string::npos) break; p = q + 1; }
+        if (!head) { if (f.size() < 3 || f[0] != "TAB" || f[1] != "1" || f[2] != mkt) return false; head = true; continue; }
+        if (f.size() != 5) continue;
+        char* x = nullptr; const long long t = std::strtoll(f[0].c_str(), &x, 10); if (!x || *x || t <= 0) continue;
+        const long d = std::strtol(f[1].c_str(), &x, 10); if (!x || *x || (d != 1 && d != -1)) continue;
+        const long pv = std::strtol(f[2].c_str(), &x, 10); if (!x || *x || pv < -1 || pv > 100000) continue;
+        if ((f[3] != "0" && f[3] != "1") || (f[4] != "0" && f[4] != "1")) continue;
+        TurnAbs z; z.dir = (int)d; z.p = (int)pv; z.plus = f[3] == "1"; z.exq = f[4] == "1"; out[t] = z;
+    }
+    return head;
+}
+// (2.7.0) the badge's three lines: "Abs" or "Abs/Ex?" / the position / "P16" (left off under P5, as agreed: no "P0")
+inline std::string absLine1(const TurnAbs* z) { return z && z->exq ? "Abs/Ex?" : "Abs"; }
+inline std::string absLine3(const TurnAbs* z) { if (!z || z->p < 5) return std::string(); return "P" + std::to_string(z->p) + (z->plus ? "+" : ""); }
 } // namespace wyi

@@ -69,7 +69,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.4.2";   // (1.4.2, Rassul 2026-11-24 11:21 CT "first color the bars differently , top should be green and bottom should be red") host only: the Absorption bars in the attackers' colour (top green, bottom red)
+static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) THE ABS READ: the order feed now keeps the book per price (added / pulled / most showing / refills) and the biggest single order a side; the read right of the last candle = the newest Abs of lsRevRead (Attack / Absorbed / Result / Ex or Next); RevRead\\turnabs-<MKT>-<spb>.txt = the P and Ex? of each Abs for the price-chart badge
+// was static const char* const VERSION = "1.4.2";   // (1.4.2, Rassul 2026-11-24 11:21 CT "first color the bars differently , top should be green and bottom should be red") host only: the Absorption bars in the attackers' colour (top green, bottom red)
 // was static const char* const VERSION = "1.4.1";   // (1.4.1, 2026-11-23 22:40 "fix everything") the top line shows a sweep of the current Globex session only (sessionOf); before, the newest sweep of an earlier session stayed there all evening
 // was static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-23 20:47 CT "build the read to the right llike you do for all the other indicators", 20:48 "i need something more specific because i already have the ratios on the bars", 20:52 "what else can you add that would be a bullish or bearish indication or telling me about direciton", 20:53 "lets go with this"): THE ABSORPTION READ right of the last candle - absRead() below: the direction from where price stands against the absorbed prices that still hold (or the one that just failed), the price, the lots, held / tested, rising lows / falling highs, and what to watch
 // was static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-23 18:15 CT "can you update my turn indicator to this .  so update effort to absrobtion also", 18:28 "i want you to do the absorbtion the right way", 18:38 "Research first before building so you do it right", 19:48 "build" on turn-four-pieces-mockup.html v3): the four pieces Stop Run / Absorption / Exhaustion / Initiative, all shown by default. ABSORPTION replaces Effort on the bars and in the strip: the lots at the heaviest single price in the end quarter / its average over the 20 closed candles before; coloured (the winner: red at a high, green at a low) from 2.0 AND only when the candle closes outside that end quarter. "Answer" is called Initiative. The record file and its Effort column are unchanged
@@ -429,8 +430,19 @@ struct Fill { long long sec = 0, px = 0, size = 0, aid = 0; signed char ag = 0; 
 struct Cell { long long buy = 0, sell = 0, stopB = 0, stopS = 0; };      // aggressor lots at the price; stop = from old orders never seen resting
 struct Turn { bool ok = false; long long extPx = 0, extSec = 0, hard = 0, big = 0; bool fresh = false; size_t ie = 0; };
 struct Exh { bool ok = false, hasDecay = false; double late = 0, decay = 0, after = 0; long long push = 0; };
+// (1.5.0) THE ABS DETAIL (Rassul 2026-11-24 "In the indicator read do you mention how many the absorbtion was done like iceber lots were absorbed",
+// "I also want to know how big the print was", "Attack and defense should be more focused on how 1 side absorbed the other", "ok. build this"):
+// per candle and price the RESTING side's book changes ([0] bids, [1] offers) - lots added, lots pulled, the most showing when hit, refills
+// (an order topped up after it filled = an iceberg tranche) - and per side the biggest single aggressive order (fills grouped by aggressor ID)
+struct BookCell { long long add[2] = { 0, 0 }, pull[2] = { 0, 0 }, shownMax[2] = { 0, 0 }, refills[2] = { 0, 0 }, refillLots[2] = { 0, 0 }, filled[2] = { 0, 0 }; };
+struct BigPr { long long lots = 0, lo = 0, hi = 0; };
+static const size_t BOOK_CAP = 60000, HIST_P = 400;
 struct Sum {
     long long key = 0, start = 0; bool complete = false, overflow = false, stopOk = false, thin = true;
+    std::map<long long, BookCell> book;                                   // (1.5.0) the prices that traded this candle: their book changes
+    long long bigAny[2] = { -1, -1 };                                     // (1.5.0) the biggest single order of the sellers [0] / buyers [1] anywhere in the candle (-1 = not known)
+    BigPr qBig[2];                                                        // (1.5.0) the biggest single SELL order wholly inside the bottom quarter [0], BUY order inside the top quarter [1]
+    long long early[2] = { 0, 0 }, late[2] = { 0, 0 };                    // (1.5.0) sellers [0] / buyers [1] lots in the first 2/3 of the candle and in its last 1/3 (the last minute of 3)
     std::map<long long, Cell> cells; long long hiPx = 0, loPx = 0;
     Turn hi, lo; Exh exHi, exLo;
     long long fills = 0, implied = 0, lots = 0;                           // lots = every filled lot read (implied too): the coverage check vs the chart's bar volume
@@ -442,15 +454,19 @@ public:
     int spb = 0;
     Counters n;
     std::deque<Sum> sums;                                                 // closed candles, oldest first
+    struct Hist { long long key = 0, big[2] = { -1, -1 }; };
+    std::deque<Hist> hist;                                                // (1.5.0) every closed candle's biggest order a side (-1 = not known), oldest first, HIST_P kept
     // a fresh start (new chart / symbol / reconnect): everything open is dropped and the next candle cannot be complete
     void reset(int barSecs) {
         spb = barSecs; fills_.clear(); std::vector<Fill>().swap(fills_); ords_.clear(); clock_.clear();
         curKey_ = 0; liveSince_ = -1; haveRef_ = false; ref_ = 0; overflow_ = false; sums.clear(); lastClosed_ = 0; limitKey_ = 0; implied_ = 0;
+        bk_.clear(); depth_.clear(); curBook_.clear(); hist.clear();
     }
     // the newest candle the chart allows: an event dated past it is counted and never opens a candle
     void setLimit(long long chartFormingKey) { limitKey_ = chartFormingKey > 0 ? chartFormingKey + spb : 0; }
     void gap() {                                                           // the stream was interrupted: open candle and the clock are not whole
         fills_.clear(); curKey_ = 0; liveSince_ = -1; overflow_ = false; clock_.clear(); ords_.clear(); implied_ = 0;
+        bk_.clear(); depth_.clear(); curBook_.clear();   // (1.5.0) the book is not whole after a gap
     }
     // one order event: sec = its RTDATE second, px in ticks, action 0 NEW 1 MOD 2 DEL 3 FILL, buySell 1 buy / 0 sell / 2 unknown
     void onEvent(long long sec, int action, int buySell, long long px, long long size, long long oidRaw, long long aidRaw) {
@@ -467,13 +483,14 @@ public:
         const long long oid = oidRaw ? clock_.unwrap(oidRaw) : 0;
         switch (action) {
         case 0: case 1: {
-            if (oid) { if (action == 0) clock_.note(oid, sec, true); shown(oid, px); }
+            if (oid) { if (action == 0) clock_.note(oid, sec, true); shown(oid, px); bookPut(oid, px, size, buySell == 1 ? 0 : buySell == 0 ? 1 : -1); }
             break; }
-        case 2: if (oid) ords_.erase(oid); break;
+        case 2: if (oid) { ords_.erase(oid); bookDel(oid); } break;
         case 3: {
             ++n.fills; ref_ = px; haveRef_ = true;
             const long long aid = aidRaw ? clock_.unwrap(aidRaw) : 0;
             if (oid && oid == aid) { ++n.bad; break; }                    // an order filling itself is not a trade between two sides
+            if (oid) bookFill(oid, size);                                  // (1.5.0) the resting order that was hit
             Fill f; f.sec = sec; f.px = px; f.size = size;
             if (buySell != 0 && buySell != 1) { ++n.implied; ++implied_; }   // implied (no aggressor): kept for the extreme and the print order only
             else {
@@ -504,6 +521,45 @@ public:
     long long forming() const { return curKey_; }
 private:
     std::vector<Fill> fills_; std::unordered_map<long long, long long> ords_; IdClock clock_;   // ords_: resting order ID -> its price
+    struct BO { long long px = 0, size = 0, filled = 0; int side = 0; };
+    std::unordered_map<long long, BO> bk_; std::map<long long, std::pair<long long, long long> > depth_; std::map<long long, BookCell> curBook_;   // (1.5.0) resting orders near price, lots resting per price (bids, offers), this candle's changes
+    long long& dep(long long px, int side) { std::pair<long long, long long>& d = depth_[px]; return side == 0 ? d.first : d.second; }
+    BookCell* cell(long long px) { std::map<long long, BookCell>::iterator it = curBook_.find(px); if (it != curBook_.end()) return &it->second; if (curBook_.size() >= CELL_CAP) return nullptr; return &curBook_[px]; }
+    void note(long long px, int side) { BookCell* c = cell(px); if (!c) return; const long long d = dep(px, side); if (d > c->shownMax[side]) c->shownMax[side] = d; }
+    void bookPut(long long oid, long long px, long long size, int side) {
+        std::unordered_map<long long, BO>::iterator it = bk_.find(oid);
+        if (it == bk_.end()) {
+            if (side < 0 || size <= 0) return;
+            if (haveRef_ && std::llabs(px - ref_) > NEAR_TICKS) return;
+            if (bk_.size() >= BOOK_CAP) bookPrune();
+            if (bk_.size() >= BOOK_CAP) return;
+            BO o; o.px = px; o.size = size; o.side = side; bk_[oid] = o;
+            dep(px, side) += size; if (BookCell* c = cell(px)) c->add[side] += size; note(px, side); return;
+        }
+        BO& o = it->second;
+        if (px != o.px) {                                                  // moved: pulled there, added here
+            dep(o.px, o.side) -= o.size; if (BookCell* c = cell(o.px)) c->pull[o.side] += o.size;
+            o.px = px; o.size = size; o.filled = 0; dep(px, o.side) += size; if (BookCell* c = cell(px)) c->add[o.side] += size; note(px, o.side); return;
+        }
+        const long long d = size - o.size; o.size = size; dep(px, o.side) += d;
+        if (d > 0) { if (BookCell* c = cell(px)) { c->add[o.side] += d; if (o.filled > 0) { ++c->refills[o.side]; c->refillLots[o.side] += d; } } o.filled = 0; note(px, o.side); }
+        else if (d < 0) { if (BookCell* c = cell(px)) c->pull[o.side] += -d; }
+    }
+    void bookDel(long long oid) {
+        std::unordered_map<long long, BO>::iterator it = bk_.find(oid); if (it == bk_.end()) return;
+        const BO& o = it->second; if (o.size > 0) { dep(o.px, o.side) -= o.size; if (BookCell* c = cell(o.px)) c->pull[o.side] += o.size; }
+        bk_.erase(it);
+    }
+    void bookFill(long long oid, long long size) {
+        std::unordered_map<long long, BO>::iterator it = bk_.find(oid); if (it == bk_.end() || size <= 0) return;
+        BO& o = it->second; note(o.px, o.side);                            // the most showing at the moment it was hit
+        const long long k = std::min(size, o.size); o.size -= k; o.filled += size; dep(o.px, o.side) -= k;
+        if (BookCell* c = cell(o.px)) c->filled[o.side] += size;
+    }
+    void bookPrune() {
+        for (std::unordered_map<long long, BO>::iterator it = bk_.begin(); it != bk_.end();) { if (!haveRef_ || std::llabs(it->second.px - ref_) > NEAR_TICKS) { dep(it->second.px, it->second.side) -= it->second.size; it = bk_.erase(it); } else ++it; }
+        for (std::map<long long, std::pair<long long, long long> >::iterator it = depth_.begin(); it != depth_.end();) { if (it->second.first <= 0 && it->second.second <= 0) it = depth_.erase(it); else ++it; }
+    }
     long long curKey_ = 0, liveSince_ = -1, ref_ = 0, implied_ = 0, lastClosed_ = 0, limitKey_ = 0; bool haveRef_ = false, overflow_ = false;
     void shown(long long oid, long long px) {
         std::unordered_map<long long, long long>::iterator it = ords_.find(oid);
@@ -530,6 +586,9 @@ private:
         if (key > lastClosed_) lastClosed_ = key;
         ++n.candles; if (s.complete) ++n.complete;
         summarize(s);
+        for (std::map<long long, BookCell>::const_iterator it = curBook_.begin(); it != curBook_.end(); ++it) if (s.cells.count(it->first)) s.book.insert(*it);   // (1.5.0) the traded prices only (as the research store)
+        curBook_.clear(); if (depth_.size() > 4096) bookPrune();
+        { Hist h; h.key = key; if (s.complete) { h.big[0] = std::max(0LL, s.bigAny[0]); h.big[1] = std::max(0LL, s.bigAny[1]); } hist.push_back(h); while (hist.size() > HIST_P) hist.pop_front(); }
         while (sums.size() > SUMS_KEEP) sums.pop_front();
         fills_.clear(); if (fills_.capacity() > 65536) std::vector<Fill>().swap(fills_);
         if (ords_.size() > SHOWN_CAP / 2) prune();
@@ -554,6 +613,22 @@ private:
             else { c.sell += f.size; if (f.stop) c.stopS += f.size; }
         }
         s.thin = nf < (size_t)MIN_PRINTS || aggr < MIN_PRINTS;            // under 5 prints: no reading (as the reference)
+        {   // (1.5.0) the biggest single order a side (fills grouped by aggressor ID), the quarters' biggest, the first 2/3 vs the last 1/3
+            struct G { long long lots = 0, lo = 0, hi = 0; int sd = 0; }; std::unordered_map<long long, G> g;
+            const long long cut = s.start + (long long)spb * 2 / 3;
+            for (size_t k = 0; k < nf; ++k) { const Fill& f = F[k]; if (f.ag == 0) continue; const int sd = f.ag > 0 ? 1 : 0;
+                (f.sec < cut ? s.early[sd] : s.late[sd]) += f.size;
+                if (!f.aid) continue;
+                std::unordered_map<long long, G>::iterator gi = g.find(f.aid);
+                if (gi == g.end()) { if (g.size() >= 200000) continue; G x; x.lo = x.hi = f.px; x.sd = sd; gi = g.insert(std::make_pair(f.aid, x)).first; }
+                G& x = gi->second; x.lots += f.size; if (f.px < x.lo) x.lo = f.px; if (f.px > x.hi) x.hi = f.px; }
+            s.bigAny[0] = s.bigAny[1] = 0;
+            const long long L = s.hiPx - s.loPx + 1, z = L >= 4 ? zoneOf(L) : 0;
+            for (std::unordered_map<long long, G>::const_iterator it = g.begin(); it != g.end(); ++it) { const G& x = it->second;
+                if (x.lots > s.bigAny[x.sd]) s.bigAny[x.sd] = x.lots;
+                if (z <= 0) continue;
+                const bool in = x.sd == 0 ? x.hi < s.loPx + z : x.lo > s.hiPx - z;
+                if (in && x.lots > s.qBig[x.sd].lots) { s.qBig[x.sd].lots = x.lots; s.qBig[x.sd].lo = x.lo; s.qBig[x.sd].hi = x.hi; } } }
         s.hi = turnOf(-1); s.lo = turnOf(1);
         if (!s.thin) { s.exHi = exhOf(s, -1, s.hi); s.exLo = exhOf(s, 1, s.lo); }
     }
@@ -869,6 +944,154 @@ template <class TW> std::vector<std::string> wrapRead(const std::string& s, int 
     if (cut) { while (!line.empty() && tw(line + "...") > width) { const size_t sp = line.find_last_of(' '); if (sp == std::string::npos) break; line.erase(sp); } line += "..."; }
     if (!line.empty()) L.push_back(line);
     return L;
+}
+// ---------------------------------------------------------------------------------------------------------------------------------
+// (1.5.0) THE ABS READ (Rassul 2026-11-24, abs-badge-mockup.html v15, "ok. build this"). lsRevRead decides the Abs at its candle's close
+// (LevelMarks 1.18.0: effort without result at the first test of a Bk level) and writes "stamp|Abs|dir|<pos>|<level px>|<level>" and, a
+// candle later, "stamp|Ex|dir" into RevRead\wy-<MKT>-<spb>.txt. This pane adds what only the order feed knows and says it in four lines:
+//   Attack   - who pushed into the absorbed end quarter, how many lots, the biggest single order (P = biggest of its side in P candles) and
+//              what it hit (a sweep of N ticks / an iceberg / an order showing on the book)
+//   Absorbed - how the other side took it: the most showing at those prices, all the lots taken, lots put back (added - pulled), iceberg lots
+//   Result   - volume / range vs the 20 candles before, which half it closed in; the attackers' last minute vs their first two (Ex? at 0.5x or
+//              less: 19% exhausted vs 11%, ABS-EXHAUSTION 2026-11-24)
+//   Ex/Next  - the candle after: the attackers' lots vs the Abs candle, and the book (defenders rebuilt / pulling, the attackers' own
+//              resting side pulled / stacked; thirds of 1,295 absorption candles: rebuilt > +15.1%, pulling < +7.2%, pulled < +5.9%,
+//              stacked > +14.6% - rebuilt AND pulled held 81% vs 59%)
+// Numbers only from candles this pane saw whole (the feed has no history); none = the line says so.
+struct AbsLine { long long t = 0; int dir = 0; std::string pos, lv; long long lvPx = 0; bool ex = false; long long exT = 0; };
+inline std::vector<AbsLine> parseAbs(const std::string& txt, const std::string& mkt, int spb) {
+    std::vector<AbsLine> out; const std::vector<std::string> L = lines(txt, true); if (L.empty()) return out;
+    const std::vector<std::string> h = split(L[0], '|'); long long s = 0;
+    if (h.size() < 4 || h[0] != "WY" || h[1] != "1" || h[2] != mkt || !toLL(h[3], s) || s != spb) return out;
+    std::map<long long, AbsLine> m; std::map<long long, int> ex;
+    for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|');
+        long long t = 0, d = 0; if (c.size() < 3 || !toLL(c[0], t) || t <= 0 || !toLL(c[2], d) || (d != 1 && d != -1)) continue;
+        if (c[1] == "Ex" && c.size() == 3) { ex[t] = (int)d; continue; }
+        if (c[1] != "Abs" || c.size() != 6) continue;
+        AbsLine a; a.t = t; a.dir = (int)d; a.pos = c[3].substr(0, 12); long long px = 0; if (!toLL(c[4], px) || px <= 0) continue; a.lvPx = px; a.lv = c[5].substr(0, 12); m[t] = a; }
+    for (std::map<long long, AbsLine>::iterator it = m.begin(); it != m.end(); ++it) {   // its Ex = the first Ex line of its side after it, before the next Abs
+        std::map<long long, int>::const_iterator e = ex.upper_bound(it->first); std::map<long long, AbsLine>::const_iterator nx = std::next(it);
+        if (e != ex.end() && e->second == it->second.dir && (nx == m.end() || e->first <= nx->first) && e->first - it->first <= 2LL * spb) { it->second.ex = true; it->second.exT = e->first; }
+        out.push_back(it->second); }
+    return out;
+}
+struct AbsCalc { bool feed = false; int p = -1; bool plus = false; bool exq = false; long long attQ = 0, defShow = 0, putBack = 0, iceLots = 0, iceN = 0, hitShow = 0, hitRef = 0, early = 0, late = 0; BigPr big; };
+inline AbsCalc absCalc(const Live& Lv, long long key, int dir) {
+    AbsCalc c; const Sum* s = Lv.find(key); if (!s || !s->complete || s->thin || s->overflow) return c;
+    const int a = dir > 0 ? 0 : 1, d = dir > 0 ? 0 : 1;                 // attackers: sellers [0] after a bullish Abs; the resting side they hit: bids [0]
+    const long long lo = s->loPx, hi = s->hiPx, L = hi - lo + 1, z = L >= 4 ? zoneOf(L) : 0; if (z <= 0) return c;
+    c.feed = true; c.early = s->early[a]; c.late = s->late[a]; c.exq = c.early > 0 && c.late * 4 <= c.early;
+    for (std::map<long long, Cell>::const_iterator it = s->cells.begin(); it != s->cells.end(); ++it) { const bool in = dir > 0 ? it->first < lo + z : it->first > hi - z; if (in) c.attQ += dir > 0 ? it->second.sell : it->second.buy; }
+    for (std::map<long long, BookCell>::const_iterator it = s->book.begin(); it != s->book.end(); ++it) { const bool in = dir > 0 ? it->first < lo + z : it->first > hi - z; if (!in) continue;
+        c.defShow += it->second.shownMax[d]; c.putBack += it->second.add[d] - it->second.pull[d]; c.iceLots += it->second.refillLots[d]; c.iceN += it->second.refills[d]; }
+    c.big = s->qBig[a];
+    if (c.big.lots > 0) {
+        if (c.big.lo == c.big.hi) { const std::map<long long, BookCell>::const_iterator b = s->book.find(c.big.lo); if (b != s->book.end()) { c.hitShow = b->second.shownMax[d]; c.hitRef = b->second.refills[d]; } }
+        c.p = 0; bool stop = false;
+        for (std::deque<Live::Hist>::const_reverse_iterator it = Lv.hist.rbegin(); it != Lv.hist.rend(); ++it) { if (it->key >= key) continue;
+            if (it->big[a] < 0) { c.plus = true; stop = true; break; }
+            if (it->big[a] >= c.big.lots) { stop = true; break; }
+            ++c.p; }
+        if (!stop) c.plus = true;
+    } else c.p = 0;
+    return c;
+}
+struct NextCalc { bool feed = false; long long att = 0, attAbs = 0; double dNet = 0, rNet = 0; bool dOk = false, rOk = false; };
+inline NextCalc nextCalc(const Live& Lv, long long keyAbs, long long keyNext, int dir) {
+    NextCalc n; const Sum* s0 = Lv.find(keyAbs); const Sum* s1 = Lv.find(keyNext); if (!s0 || !s1 || !s0->complete || !s1->complete) return n;
+    const int d = dir > 0 ? 0 : 1, r = 1 - d;
+    for (std::map<long long, Cell>::const_iterator it = s0->cells.begin(); it != s0->cells.end(); ++it) n.attAbs += dir > 0 ? it->second.sell : it->second.buy;
+    for (std::map<long long, Cell>::const_iterator it = s1->cells.begin(); it != s1->cells.end(); ++it) n.att += dir > 0 ? it->second.sell : it->second.buy;
+    long long ad = 0, pd = 0, ar = 0, pr = 0;
+    for (std::map<long long, BookCell>::const_iterator it = s1->book.begin(); it != s1->book.end(); ++it) { ad += it->second.add[d]; pd += it->second.pull[d]; ar += it->second.add[r]; pr += it->second.pull[r]; }
+    if (ad > 0) { n.dNet = (double)(ad - pd) / (double)ad; n.dOk = true; } if (ar > 0) { n.rNet = (double)(ar - pr) / (double)ar; n.rOk = true; }
+    n.feed = n.attAbs > 0; return n;
+}
+static const double BOOK_REBUILT = 0.151, BOOK_PULLING = 0.072, ATT_PULLED = 0.059, ATT_STACKED = 0.146;
+inline std::string pctText(double x) { char b[16]; std::snprintf(b, sizeof b, "%+d%%", (int)std::lround(x * 100.0)); return b; }
+inline std::string xText(double x) { char b[16]; std::snprintf(b, sizeof b, "%.1fx", x < 0 ? 0.0 : x > 99 ? 99.0 : x); return b; }
+inline std::string xText2(double x) { char b[16]; std::snprintf(b, sizeof b, "%.2fx", x < 0 ? 0.0 : x > 99 ? 99.0 : x); return b; }
+struct AbsText { std::string title; int dir = 0; std::vector<std::pair<std::string, std::string> > rows; };
+// volr / rngr < 0 = not known; nextT = "" while the candle after is still forming
+inline AbsText absText(const AbsLine& a, const AbsCalc& c, const NextCalc* nx, const std::string& when, const std::string& nextWhen, double volr, double rngr, double tick) {
+    AbsText o; o.dir = a.dir; const bool bull = a.dir > 0;
+    const std::string Att = bull ? "Sellers" : "Buyers", att = bull ? "sellers" : "buyers", Def = bull ? "Bids" : "Offers", def = bull ? "bids" : "offers";
+    const std::string end = bull ? "bottom" : "top", ord = bull ? "sell" : "buy", hitWord = bull ? "bid" : "offer", ownRest = bull ? "offers" : "bids";
+    const std::string pos = a.pos.empty() ? std::string() : " (" + a.pos + ")";
+    o.title = (when.empty() ? std::string() : when + "  ") + (bull ? "Bullish ? - absorbed at " : "Bearish ? - absorbed at ") + a.lv + " " + pxText(a.lvPx, tick);
+    std::string at;
+    if (!c.feed) at = Att + (bull ? " hit" : " lifted") + " the " + end + " 25%" + pos + " - no order feed for this candle.";
+    else if (c.big.lots > 0 && c.p >= 5) {
+        std::string hit;
+        if (c.big.lo != c.big.hi) hit = "it swept " + std::to_string(c.big.hi - c.big.lo + 1) + " ticks to " + pxText(bull ? c.big.lo : c.big.hi, tick);
+        else if (c.hitRef > 0) hit = "it hit an iceberg at " + pxText(c.big.lo, tick) + " (refilled " + std::to_string(c.hitRef) + "x)";
+        else if (c.hitShow > 0) hit = "it hit a " + std::to_string(c.hitShow) + "-lot " + hitWord + " at " + pxText(c.big.lo, tick) + " that was showing";
+        else hit = "it hit the " + hitWord + " at " + pxText(c.big.lo, tick);
+        at = Att + (bull ? " hit " : " lifted ") + std::to_string(c.attQ) + " lots into the " + end + " 25%" + pos + ", led by one " + std::to_string(c.big.lots) + "-lot " + ord
+           + " (biggest in " + std::to_string(c.p) + (c.plus ? "+" : "") + " bars) - " + hit + ".";
+    } else at = Att + (bull ? " hit " : " lifted ") + std::to_string(c.attQ) + " lots into the " + end + " 25%" + pos + " in small orders (biggest " + std::to_string(c.big.lots) + " - no big print).";
+    o.rows.push_back(std::make_pair("Attack", at));
+    if (c.feed) {
+        std::string ab = Def + " showing up to " + std::to_string(c.defShow) + " lots took all " + std::to_string(c.attQ);
+        ab += c.putBack >= 0 ? " and put back " + std::to_string(c.putBack) : " and pulled " + std::to_string(-c.putBack);
+        if (c.iceLots > 0) ab += " (iceberg " + std::to_string(c.iceLots) + ")";
+        o.rows.push_back(std::make_pair("Absorbed", ab + "."));
+    }
+    std::string rs; if (volr >= 0 && rngr >= 0) rs = "Volume " + xText(volr) + ", range " + xText(rngr) + ", closed in the " + (bull ? "upper" : "lower") + " half"; else rs = std::string("Closed in the ") + (bull ? "upper" : "lower") + " half";
+    if (c.feed && c.early > 0) rs += "; last minute " + att + " " + xText(2.0 * (double)c.late / (double)c.early) + (c.exq ? " - Ex?" : " - no Ex");
+    o.rows.push_back(std::make_pair("Result", rs + "."));
+    if (!nextWhen.empty()) {
+        std::string nt;
+        if (nx && nx->feed) {
+            const double r = (double)nx->att / (double)nx->attAbs;
+            nt = nextWhen + " - " + att + (a.ex ? (r <= 0.5 ? " traded only " : " traded ") : " came back with ") + std::to_string(nx->att) + " lots (" + xText2(r) + ")" + (a.ex ? " and the candle closed further away" : "");
+            bool rebuilt = false, pulled = false, pulling = false;
+            if (nx->dOk) { if (nx->dNet > BOOK_REBUILT) { rebuilt = true; nt += "; " + def + " rebuilt (net " + pctText(nx->dNet) + ")"; } else if (nx->dNet < BOOK_PULLING) { pulling = true; nt += "; " + def + " thinning (net " + pctText(nx->dNet) + ")"; } else nt += "; " + def + " steady (net " + pctText(nx->dNet) + ")"; }
+            if (nx->rOk) { if (nx->rNet < ATT_PULLED) { pulled = true; nt += ", " + att + " pulled their " + ownRest + " (net " + pctText(nx->rNet) + ")"; } else if (nx->rNet > ATT_STACKED) nt += ", " + att + " stacked " + ownRest + " (net " + pctText(nx->rNet) + ")"; }
+            if (a.ex) nt += std::string(" - ") + att + " exhausted" + (rebuilt && pulled ? std::string(", ") + (bull ? "buyers" : "sellers") + " in control" : std::string());
+            else nt += pulling ? " - no exhaustion, warning" : " - no exhaustion";
+        } else nt = nextWhen + (a.ex ? " - " + att + " traded 0.5x or less and the candle closed further away - " + att + " exhausted" : " - no exhaustion");
+        o.rows.push_back(std::make_pair(a.ex ? "Ex" : "Next", nt + "."));
+    }
+    return o;
+}
+
+// (1.5.0) the read's numbers, kept once decided (TurnPane\absread-<MKT>-<spb>.txt) so a restart draws the same read (the feed has no history):
+//   "A|stamp|feed|p|plus|exq|attQ|defShow|putBack|iceLots|iceN|hitShow|hitRef|early|late|bigLots|bigLo|bigHi" and "N|stamp|feed|att|attAbs|dOk|dNet x1e6|rOk|rNet x1e6"
+inline std::string absRecText(const std::map<long long, AbsCalc>& A, const std::map<long long, NextCalc>& N, const std::string& mkt, int spb) {
+    std::string t = "ABR|1|" + mkt + "|" + std::to_string(spb) + "\n"; char b[400];
+    size_t skip = A.size() > HIST_P ? A.size() - HIST_P : 0;
+    for (std::map<long long, AbsCalc>::const_iterator it = A.begin(); it != A.end(); ++it) { if (skip) { --skip; continue; } const AbsCalc& c = it->second;
+        std::snprintf(b, sizeof b, "A|%lld|%d|%d|%d|%d|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld\n", it->first, c.feed ? 1 : 0, c.p, c.plus ? 1 : 0, c.exq ? 1 : 0, c.attQ, c.defShow, c.putBack, c.iceLots, c.iceN, c.hitShow, c.hitRef, c.early, c.late, c.big.lots, c.big.lo, c.big.hi); t += b; }
+    skip = N.size() > HIST_P ? N.size() - HIST_P : 0;
+    for (std::map<long long, NextCalc>::const_iterator it = N.begin(); it != N.end(); ++it) { if (skip) { --skip; continue; } const NextCalc& n = it->second;
+        std::snprintf(b, sizeof b, "N|%lld|%d|%lld|%lld|%d|%lld|%d|%lld\n", it->first, n.feed ? 1 : 0, n.att, n.attAbs, n.dOk ? 1 : 0, (long long)std::llround(n.dNet * 1e6), n.rOk ? 1 : 0, (long long)std::llround(n.rNet * 1e6)); t += b; }
+    return t;
+}
+inline bool parseAbsRec(const std::string& txt, const std::string& mkt, int spb, std::map<long long, AbsCalc>& A, std::map<long long, NextCalc>& N) {
+    A.clear(); N.clear(); const std::vector<std::string> L = lines(txt, true); if (L.empty()) return false;
+    const std::vector<std::string> h = split(L[0], '|'); long long s = 0; if (h.size() < 4 || h[0] != "ABR" || h[1] != "1" || h[2] != mkt || !toLL(h[3], s) || s != spb) return false;
+    for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|'); std::vector<long long> v;
+        for (size_t k = 1; k < c.size(); ++k) { long long x = 0; if (!toLL(c[k], x)) { v.clear(); break; } v.push_back(x); }
+        if (c[0] == "A" && v.size() == 17 && v[0] > 0) { AbsCalc a; a.feed = v[1] != 0; a.p = (int)std::max(-1LL, std::min(100000LL, v[2])); a.plus = v[3] != 0; a.exq = v[4] != 0; a.attQ = v[5]; a.defShow = v[6]; a.putBack = v[7]; a.iceLots = v[8]; a.iceN = v[9]; a.hitShow = v[10]; a.hitRef = v[11]; a.early = v[12]; a.late = v[13]; a.big.lots = v[14]; a.big.lo = v[15]; a.big.hi = v[16]; A[v[0]] = a; }
+        else if (c[0] == "N" && v.size() == 8 && v[0] > 0) { NextCalc n; n.feed = v[1] != 0; n.att = v[2]; n.attAbs = v[3]; n.dOk = v[4] != 0; n.dNet = (double)v[5] / 1e6; n.rOk = v[6] != 0; n.rNet = (double)v[7] / 1e6; if (n.feed && n.attAbs <= 0) n.feed = false; N[v[0]] = n; } }
+    return true;
+}
+// (1.5.0) lsTurn's line per Abs candle for lsRevReadMarks (RevRead\turnabs-<MKT>-<spb>.txt): "stamp|dir|P|plus|exq" (P -1 = not known)
+struct TabRec { int dir = 0, p = -1; bool plus = false, exq = false; };
+inline std::string tabFileText(const std::map<long long, TabRec>& m, const std::string& mkt, int spb) {
+    std::string t = "TAB|1|" + mkt + "|" + std::to_string(spb) + "|" + VERSION + "\n"; size_t skip = m.size() > HIST_P ? m.size() - HIST_P : 0;
+    for (std::map<long long, TabRec>::const_iterator it = m.begin(); it != m.end(); ++it) { if (skip) { --skip; continue; }
+        t += std::to_string(it->first) + "|" + std::to_string(it->second.dir) + "|" + std::to_string(it->second.p) + "|" + (it->second.plus ? "1" : "0") + "|" + (it->second.exq ? "1" : "0") + "\n"; }
+    return t;
+}
+inline bool parseTabFile(const std::string& txt, const std::string& mkt, int spb, std::map<long long, TabRec>& out) {
+    out.clear(); const std::vector<std::string> L = lines(txt, true); if (L.empty()) return false;
+    const std::vector<std::string> h = split(L[0], '|'); long long s = 0; if (h.size() < 4 || h[0] != "TAB" || h[1] != "1" || h[2] != mkt || !toLL(h[3], s) || s != spb) return false;
+    for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|'); long long t = 0, d = 0, p = 0;
+        if (c.size() != 5 || !toLL(c[0], t) || t <= 0 || !toLL(c[1], d) || (d != 1 && d != -1) || !toLL(c[2], p) || p < -1 || p > 100000 || (c[3] != "0" && c[3] != "1") || (c[4] != "0" && c[4] != "1")) continue;
+        TabRec r; r.dir = (int)d; r.p = (int)p; r.plus = c[3] == "1"; r.exq = c[4] == "1"; out[t] = r; }
+    return true;
 }
 inline const char* verdictText(int v, bool bestProven) {
     return v == V_UNCLEAR ? "UNCLEAR" : v == V_ASIDE ? "STAND ASIDE" : v == V_WAIT ? "WAIT" : v == V_BEST ? (bestProven ? "BEST ODDS" : "BEST ODDS ?") : "NO READ";

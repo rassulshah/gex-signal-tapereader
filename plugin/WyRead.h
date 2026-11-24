@@ -28,7 +28,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it and also add the mark to the signals line in reversal indicator ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): Out.ilvC = EVERY named level each I reclaimed (the host picks the one to show by the Bk / Sw priority, LevelMarks iPick); stripFromLines() = the strip's B / C / I from the published wy lines (an I line flagged "|Sw" - same candle as a Sw - is not drawn); no rule change
+static const char* const VERSION = "1.10.0";   // (1.10.0, Rassul 2026-11-24 11:12 CT "ok. build this"): + Bar.qTop / qBot for the Abs badge (LevelMarks 1.18.0 absMarks); no rule here changed
+// was static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it and also add the mark to the signals line in reversal indicator ... if both sweep and i are true, only show sweep", 09:24 "build"; lsRevRead 0.21.2): Out.ilvC = EVERY named level each I reclaimed (the host picks the one to show by the Bk / Sw priority, LevelMarks iPick); stripFromLines() = the strip's B / C / I from the published wy lines (an I line flagged "|Sw" - same candle as a Sw - is not drawn); no rule change
 // was VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-20 05:52 CT "ok.. you decide and add it. you can also add for example b for break and c for climax etc."): + more() = T trapped / P defenders pulled while hit / X exhaustion without pulling (each candle decided at its close, measured per market before it is drawn), + Bar.pull, + the strip priority (stripPick: at most 2 letters per candle, Sp / Ut > I > T > P > A > X > E > B > C); run() is unchanged
 // was VERSION = "1.7.1";   // (1.7.1, Rassul 2026-11-19 16:58 CT "ok" to the read wording: the I is set aside (lsRevRead 0.19.5), so the E / A reads say "Watch: ... (Sw / Tst)" instead of "(I)"; no rule change)
 // was VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-19 10:37 CT "yes, put level under I too", 10:40 "go"): the level each I reclaimed is kept in Out.ilv (candle stamp -> level) so the candle tag can name it (I / PHL); hour levels carry how many hours back they are (Lvl.hb) and their side (Lvl.high). No rule change
@@ -67,6 +68,7 @@ struct Params {
 struct Bar {
     long long t = 0; long long o = 0, h = 0, l = 0, c = 0; long long buy = 0, sell = 0;
     bool book = false; long long addNet[2] = {0, 0}, aggrMax[2] = {0, 0}, sweepLv[2] = {0, 0}, ice[2] = {0, 0};
+    long long qTop = 0, qBot = 0;   // (1.10.0) the heaviest buy price in the top quarter / sell price in the bottom quarter (ticks, 0 = not known): the Abs badge's position line
     long long pull[2] = {0, 0};   // (1.8.0) lots PULLED near price this candle per resting side ([0] bids, [1] offers) - the Book Flow record's pullC; more() P / X
     std::string when;   // "1:39 AM" (the host's clock)
     long long delta() const { return buy - sell; }

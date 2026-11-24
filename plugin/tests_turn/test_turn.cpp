@@ -351,7 +351,7 @@ static void drawing() {
 }
 // (1.0.1) the ratio on a bar, the strip of a candle at a named level, and which labels narrow candles keep
 static void mouseAndLabels() {
-    CHECK(std::string(VERSION) == "1.4.1");
+    CHECK(std::string(VERSION) == "1.5.0");
     // the ratio ON a bar: no x, one decimal under 10, none from 10 up, 99+ cap; the strip's ratioText is unchanged
     CHECK(labelText(0) == "0.0" && labelText(0.522) == "0.5" && labelText(2.435) == "2.4" && labelText(2.87) == "2.9" && labelText(9.94) == "9.9" && labelText(9.95) == "10" && labelText(13.652) == "14");
     CHECK(labelText(99.4) == "99" && labelText(99.5) == "99+" && labelText(1e9) == "99+" && labelText(-1).empty() && labelText(std::nan("")).empty() && labelText(1.0 / 0.0).empty());

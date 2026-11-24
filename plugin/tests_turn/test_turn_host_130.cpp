@@ -133,14 +133,21 @@ int main() {
     cppExtension* x = CreateExtension();
     es.chartTo(K0); cycle(x, es.H);                                       // the first cycle makes the folders
     for (const char* f : { "TurnPane\\turn-ES-180.txt", "TurnPane\\_opening-ES-180.txt", "TurnPane\\status-ES-180.txt", "TurnPane\\display.txt" }) std::remove(P(f).c_str());
-    put(P("LRA-TurnPane-ES.csv"), get(data + "/LRA-Turn-ES.csv")); put(P("RevRead\\wy-ES-180.txt"), get(data + "/wy-ES.txt"));
+    put(P("LRA-TurnPane-ES.csv"), get(data + "/LRA-Turn-ES.csv")); put(P("RevRead\\wy-ES-180.txt"), get(data + "/wy-ES.txt") + std::to_string(KEND - 180 * 5) + "|Abs|1|Low 20%|28420|ONL\n" + std::to_string(KEND - 180 * 4) + "|Ex|1\n");   // (1.5.0) an Abs of lsRevRead on a candle the feed sees whole
     mock::current = &es.H; x->destroy(); drop(x); x = CreateExtension();           // start clean: no record, no display file
     const auto drain1 = [&]() { for (int i = 0; i < 8000 && es.F.at < es.F.ev.size(); ++i) cycle(x, es.H); for (int i = 0; i < 3; ++i) cycle(x, es.H); };
     es.chartTo(K0); cycle(x, es.H);
     for (long long forming = K0; forming <= KEND - 180; forming += 180) { es.chartTo(forming); es.feedTo(forming); drain1(); }
     es.chartTo(KEND); es.feedTo(KEND - 150); drain1(); for (int i = 0; i < 6; ++i) cycle(x, es.H);
     const std::string st = get(P("TurnPane\\status-ES-180.txt")), rec0 = get(P("TurnPane\\turn-ES-180.txt"));
-    CHECK(st.find("VERSION|1.4.1") != std::string::npos && std::string(TURN_VERSION) == "1.4.1" && std::string(turn::VERSION) == "1.4.1");
+    {   // (1.5.0) the Abs read and the badge file, straight after the replay (the feed saw the Abs candle whole)
+        const std::string ab = lineOf(st, "ABS|"), rd = lineOf(st, "READ|"), tb = get(P("RevRead\\turnabs-ES-180.txt")); const long long KA = KEND - 180 * 5;
+        std::cout << "(1.5.0) " << ab << "\n(1.5.0) " << rd << "\n(1.5.0) turnabs: " << tb;
+        CHECK(ab.find("ABS|1 Abs lines in the wy file|1 decided") == 0 && ab.find("read shows an Abs 1") != std::string::npos);
+        CHECK(rd.find("READ|bullish|") == 0 && rd.find("Bullish ? - absorbed at ONL 7105.00") != std::string::npos && rd.find("Attack: Sellers hit ") != std::string::npos && rd.find("no order feed") == std::string::npos);
+        CHECK(rd.find("Absorbed: Bids showing up to ") != std::string::npos && rd.find("Result: Volume ") != std::string::npos && rd.find("last minute sellers ") != std::string::npos && rd.find("Ex: ") != std::string::npos);
+        CHECK(tb.compare(0, 13, "TAB|1|ES|180|") == 0 && tb.find("\n" + std::to_string(KA) + "|1|") != std::string::npos && tb.find("\n" + std::to_string(KA) + "|1|-1|") == std::string::npos); }
+    CHECK(st.find("VERSION|1.5.0") != std::string::npos && std::string(TURN_VERSION) == "1.5.0" && std::string(turn::VERSION) == "1.5.0");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----
@@ -175,9 +182,9 @@ int main() {
         if (hpx < 0 && ru && up[i].known && up[i].v > 0.2 && up[i].v < 3) hpx = (int)std::lround((ru->b - ru->t) / up[i].v * 3.0);   // the pane's scale, from the first bar
         const auto same = [&](const mock::Draw* b, const Exp& e, bool u, COLOR win) { if (!e.known) { CHECK(b == nullptr); ++none; return; } ++known; CHECK(b != nullptr); if (!b) return;
             CHECK(b->color == (e.on ? win : trh::C_AXIS)); CHECK(labelOf(*b, u) == e.label); if (e.on) ++coloured; else ++grey; if (!e.away && turn::shown10(e.label) >= 20) ++heavyNotAway; };
-        same(ru, up[i], true, trh::C_RED);                                  // absorbed at the high: red (the winner), also on a sweep of a high
+        same(ru, up[i], true, trh::C_GREEN);                                // (1.4.2) the top bar: green (the buyers at the offer), also on a sweep of a high
         if (sweep) { CHECK(rd != nullptr); if (rd) CHECK(isMarks(labelOf(*rd, false))); }   // the turn half of a sweep candle: the Initiative as marks
-        else same(rd, dn[i], false, trh::C_GREEN); }
+        else same(rd, dn[i], false, trh::C_RED); }   // (1.4.2) the bottom bar: red (the sellers at the bid)
     std::printf("Absorption bars: %d with a number (%d coloured, %d grey; %d read 2.0+ but closed in that quarter), %d candle sides with none yet\n", known, coloured, grey, heavyNotAway, none);
     CHECK(known >= 20 && coloured >= 1 && grey >= 10 && none >= 18); (void)half; (void)hpx;
     // heights: equal numbers -> equal heights, a bigger number is never shorter (the scale itself is 1.2.1's barPx)
@@ -200,7 +207,7 @@ int main() {
     put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|0\nexhaustion|0\nanswer|0\nread|0\nEND\n"); for (int i = 0; i < 8; ++i) cycle(x, es.H);
     { const std::string s = stripText(es.H); std::cout << "Absorption only: " << s << "\n"; CHECK(s.find("   High: ") != std::string::npos && s.find(" / Low: ") != std::string::npos && s.find("Stop Run") == std::string::npos && pillText(es.H).empty());
       CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|ok|absorption|absorption coloured from 2.0\n") != std::string::npos); noOverlap(es.H);
-      int reds = 0, greens = 0, wrong = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.r - d.l <= 60) { if (d.color == trh::C_RED) { ++reds; if (d.b != axis) ++wrong; } else if (d.color == trh::C_GREEN) { ++greens; if (d.t != axis + 1) ++wrong; } else if (d.color != trh::C_AXIS) ++wrong; }
+      int reds = 0, greens = 0, wrong = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.r - d.l <= 60) { if (d.color == trh::C_GREEN) { ++greens; if (d.b != axis) ++wrong; } else if (d.color == trh::C_RED) { ++reds; if (d.t != axis + 1) ++wrong; } else if (d.color != trh::C_AXIS) ++wrong; }
       CHECK(wrong == 0 && reds + greens == coloured + (up[(size_t)((K851 - K0) / 180)].on ? 0 : 0)); }                 // red only above the axis (highs), green only below (lows); the same candles count
     put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|0\nexhaustion|x\nEND\n"); for (int i = 0; i < 8; ++i) cycle(x, es.H);
     CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|display line 3 garbled (the defaults)|absorption stop exhaustion initiative read|") != std::string::npos); CHECK(barsOnly(es.H) == bars0);
