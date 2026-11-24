@@ -40,3 +40,19 @@ Mockup: breakout-3h-mockup.html v5.
 - Checked on GC only; NOT measured for what happens after a BO / Tst on any market.
 - No record file: the marks are recomputed from the chart's candles; a different first candle can change the very oldest pivots.
 - A letter that would cross the pane's left edge is not drawn.
+
+## 1.1.0 (2026-11-23 23:06-23:10 CT): SP and UT
+Rassul 23:06 "update the bo on the htf that we did to include sp and ut .  the code can be found in these two indicators"
+(his IRT signals sot_mom_div_dn_basic = SP, sot_mom_div_up_basic = UT; RTL read from data\irt\library\rtl), 23:10 "go".
+- b3h::spUt inside run(): on the same 1-bar High / Low ZigZag, decided on the CLOSED candle that confirms the pivot (his Uppivot =
+  Ups#1 = 1), drawn on the pivot candle, final at once (no live state). UT (red, above the pivot high) when the new pivot high H1:
+  1. >= H2 with its candle's low <= H2 and (H1 - H2 < 0.5 x (H2 - L1) or the confirming close < H2 or a lower momentum high);
+  2. >= H3 (H2 lower than H3 and H1) the same way, with L2;  3. >= H4 (above H2 and H3), its low <= H4, H1 - H4 <= the confirming
+  candle's true range. Momentum = close - close 10 candles back (IRT MOM; his MOM length to confirm), the highest in each up leg.
+  SP (green, below the pivot low) = the mirror.
+- Host: SP / UT words, side by b3h::above(); at most 2 letters a candle side, drawn BO / BD first, then SP / UT, then Tst; a letter
+  moves outward a row when it would touch a neighbour candle's letter. Status line adds ",SP n,UT n".
+- His GC candles 10-13 .. 11-23: BO 11, BD 17, Tst 10 (unchanged), SP 13, UT 9. Live ES 3-hour: SP 8, UT 11.
+- Tests: logic 15,136 (no repaint over every prefix, mirror SP <-> UT, hand-made UT cases 1 / momentum / no overlap of H2 /
+  close back / not before a closed confirm), host 473 (words, sides, colours, no overlap), real irtsdk.h C++14 / C++17 clean.
+- Not verified: the candles against his two signals on the live ES 3-hour chart (his MOM length).

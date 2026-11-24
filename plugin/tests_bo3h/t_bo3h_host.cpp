@@ -1,4 +1,4 @@
-// t_bo3h_host.cpp -- ls3hBO 1.0.0 ("3h BO", Bo3h.cpp) on the mock SDK: the 3-hour BO / BD / Tst on a 180-minute chart, on Rassul's own GC 180-minute
+// t_bo3h_host.cpp -- ls3hBO 1.1.0 (+ SP / UT; was 1.0.0) ("3h BO", Bo3h.cpp) on the mock SDK: the 3-hour BO / BD / Tst on a 180-minute chart, on Rassul's own GC 180-minute
 // candles of 2026-10-13 .. 11-23 19:26 CT (gc3h_1123.csv from lsFlexLevels\ChartView\GC_10800_GCZ6.json).
 //   (in plugin\tests_bo3h) g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror -Imock -I.. t_bo3h_host.cpp -o th && ./th
 // Covers: only texts are drawn, only the words BO / BD / Tst; green (bullish) / red (bearish); BO above its candle's high, BD below its
@@ -48,7 +48,7 @@ int main() {
     mock::Host H; mock::current = &H; chart(H, R, N);
     Bo3h* x = static_cast<Bo3h*>(CreateExtension()); x->init(); x->setup(); pass(*x);
     int other = 0; std::set<std::string> words; for (const auto& p : H.drawn) { if (p.k != 'T') ++other; else words.insert(p.text); }
-    CHECK(other == 0, "nothing but text is drawn"); for (const std::string& w : words) CHECK(w == "BO" || w == "BD" || w == "Tst", "word " + w);
+    CHECK(other == 0, "nothing but text is drawn"); for (const std::string& w : words) CHECK(w == "BO" || w == "BD" || w == "Tst" || w == "SP" || w == "UT", "word " + w);
     const std::vector<mock::Prim> C = coloured(H);
     int inView = 0; for (const auto& m : M) if (m.bar > H.first) ++inView;   // a letter that would cross the pane's left edge (the first candle in view) is not drawn
     CHECK((int)C.size() == inView && inView >= 10, "every mark in view drawn once (" + std::to_string(C.size()) + " / " + std::to_string(inView) + ")");
@@ -58,14 +58,14 @@ int main() {
         const b3h::Mark* mm = nullptr; for (const auto& m : M) if (m.bar == bar && std::string(b3h::text(m)) == p.text) mm = &m;
         CHECK(mm != nullptr, "a decided mark under the letter " + p.text + " at " + R[bar].ts); if (!mm) continue;
         CHECK(green == (mm->dir > 0), "colour = direction");
-        mock::current = &H; const int yh = mockY(R[bar].h), yl = mockY(R[bar].l); const bool above = mm->code == 'T' ? mm->dir < 0 : mm->dir > 0;
+        mock::current = &H; const int yh = mockY(R[bar].h), yl = mockY(R[bar].l); const bool above = b3h::above(*mm);
         if (above) CHECK(p.y1 <= yh, p.text + " above the high at " + R[bar].ts); else CHECK(p.y0 >= yl - 8, p.text + " below the low at " + R[bar].ts);
         CHECK(p.font == B3_FONT, "small font"); got.insert(R[bar].ts + " " + p.text + (mm->live ? " live" : "")); }
-    for (size_t a = 0; a < C.size(); ++a) for (size_t b = a + 1; b < C.size(); ++b) CHECK(C[a].x1 <= C[b].x0 || C[b].x1 <= C[a].x0 || C[a].y1 <= C[b].y0 || C[b].y1 <= C[a].y0, "no overlap " + C[a].text + " / " + C[b].text);
+    for (size_t a = 0; a < C.size(); ++a) for (size_t b = a + 1; b < C.size(); ++b) CHECK(C[a].x1 <= C[b].x0 || C[b].x1 <= C[a].x0 || C[a].y1 <= C[b].y0 || C[b].y1 <= C[a].y0, "no overlap " + C[a].text + " / " + C[b].text + " " + std::to_string(C[a].x0) + "," + std::to_string(C[a].y0) + " " + std::to_string(C[b].x0) + "," + std::to_string(C[b].y0));
     CHECK(got.count("2026-11-22 20:00 BO") && got.count("2026-11-23 05:00 Tst") && got.count("2026-11-23 08:00 BO") && got.count("2026-11-23 20:00 Tst live"), "his picture: BO, Tst, BO, live Tst");
     const std::string st = slurp(home + "/InvestorRT/rtx/lsFlexLevels/Bo3h.status-GC-10800.txt");
-    CHECK(st.find("H3,b3h 1.0.0,BO 11,BD 17,Tst 10,live 1,bars 233") != std::string::npos, "status line H3");
-    CHECK(std::string(B3_VERSION) == "1.0.0" && std::string(b3h::VERSION) == "1.0.0" && st.find("VERSION,1.0.0\n") == 0, "version");
+    CHECK(st.find("H3,b3h 1.1.0,BO 11,BD 17,Tst 10,live 1,SP 13,UT 9,bars 233") != std::string::npos, "status line H3");
+    CHECK(std::string(B3_VERSION) == "1.1.0" && std::string(b3h::VERSION) == "1.1.0" && st.find("VERSION,1.1.0\n") == 0, "version");
     // ---- 2. bar by bar (a live chart), then a restart: the same letters; a final letter never moves ----
     mock::Host H2; mock::current = &H2; Bo3h* y = static_cast<Bo3h*>(CreateExtension()); y->init(); y->setup();
     std::map<std::string, int> finalAt; int moved = 0;
