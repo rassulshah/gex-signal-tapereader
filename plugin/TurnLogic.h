@@ -69,7 +69,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): RevRead\\turnexq-<MKT>-<spb>.txt = the sellers' / buyers' Ex? (last minute <= 0.5x the first 2 minutes' pace) of EVERY closed candle this pane saw whole - the E of the Tst badge's line 3 (lsRevReadMarks 0.28.0); nothing drawn changed
+static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-24 17:28 CT "i think absorbtion read should be in the absorption indicator but it should be more compact without the result and next", 17:30 "lets go with this for now" / "build" on turn-read-mockup.html): THE COMPACT READ - for the candle under the mouse (else the last closed one): who won at the end that was pushed (Passive defense / Aggressor), then Attack and Absorbed / Not absorbed only; an Abs names its level in the heading. Research VERDICT 2026-11-24: 12,406 candles 1.5x+, passive defense held 40% (both halves 40 / 40) vs aggressor 15% (16 / 13); aggressor ran on 1 ATR 42% vs 26%, all 7 markets
+// was static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): RevRead\\turnexq-<MKT>-<spb>.txt = the sellers' / buyers' Ex? (last minute <= 0.5x the first 2 minutes' pace) of EVERY closed candle this pane saw whole - the E of the Tst badge's line 3 (lsRevReadMarks 0.28.0); nothing drawn changed
 // was static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) THE ABS READ: the order feed now keeps the book per price (added / pulled / most showing / refills) and the biggest single order a side; the read right of the last candle = the newest Abs of lsRevRead (Attack / Absorbed / Result / Ex or Next); RevRead\\turnabs-<MKT>-<spb>.txt = the P and Ex? of each Abs for the price-chart badge
 // was static const char* const VERSION = "1.4.2";   // (1.4.2, Rassul 2026-11-24 11:21 CT "first color the bars differently , top should be green and bottom should be red") host only: the Absorption bars in the attackers' colour (top green, bottom red)
 // was static const char* const VERSION = "1.4.1";   // (1.4.1, 2026-11-23 22:40 "fix everything") the top line shows a sweep of the current Globex session only (sessionOf); before, the newest sweep of an earlier session stayed there all evening
@@ -1076,6 +1077,75 @@ inline bool parseAbsRec(const std::string& txt, const std::string& mkt, int spb,
         for (size_t k = 1; k < c.size(); ++k) { long long x = 0; if (!toLL(c[k], x)) { v.clear(); break; } v.push_back(x); }
         if (c[0] == "A" && v.size() == 17 && v[0] > 0) { AbsCalc a; a.feed = v[1] != 0; a.p = (int)std::max(-1LL, std::min(100000LL, v[2])); a.plus = v[3] != 0; a.exq = v[4] != 0; a.attQ = v[5]; a.defShow = v[6]; a.putBack = v[7]; a.iceLots = v[8]; a.iceN = v[9]; a.hitShow = v[10]; a.hitRef = v[11]; a.early = v[12]; a.late = v[13]; a.big.lots = v[14]; a.big.lo = v[15]; a.big.hi = v[16]; A[v[0]] = a; }
         else if (c[0] == "N" && v.size() == 8 && v[0] > 0) { NextCalc n; n.feed = v[1] != 0; n.att = v[2]; n.attAbs = v[3]; n.dOk = v[4] != 0; n.dNet = (double)v[5] / 1e6; n.rOk = v[6] != 0; n.rNet = (double)v[7] / 1e6; if (n.feed && n.attAbs <= 0) n.feed = false; N[v[0]] = n; } }
+    return true;
+}
+
+// (1.7.0) THE COMPACT READ (Rassul 2026-11-24 17:28-17:30 CT, turn-read-mockup.html, "build"). The candle under the mouse (else the last closed
+// candle in view). The END that was pushed = the bigger of its two Absorption numbers (top = buyers, bottom = sellers); counted from 1.5.
+//   heading  - time, who won, where: "Passive defense won - buyers absorbed at the top" (the candle closed OUTSIDE that end quarter) or
+//              "Aggressor won - buyers got through" (closed inside it); an Abs of lsRevRead on the candle adds its level. Colour = the side that
+//              won (passive at the top = red, at the bottom = green; aggressor buyers = green, sellers = red).
+//   Attack   - the attackers' lots in that quarter, the Absorption number, the biggest single order (a sweep: how many ticks)
+//   Absorbed / Not absorbed - what the resting side there did: most showing, put back or pulled, refills (icebergs)
+// Research VERDICT 2026-11-24 (12,406 RTH candles 1.5x+, 7 markets): the next 5 candles stayed within 1 tick of the pushed extreme after
+// passive defense 40% (both halves) vs aggressor 15%; price ran 1 ATR on past it 26% vs 42%. Refills did NOT change it (40% vs 41%):
+// they describe, they do not grade. Under 1.5 at both ends = one quiet line.
+static const long long CR_FROM1000 = 1500;
+struct CText { std::string title; int win = 0; std::vector<std::pair<std::string, std::string> > rows; bool quiet = false; };
+inline CText compactText(int dir, long long x1000, bool passive, const AbsCalc& c, const std::string& when, const std::string& lv, long long lvPx, double tick) {
+    CText o; const bool bull = dir > 0;   // dir +1 = sellers pushed into the bottom, -1 = buyers into the top
+    const std::string Att = bull ? "Sellers" : "Buyers", Def = bull ? "Bids" : "Offers", end = bull ? "bottom" : "top";
+    o.win = passive ? (bull ? 1 : -1) : (bull ? -1 : 1);
+    o.title = (when.empty() ? std::string() : when + "  ") + (passive ? std::string("Passive defense won - ") + (bull ? "sellers" : "buyers") + " absorbed at the " + end
+                                                                       : std::string("Aggressor won - ") + (bull ? "sellers" : "buyers") + " got through the " + end);
+    if (!lv.empty()) o.title += " (" + lv + (lvPx > 0 ? " " + pxText(lvPx, tick) : std::string()) + ")";
+    const std::string xs = xText((double)x1000 / 1000.0);
+    std::string at;
+    if (!c.feed) at = Att + " into the " + end + " " + xs + " - no order feed for this candle.";
+    else { at = Att + " " + std::to_string(c.attQ) + " lots into the " + end + " " + xs;
+        if (c.big.lots > 0) { at += ", biggest print " + std::to_string(c.big.lots); if (c.big.lo != c.big.hi) at += " (swept " + std::to_string(c.big.hi - c.big.lo + 1) + " ticks)"; }
+        else { at += ", no big print"; }
+        at += "."; }
+    o.rows.push_back(std::make_pair("Attack", at));
+    std::string ab;
+    if (passive) {
+        if (!c.feed) ab = std::string("closed back out of the ") + end + " quarter; the " + end + " held.";
+        else { ab = Def + " showing up to " + std::to_string(c.defShow) + " took them and " + (c.putBack >= 0 ? "put back " + std::to_string(c.putBack) : "pulled " + std::to_string(-c.putBack));
+            if (c.iceN > 0) { ab += " (refilled " + std::to_string(c.iceN) + "x)"; }
+            ab += "; the " + end + " held."; }
+        o.rows.push_back(std::make_pair("Absorbed", ab));
+    } else {
+        if (!c.feed) ab = std::string("closed in the ") + end + " quarter.";
+        else { ab = c.putBack < 0 ? Def + " pulled " + std::to_string(-c.putBack) + " lots ahead of them" : Def + " showing up to " + std::to_string(c.defShow) + " were taken";
+            ab += "; closed in the " + end + " quarter."; }
+        o.rows.push_back(std::make_pair("Not absorbed", ab));
+    }
+    return o;
+}
+inline CText quietText(const std::string& when, long long up1000, long long dn1000) {
+    CText o; o.quiet = true; o.title = (when.empty() ? std::string() : when + "  ") + "Quiet - no push into either end";
+    if (up1000 >= 0 || dn1000 >= 0) o.title += " (top " + (up1000 >= 0 ? xText((double)up1000 / 1000.0) : std::string("-")) + " / bottom " + (dn1000 >= 0 ? xText((double)dn1000 / 1000.0) : std::string("-")) + ")";
+    return o;
+}
+// the end that was pushed: +1 bottom (sellers), -1 top (buyers), 0 = neither 1.5+; ties go to the top
+inline int pushedEnd(long long up1000, long long dn1000) { const long long u = up1000 >= CR_FROM1000 ? up1000 : -1, d = dn1000 >= CR_FROM1000 ? dn1000 : -1; if (u < 0 && d < 0) return 0; return u >= d ? -1 : 1; }
+// (1.7.0) the order-book numbers of every closed candle this pane read whole, both ends, kept once decided (TurnPane\cread-<MKT>-<spb>.txt) so
+// the read of an older candle (or after a restart) is the same: "C|stamp|dir|feed|attQ|defShow|putBack|iceLots|iceN|bigLots|bigLo|bigHi"
+static const size_t CR_KEEP = 900;
+inline std::string crecText(const std::map<std::pair<long long, int>, AbsCalc>& m, const std::string& mkt, int spb) {
+    std::string t = "CRD|1|" + mkt + "|" + std::to_string(spb) + "|" + VERSION + "\n"; size_t skip = m.size() > CR_KEEP ? m.size() - CR_KEEP : 0;
+    for (const auto& kv : m) { if (skip) { --skip; continue; } const AbsCalc& a = kv.second;
+        t += "C|" + std::to_string(kv.first.first) + "|" + std::to_string(kv.first.second) + "|" + (a.feed ? "1" : "0") + "|" + std::to_string(a.attQ) + "|" + std::to_string(a.defShow) + "|" + std::to_string(a.putBack)
+           + "|" + std::to_string(a.iceLots) + "|" + std::to_string(a.iceN) + "|" + std::to_string(a.big.lots) + "|" + std::to_string(a.big.lo) + "|" + std::to_string(a.big.hi) + "\n"; }
+    return t;
+}
+inline bool parseCrec(const std::string& txt, const std::string& mkt, int spb, std::map<std::pair<long long, int>, AbsCalc>& out) {
+    out.clear(); const std::vector<std::string> L = lines(txt, true); if (L.empty()) return false;
+    const std::vector<std::string> h = split(L[0], '|'); long long s = 0; if (h.size() < 4 || h[0] != "CRD" || h[1] != "1" || h[2] != mkt || !toLL(h[3], s) || s != spb) return false;
+    for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|'); if (c.size() != 12 || c[0] != "C") continue; std::vector<long long> v;
+        for (size_t k = 1; k < c.size(); ++k) { long long x = 0; if (!toLL(c[k], x)) { v.clear(); break; } v.push_back(x); }
+        if (v.size() != 11 || v[0] <= 0 || (v[1] != 1 && v[1] != -1)) continue;
+        AbsCalc a; a.feed = v[2] != 0; a.attQ = v[3]; a.defShow = v[4]; a.putBack = v[5]; a.iceLots = v[6]; a.iceN = v[7]; a.big.lots = v[8]; a.big.lo = v[9]; a.big.hi = v[10]; out[std::make_pair(v[0], (int)v[1])] = a; }
     return true;
 }
 // (1.5.0) lsTurn's line per Abs candle for lsRevReadMarks (RevRead\turnabs-<MKT>-<spb>.txt): "stamp|dir|P|plus|exq" (P -1 = not known)

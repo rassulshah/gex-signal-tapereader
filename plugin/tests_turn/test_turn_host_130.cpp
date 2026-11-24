@@ -110,7 +110,8 @@ static int barLabels(const mock::Host& H, int bw) {
     return n;
 }
 static std::string barsOnly(const mock::Host& H) {                     // everything below the strip row: the bars, the axis and their labels
-    std::ostringstream o; for (const mock::Draw& d : H.draws) if (d.t > H.paneTop + 21) o << d.type << "|" << d.l << "|" << d.t << "|" << d.r << "|" << d.b << "|" << std::hex << d.color << std::dec << "|" << d.text << "\n"; return o.str();
+    int readX = 0; for (const mock::Draw& d : H.draws) if (d.type == "box" && d.t > H.paneTop + 21) readX = std::max(readX, d.r + 1);   // (1.7.0) the read right of the bars follows the mouse: not part of the bars
+    std::ostringstream o; for (const mock::Draw& d : H.draws) if (d.t > H.paneTop + 21 && !(d.type == "text" && d.l >= readX)) o << d.type << "|" << d.l << "|" << d.t << "|" << d.r << "|" << d.b << "|" << std::hex << d.color << std::dec << "|" << d.text << "\n"; return o.str();
 }
 // (1.0.1) the cursor at pane point (h, v) of this chart's window, on chart bar `bar`; the event must never be swallowed
 static void mouseAt(cppExtension* x, mock::Host& H, long bar, int h, int v, int type = E_MOUSE_MOVE) {
@@ -143,9 +144,10 @@ int main() {
     {   // (1.5.0) the Abs read and the badge file, straight after the replay (the feed saw the Abs candle whole)
         const std::string ab = lineOf(st, "ABS|"), rd = lineOf(st, "READ|"), tb = get(P("RevRead\\turnabs-ES-180.txt")); const long long KA = KEND - 180 * 5;
         std::cout << "(1.5.0) " << ab << "\n(1.5.0) " << rd << "\n(1.5.0) turnabs: " << tb;
-        CHECK(ab.find("ABS|1 Abs lines in the wy file|1 decided") == 0 && ab.find("read shows an Abs 1") != std::string::npos);
-        CHECK(rd.find("READ|bullish|") == 0 && rd.find("Bullish ? - absorbed at ONL 7105.00") != std::string::npos && rd.find("Attack: Sellers hit ") != std::string::npos && rd.find("no order feed") == std::string::npos);
-        CHECK(rd.find("Absorbed: Bids showing up to ") != std::string::npos && rd.find("Result: Volume ") != std::string::npos && rd.find("last minute sellers ") != std::string::npos && rd.find("Ex: ") != std::string::npos);
+        CHECK(ab.find("ABS|1 Abs lines in the wy file|1 decided") == 0);
+        // (1.7.0) the compact read: the last closed candle (no mouse) - its time, then quiet or who won + Attack + Absorbed / Not absorbed; never Result / Next / Ex
+        CHECK(rd.find("READ|") == 0 && rd.find("Result:") == std::string::npos && rd.find("Next:") == std::string::npos && rd.find("Ex:") == std::string::npos);
+        CHECK(rd.find("Quiet - no push into either end") != std::string::npos || (rd.find("Attack: ") != std::string::npos && (rd.find("Absorbed: ") != std::string::npos || rd.find("Not absorbed: ") != std::string::npos)));
         CHECK(tb.compare(0, 13, "TAB|1|ES|180|") == 0 && tb.find("\n" + std::to_string(KA) + "|1|") != std::string::npos && tb.find("\n" + std::to_string(KA) + "|1|-1|") == std::string::npos);
         // (1.6.0) every candle's Ex?: the turnexq file has the Abs candle, and its sellers' flag = the badge's Ex? (the same rule, the same candle)
         const std::string te = get(P("RevRead\\turnexq-ES-180.txt")); const std::string te1 = lineOf(st, "TEQ|"); std::cout << "(1.6.0) " << te1 << "\n";
@@ -154,7 +156,7 @@ int main() {
           if (a != std::string::npos && b != std::string::npos) { const std::string la = tb.substr(a + 1, tb.find('\n', a + 1) - a - 1), lb = te.substr(b + 1, te.find('\n', b + 1) - b - 1);
             std::cout << "(1.6.0) abs " << la << " / exq " << lb << "\n"; CHECK(la.substr(la.size() - 1) == lb.substr(lb.find('|') + 1, 1)); } }
         std::map<long long, std::pair<int, int> > tq; CHECK(turn::parseTeqFile(te, "ES", 180, tq) && !tq.empty() && !turn::parseTeqFile(te, "NQ", 180, tq)); }
-    CHECK(st.find("VERSION|1.6.0") != std::string::npos && std::string(TURN_VERSION) == "1.6.0" && std::string(turn::VERSION) == "1.6.0");
+    CHECK(st.find("VERSION|1.7.0") != std::string::npos && std::string(TURN_VERSION) == "1.7.0" && std::string(turn::VERSION) == "1.7.0");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----
@@ -204,9 +206,20 @@ int main() {
         const int hx = es.H.barX0 + (int)i * es.H.barW; mouseAt(x, es.H, (long)i, hx, 250); cycle(x, es.H); cycle(x, es.H); const std::string s = stripText(es.H);
         const std::string want = std::string("High: ") + turn::word4(up[i].cls) + " Absorption / Low: " + turn::word4(dn[i].cls) + " Absorption";
         if (s.find(want) == std::string::npos) std::printf("strip '%s' wants '%s'\n", s.c_str(), want.c_str());
-        CHECK(s.find(want) != std::string::npos && s.find(" AM   High: ") != std::string::npos); CHECK(barsOnly(es.H) == bars0); noOverlap(es.H); ++tried;
+        CHECK(s.find(want) != std::string::npos && s.find(" AM   High: ") != std::string::npos); { const std::string b1 = barsOnly(es.H); if (b1 != bars0) { std::istringstream A(bars0), Bq(b1); std::string la, lb; int shown = 0; while (shown < 4) { const bool ga = (bool)std::getline(A, la), gb = (bool)std::getline(Bq, lb); if (!ga && !gb) break; if (la != lb) { std::printf("DIFF0 %s\nDIFF1 %s\n", la.c_str(), lb.c_str()); ++shown; } } } CHECK(b1 == bars0); } noOverlap(es.H); ++tried;
         for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t == es.H.paneTop + 4) { if (d.text.find("High: ") == 0) CHECK(d.color == (up[i].on ? trh::C_RED : trh::C_MUTED)); if (d.text.find("Low: ") == 0) CHECK(d.color == (dn[i].on ? trh::C_GREEN : trh::C_MUTED)); } }
-    CHECK(tried >= 3); turn_test_window = nullptr; cycle(x, es.H); cycle(x, es.H); CHECK(stripText(es.H) == s0 && barsOnly(es.H) == bars0);
+    CHECK(tried >= 3);
+    {   // (1.7.0) the read follows the mouse: on the Abs candle it reads that candle; numbers of a candle the feed saw whole; never Result / Next
+        const long long KA = KEND - 180 * 5; long ia = -1; for (size_t i = 0; i < NB; ++i) if ((long long)es.H.bars[i].time == KA) ia = (long)i;
+        CHECK(ia >= 0);
+        if (ia >= 0) { mouseAt(x, es.H, ia, es.H.barX0 + (int)ia * es.H.barW, 250); cycle(x, es.H); cycle(x, es.H);
+            const std::string r1 = lineOf(get(P("TurnPane\\status-ES-180.txt")), "READ|"); std::cout << "(1.7.0) hover Abs candle: " << r1 << "\n";
+            CHECK(r1.find("Result:") == std::string::npos && r1.find("Next:") == std::string::npos);
+            const bool q = r1.find("Quiet - no push") != std::string::npos;
+            CHECK(q || (r1.find("Attack: ") != std::string::npos && r1.find("no order feed") == std::string::npos));
+            if (r1.find("sellers absorbed at the bottom") != std::string::npos || r1.find("sellers got through the bottom") != std::string::npos) CHECK(r1.find("(ONL 7105.00)") != std::string::npos); }
+    }
+    turn_test_window = nullptr; cycle(x, es.H); cycle(x, es.H); CHECK(stripText(es.H) == s0 && barsOnly(es.H) == bars0);
     // ---- the chart removed and added again, no order events: the same bars and strip, the record untouched (no repaint) ----
     { const std::string before = dumpDraws(es.H); mock::current = &es.H; x->destroy(); static mock::Feed empty; es.H.feedp = &empty; for (int i = 0; i < 6; ++i) cycle(x, es.H);
       CHECK(dumpDraws(es.H) == before); CHECK(get(P("TurnPane\\turn-ES-180.txt")) == rec0); }

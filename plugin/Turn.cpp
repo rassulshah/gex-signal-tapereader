@@ -105,7 +105,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.6.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.7.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -362,7 +362,7 @@ struct State {
     turn::Show show; long long showSig = -2; std::string showPath; bool showChanged = false;
     // (1.5.0) the Abs candles lsRevRead published (wy file) and this pane's P / Ex? for each (RevRead\\turnabs-<MKT>-<spb>.txt, read by lsRevReadMarks)
     std::map<long long, std::pair<int, int> > teq; std::string teqPath; bool teqLoaded = false, teqDirty = false; long long teqWrites = 0, teqFails = 0;   /* (1.6.0) every candle's Ex? */ std::vector<turn::AbsLine> abs; std::map<long long, turn::TabRec> tab; std::string tabPath; bool tabLoaded = false, tabDirty = false; long long tabWrites = 0, tabFails = 0; int absShown = 0; std::string absHead, absWhy;
-    std::map<long long, turn::AbsCalc> absC; std::map<long long, turn::NextCalc> absN; std::string absRecPath; bool absRecLoaded = false, absRecDirty = false;   // (1.5.0) the read's numbers once decided (a restart draws the same read)
+    std::map<std::pair<long long, int>, turn::AbsCalc> crC; std::string crPath; bool crLoaded = false, crDirty = false;   /* (1.7.0) every closed candle's order-book numbers, both ends */ std::map<long long, turn::AbsCalc> absC; std::map<long long, turn::NextCalc> absN; std::string absRecPath; bool absRecLoaded = false, absRecDirty = false;   // (1.5.0) the read's numbers once decided (a restart draws the same read)
 };
 
 }  // namespace trh
@@ -458,6 +458,7 @@ private:
         S.showPath = own.empty() || !S.supported ? std::string() : own + "\\display.txt"; S.showSig = -2; S.show = turn::Show(); S.showChanged = false;   // (1.2.0)
         S.teqPath = flex.empty() || !S.supported || spb <= 0 ? std::string() : flex + "\\RevRead\\turnexq-" + S.market + "-" + std::to_string(spb) + ".txt"; S.teq.clear(); S.teqLoaded = false; S.teqDirty = false;   // (1.6.0)
         S.tabPath = flex.empty() || !S.supported || spb <= 0 ? std::string() : flex + "\\RevRead\\turnabs-" + S.market + "-" + std::to_string(spb) + ".txt"; S.abs.clear(); S.tab.clear(); S.tabLoaded = false; S.tabDirty = false;   // (1.5.0)
+        S.crPath = own.empty() || !S.supported || spb <= 0 ? std::string() : own + "\\cread-" + S.market + "-" + std::to_string(spb) + ".txt"; S.crC.clear(); S.crLoaded = false; S.crDirty = false;   // (1.7.0)
         S.absRecPath = own.empty() || !S.supported || spb <= 0 ? std::string() : own + "\\absread-" + S.market + "-" + std::to_string(spb) + ".txt"; S.absC.clear(); S.absN.clear(); S.absRecLoaded = false; S.absRecDirty = false;
         S.paramsSig = S.wySig = -2; S.P = turn::defaults(S.market); S.sweeps.clear(); S.levels.clear(); S.swAt.clear(); S.histAt.clear();
         S.rec = turn::Rec(); S.recLoaded = false; S.recDirty = false; S.recSig = -2;
@@ -569,6 +570,11 @@ private:
             std::string t; long long sig = -1;
             if (readCapped(S.teqPath, 256 * 1024, t, sig)) { std::map<long long, std::pair<int, int> > f; if (sig >= 0 && turn::parseTeqFile(t, S.market, S.spb, f)) for (const auto& kv : f) if (!S.teq.count(kv.first)) S.teq[kv.first] = kv.second; S.teqLoaded = true; }
         }
+        if (!S.crLoaded && !S.crPath.empty()) {                         // (1.7.0)
+            std::string t; long long sig = -1;
+            if (readCapped(S.crPath, 512 * 1024, t, sig)) { std::map<std::pair<long long, int>, turn::AbsCalc> f; if (sig >= 0 && turn::parseCrec(t, S.market, S.spb, f)) for (const auto& kv : f) if (!S.crC.count(kv.first)) S.crC[kv.first] = kv.second; S.crLoaded = true; }
+        }
+        if (S.crDirty && S.crLoaded) { if (!S.dirMade) { makeDir(ownDir()); S.dirMade = true; } if (publishFile(S.crPath, turn::crecText(S.crC, S.market, S.spb))) S.crDirty = false; }
         if (!S.absRecLoaded && !S.absRecPath.empty()) {
             std::string t; long long sig = -1;
             if (readCapped(S.absRecPath, 512 * 1024, t, sig)) { std::map<long long, turn::AbsCalc> a; std::map<long long, turn::NextCalc> n;
@@ -709,7 +715,8 @@ private:
             if (cs == S.closedSeen.end() || (now - cs->second < DECIDE_WAIT_MS && now >= cs->second)) continue;
             long long vol = -1; for (long i = count - 2; i >= 0 && i >= count - 40; --i) if ((long long)times[(int)i] == x.key) { vol = (long long)vols[(int)i]; break; }
             long long pct = -1; if (vol <= 0 || !covered(x, vol, pct)) continue;
-            S.teq[x.key] = turn::exqOf(x); S.teqDirty = true; }
+            S.teq[x.key] = turn::exqOf(x); S.teqDirty = true;
+            if (S.crLoaded) for (int dd : { 1, -1 }) { S.crC[std::make_pair(x.key, dd)] = turn::absCalc(S.live, x.key, dd); S.crDirty = true; } }   // (1.7.0) the compact read's numbers, both ends
         if (S.teqDirty && S.teqLoaded) { if (publishFile(S.teqPath, turn::teqFileText(S.teq, S.market, S.spb))) { ++S.teqWrites; S.teqDirty = false; } else ++S.teqFails; }
         // (1.5.0) the candle after each Abs: its attackers and book, decided once it closed
         for (const turn::AbsLine& a : S.abs) {
@@ -864,39 +871,40 @@ private:
         {
             const int iEnd = indexOf(atKey);
             if (iEnd >= 0) {
-                // (1.5.0) THE ABS READ: the newest Abs of lsRevRead in the last ARD_WIN closed candles up to the last one in view; none = quiet
-                const long long from = (long long)times[std::max(0, iEnd - turn::ARD_WIN + 1)];
-                const turn::AbsLine* ab = nullptr; for (size_t k = S.abs.size(); k-- > 0;) if (S.abs[k].t <= atKey && S.abs[k].t >= from) { ab = &S.abs[k]; break; }
+                // (1.7.0) THE COMPACT READ (Rassul 17:28-17:30 CT): the candle under the mouse (closed), else the last closed candle in view - who won at
+                // the end that was pushed, then Attack and Absorbed / Not absorbed (no Result, no Next); an Abs of lsRevRead on it names its level
+                const int hv0 = (S.hov >= v0 && S.hov <= v1 && (long long)times[S.hov] <= S.lastClosedKey) ? S.hov : -1;
+                const int ic = hv0 >= 0 ? hv0 : iEnd; const long long key = (long long)times[ic];
+                const turn::Abs up = absAt(ic, true), dn = absAt(ic, false);
+                const int dir = turn::pushedEnd(up.x1000, dn.x1000);
                 const int x0 = xLast + 16, wAv = R - 6 - x0, rh = 13, rows = (B - T - 2) / rh;
                 const auto tw = [&](const std::string& t) { return (int)getTextWidth(t.c_str(), -1); };
-                S.absShown = 0; S.readLines = 0;
-                if (!ab) { S.readVerdict = 0; S.readHead = "No Abs at a Bk level in the last hour"; S.readWhy.clear(); S.readWatch.clear();
-                    if (wAv >= 150 && rows >= 1) { setFont(f9); text(S.readHead, x0, T + 1, R - 2, T + 1 + rh, C_MUTED, false); S.readLines = 1; } }
+                S.absShown = 0; S.readLines = 0; turn::CText ct;
+                const std::string when = prefixText(std::string(), key, false, 0);
+                if (!dir) ct = turn::quietText(when, up.x1000, dn.x1000);
                 else {
-                    const int ia = indexOf(ab->t); double volr = -1, rngr = -1;
-                    if (ia > 20) { RTARRAYI vv(barVolume); RTARRAY hh(barHigh), ll(barLow);
-                        if (vv.count > ia && hh.count > ia && ll.count > ia) { double sv = 0, sr = 0; int n = 0;
-                            for (int k = ia - 1; k >= 0 && n < 20; --k) { const double v = (double)vv[k], r = (double)hh[k] - (double)ll[k]; if (!(v > 0) || !std::isfinite(r)) continue; sv += v; sr += r; ++n; }
-                            if (n >= 10 && sv > 0 && sr > 0) { volr = (double)vv[ia] / (sv / n); rngr = ((double)hh[ia] - (double)ll[ia]) / (sr / n); } } }
-                    const std::map<long long, turn::AbsCalc>::const_iterator sc = S.absC.find(ab->t); const turn::AbsCalc c = sc != S.absC.end() ? sc->second : turn::absCalc(S.live, ab->t, ab->dir);   // decided numbers first (a restart draws the same read)
-                    std::string nextWhen; turn::NextCalc nx; long long keyNext = 0;
-                    if (ia >= 0 && ia + 1 < (int)count) { keyNext = (long long)times[ia + 1]; if (keyNext <= S.lastClosedKey) { nextWhen = prefixText(std::string(), keyNext, false, 0); const std::map<long long, turn::NextCalc>::const_iterator sn = S.absN.find(ab->t); nx = sn != S.absN.end() ? sn->second : turn::nextCalc(S.live, ab->t, keyNext, ab->dir); } }
-                    const turn::AbsText at = turn::absText(*ab, c, nextWhen.empty() ? nullptr : &nx, prefixText(std::string(), ab->t, false, 0), nextWhen, volr, rngr, S.tick);
-                    S.readVerdict = ab->dir; S.readHead = at.title; S.readWhy.clear(); for (const auto& rw : at.rows) S.readWhy += rw.first + ": " + rw.second + " "; S.readWatch.clear(); S.absShown = 1;
-                    if (wAv >= 150 && rows >= 3) {
-                        int y = T + 1, used = 0; setFont(f9b);
-                        const std::vector<std::string> hl = turn::wrapRead(at.title, wAv, 1, tw);
-                        for (size_t q = 0; q < hl.size(); ++q, ++used, y += rh) text(hl[q], x0, y, R - 2, y + rh, ab->dir > 0 ? C_GREEN : C_RED, false);
-                        for (const auto& rw : at.rows) {
-                            if (used >= rows) break;
-                            const std::vector<std::string> wl = turn::wrapRead(rw.first + ": " + rw.second, wAv, std::max(1, std::min(3, rows - used)), tw);
-                            for (size_t q = 0; q < wl.size() && used < rows; ++q, ++used, y += rh) {
-                                if (q == 0) { setFont(f9b); const std::string lab = rw.first + ":"; text(lab, x0, y, x0 + tw(lab) + 2, y + rh, C_TEXT, false); setFont(f9);
-                                    const std::string rest = wl[q].size() > lab.size() + 1 ? wl[q].substr(lab.size() + 1) : std::string(); setFont(f9b); const int lw = tw(lab + " "); setFont(f9); text(rest, x0 + lw, y, R - 2, y + rh, C_TEXT, false); }
-                                else { setFont(f9); text(wl[q], x0, y, R - 2, y + rh, C_TEXT, false); } }
-                        }
-                        S.readLines = used;
+                    const turn::AbsLine* ab = nullptr; for (const turn::AbsLine& a : S.abs) if (a.t == key && a.dir == dir) { ab = &a; break; }
+                    turn::AbsCalc c; const std::map<long long, turn::AbsCalc>::const_iterator sa = ab ? S.absC.find(key) : S.absC.end();
+                    const std::map<std::pair<long long, int>, turn::AbsCalc>::const_iterator sc = S.crC.find(std::make_pair(key, dir));
+                    if (sa != S.absC.end()) c = sa->second; else if (sc != S.crC.end()) c = sc->second; else c = turn::absCalc(S.live, key, dir);   // decided numbers first (a restart draws the same read)
+                    const turn::Abs& e = dir > 0 ? dn : up;
+                    ct = turn::compactText(dir, e.x1000, e.away, c, when, ab ? ab->lv : std::string(), ab ? ab->lvPx : 0, S.tick);
+                    if (ab) S.absShown = 1;
+                }
+                S.readVerdict = ct.quiet ? 0 : ct.win; S.readHead = ct.title; S.readWhy.clear(); for (const auto& rw : ct.rows) S.readWhy += rw.first + ": " + rw.second + " "; S.readWatch.clear();
+                if (wAv >= 150 && rows >= 1) {
+                    int y = T + 1, used = 0; setFont(f9b);
+                    const std::vector<std::string> hl = turn::wrapRead(ct.title, wAv, 2, tw);
+                    for (size_t q = 0; q < hl.size() && used < rows; ++q, ++used, y += rh) text(hl[q], x0, y, R - 2, y + rh, ct.quiet ? C_MUTED : ct.win > 0 ? C_GREEN : C_RED, false);
+                    for (const auto& rw : ct.rows) {
+                        if (used >= rows) break;
+                        const std::vector<std::string> wl = turn::wrapRead(rw.first + ": " + rw.second, wAv, std::max(1, std::min(2, rows - used)), tw);
+                        for (size_t q = 0; q < wl.size() && used < rows; ++q, ++used, y += rh) {
+                            if (q == 0) { setFont(f9b); const std::string lab = rw.first + ":"; text(lab, x0, y, x0 + tw(lab) + 2, y + rh, C_TEXT, false);
+                                const std::string rest = wl[q].size() > lab.size() + 1 ? wl[q].substr(lab.size() + 1) : std::string(); const int lw = tw(lab + " "); setFont(f9); text(rest, x0 + lw, y, R - 2, y + rh, C_TEXT, false); }
+                            else { setFont(f9); text(wl[q], x0, y, R - 2, y + rh, C_TEXT, false); } }
                     }
+                    S.readLines = used;
                 }
             }
         }
@@ -1067,6 +1075,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.3 - Stop Run / Absorption / Exhaustion / Initiative. Absorption on every closed candle: the heaviest price at its high (up) and at its low (down) against the 20 candles before; red at a high / green at a low from 2.0 when the candle closed away from that end, grey otherwise. Top line: the last sweep's read, or the candle under the mouse.");
-    p->setVersion("1.6.0");
+    p->setVersion("1.7.0");
     return p;
 }
