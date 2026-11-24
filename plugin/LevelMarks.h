@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?" (HG 11:03 PM climax, drawn 11:12 PM when the 3-bar ZigZag confirmed the low), 23:20 "go" on the live Cx?): liveCx() below - the climax candle shows "Cx?" from its own close while it is still the low (high) of the running leg; the Cx itself is unchanged
+static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-24 08:33 CT "go for hourly pivots and 4h high and lows", 08:34 "absorption levels should match bk levels", 09:01 "go for bk with hourly pivots and 4 hour highs and lows"): Bk (and the Tst / FT / Rev that follow it) gains two level groups - the HOURLY PIVOTS (HpH / HpL: his 1-bar High / Low ZigZag on 1-hour bars, R1 R2 / S1 S2 as HtfSr.h walks the 3-hour ones, standing only) and the last completed 4-HOUR bar's high / low (4hH / 4hL, 4-hour bars from 5 PM CT). Both rank after every older level (4h 65, pivots 70) so no earlier mark changes its name, and a Bk made only by them never takes a candle from a Cx, need the hour levels' rule (the Bk candle's volume the biggest in 5+) and never make or name a Sw, Cx or I (Sw stays major-only)
+// was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?" (HG 11:03 PM climax, drawn 11:12 PM when the 3-bar ZigZag confirmed the low), 23:20 "go" on the live Cx?): liveCx() below - the climax candle shows "Cx?" from its own close while it is still the low (high) of the running leg; the Cx itself is unchanged
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?" - GC 5:51 PM, the pivot low on 324 lots, the biggest in 35 candles: the Cx look-back counted only the session's own candles, so no Cx could come in the first hour after 5:00 PM; 20:16 "go"): the Cx's "biggest volume in 20+" reaches into the candles BEFORE the session (run() preV = their volumes, oldest first), as the Volume pane's BVMax does. Nothing else changes
 // was VERSION = "1.14.0";   // (1.14.0, Rassul 2026-11-23 14:00-14:18 CT "for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level etc", "no the 3h is  the S1 S2 R1 R2  levels", "no the bk and tst can also include hourly", "ok so you are just adding to bk right ?", "and for SW you are limiting to major levels right", "for the AR badge ,   if the Green bar is bigger than the ATR and its high is above the cmx bar with the hevy volume , it is also valid AR", "build") (a) + the 3-HOUR S / R (R1 R2 S1 S2 of HtfSr.h, the lines lsHtfSR draws) as levels of every mark: the host hands run() the levels standing before each candle (H3); (b) a Sw is kept only when the level it is LABELLED with is MAJOR (swMajor: session ON / London / Asia, PD, PF, weekly, the 3h S / R) - the hour highs / lows, the pre-open hour (PhrH / PhrL) and VAH / VAL no longer name a Sw; what makes a sweep (a level nobody traded through, the close back, colour, strength 20+, no opening / release candle) is unchanged; Bk / Tst / Cx keep every level they had and gain the 3h S / R; (c) the AR's second way in: range > ATR(13) of the candle before AND beyond the Cx candle's extreme (AR_ATR) - see THE AR
 // was VERSION = "1.13.0";   // (1.13.0, Rassul 2026-11-23 09:25 CT "i want you to implement the AR which is an automatic rally bar that occurs after a cx . so if there is a climax, and there is a bar that has its low below the pivot high and is within 3 bars of the pivot and has a BRMax of at least 10. so if the cx was in a downwave , the ARbar would have to be green", 09:26 "the AR bar should also have a strength line", "here is a decent example" (NQ 11-23 6:51 AM, the green candle after the 6:48 pivot low; Cx 6:45), 09:34 "go"; mockup ar-mockup.html): the AR - arCands() / arPick() below; Bk / Sw / Cx / FT / Tst / Rev untouched
@@ -109,6 +110,8 @@ inline int pri(const std::string& n, int hb) {
     for (const char* x : S4) if (n == x) return 40;
     for (const char* x : S6) if (n == x) return 45;
     for (const char* x : S5) if (n == x) return 50;
+    if (n == "4hH" || n == "4hL") return 65;   // (1.17.0) the 4-hour bar high / low: after every older level (the hour levels 50 / 60 keep their names)
+    if (n == "HpH" || n == "HpL") return 70;   // (1.17.0) the hourly pivots: ranked last
     if (n.find('/') != std::string::npos) return priParts(n);   // (1.9.0) a combined name not listed above
     return -1;
 }
@@ -122,9 +125,57 @@ inline std::string shortName(const std::string& n, int hb, bool high) {
     return n;
 }
 
-struct Lv { long long px = 0; std::string name; int from = 0; int hb = 0; bool high = false; };
+struct Lv { long long px = 0; std::string name; int from = 0; int hb = 0; bool high = false; bool bkOnly = false; };   // (1.17.0) bkOnly = an hourly pivot / 4-hour level: Bk only
 // (1.14.0) the 3-hour S / R standing BEFORE a candle trades (ticks; 0 = none / broken): one per candle of B, from the host's HtfSr walk
-struct H3 { long long r1 = 0, r2 = 0, s1 = 0, s2 = 0; bool has(long long px) const { return px > 0 && (px == r1 || px == r2 || px == s1 || px == s2); } };
+struct H3 { long long r1 = 0, r2 = 0, s1 = 0, s2 = 0; bool has(long long px) const { return px > 0 && (px == r1 || px == r2 || px == s1 || px == s2); }
+    // (1.17.0) the hourly pivots (standing) and the last completed 4-hour bar's high / low, before the candle (ticks; 0 = none)
+    long long hr1 = 0, hr2 = 0, hs1 = 0, hs2 = 0, h4h = 0, h4l = 0;
+    bool hasHp(long long px) const { return px > 0 && (px == hr1 || px == hr2 || px == hs1 || px == hs2); }
+    bool has4(long long px) const { return px > 0 && (px == h4h || px == h4l); } };
+// (1.17.0) THE HOURLY PIVOTS and THE 4-HOUR HIGH / LOW, walked by the host over the chart's candles (any bar size dividing the block):
+//   PivWalk = HtfSr.h's hsr::Walk with the block size as a parameter (1 hour, blocks on the clock hour): his 1-bar High / Low ZigZag, the
+//   forming block counts, R1 = the last confirmed pivot high, R2 = the higher of the last two, S1 / S2 the same for lows, standing = no
+//   COMPLETED block since the pivot has closed beyond it. Blk4 = the high / low of the last COMPLETED 4-hour block (17-21, 21-01, 01-05,
+//   05-09, 09-13, 13-17 CT). t = the candle END, local seconds of an epoch that starts on a local midnight (IRT's own times).
+struct PivSnap { long long r1 = 0, r2 = 0, s1 = 0, s2 = 0; };
+struct PivWalk {
+    long long secs = 3600, off = 0; struct HB { long long k = 0; long long h = 0, l = 0, c = 0; };
+    std::vector<HB> H; int d = 0, ext = 0; std::vector<std::pair<int, int> > piv;
+    static long long fdiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
+    static void step(const std::vector<HB>& V, int i, int& d, int& ext, std::vector<std::pair<int, int> >& out) {
+        if (i < 1 || i >= (int)V.size()) return;
+        if (d == 0) { d = V[1].h >= V[0].h ? 1 : -1; ext = 0; }
+        const HB& b = V[(size_t)i]; const HB& p = V[(size_t)i - 1];
+        if (d == 1) { if (b.h > V[(size_t)ext].h) ext = i; else if (b.l < p.l && i != ext) { out.push_back(std::make_pair(ext, 1)); ext = i; d = -1; } }
+        else        { if (b.l < V[(size_t)ext].l) ext = i; else if (b.h > p.h && i != ext) { out.push_back(std::make_pair(ext, -1)); ext = i; d = 1; } } }
+    PivSnap add(long long t, long long perSec, long long h, long long l, long long c) {
+        PivSnap o; if (perSec <= 0 || perSec > secs || secs % perSec != 0 || h < l) return o;
+        const long long k = fdiv(t - perSec - off, secs);
+        if (H.empty() || k != H.back().k) { if (!H.empty()) step(H, (int)H.size() - 1, d, ext, piv); HB n; n.k = k; n.h = h; n.l = l; n.c = c; H.push_back(n); }
+        else { HB& n = H.back(); n.h = std::max(n.h, h); n.l = std::min(n.l, l); n.c = c; }
+        const int last = (int)H.size() - 1; int d2 = d, e2 = ext; std::vector<std::pair<int, int> > extra; step(H, last, d2, e2, extra);
+        if (d2 == 0) return o;
+        int hi[2] = { -1, -1 }, lo[2] = { -1, -1 }, nh = 0, nl = 0;
+        auto take = [&](const std::pair<int, int>& q) { if (q.second > 0) { if (nh < 2) hi[nh++] = q.first; } else { if (nl < 2) lo[nl++] = q.first; } };
+        for (size_t q = extra.size(); q-- > 0;) take(extra[q]);
+        for (size_t q = piv.size(); q-- > 0 && (nh < 2 || nl < 2);) take(piv[q]);
+        auto stand = [&](int pb, long long L, int sd) { for (int q = pb + 1; q < last; ++q) if (sd > 0 ? H[(size_t)q].c > L : H[(size_t)q].c < L) return false; return true; };
+        if (nh >= 1) { const long long r1 = H[(size_t)hi[0]].h; int b2 = hi[0]; if (nh >= 2 && H[(size_t)hi[1]].h > r1) b2 = hi[1];
+            if (stand(hi[0], r1, 1)) { o.r1 = r1; }
+            const long long r2 = H[(size_t)b2].h; if (r2 != r1 && stand(b2, r2, 1)) o.r2 = r2; }
+        if (nl >= 1) { const long long s1 = H[(size_t)lo[0]].l; int b2 = lo[0]; if (nl >= 2 && H[(size_t)lo[1]].l < s1) b2 = lo[1];
+            if (stand(lo[0], s1, -1)) { o.s1 = s1; }
+            const long long s2 = H[(size_t)b2].l; if (s2 != s1 && stand(b2, s2, -1)) o.s2 = s2; }
+        return o; } };
+struct Blk4 {
+    long long k = 0, h = 0, l = 0, ph = 0, pl = 0; bool any = false;   // the forming block and the last completed one
+    // returns the last COMPLETED block's high / low as it stands BEFORE this candle, then takes the candle in
+    std::pair<long long, long long> add(long long t, long long perSec, long long hi, long long lo) {
+        const long long kk = PivWalk::fdiv(t - perSec - 3600, 14400);
+        if (any && kk != k) { ph = h; pl = l; any = false; }
+        const std::pair<long long, long long> before(ph, pl);
+        if (!any) { k = kk; h = hi; l = lo; any = true; } else { h = std::max(h, hi); l = std::min(l, lo); }
+        return before; } };
 // (1.14.0, "for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level") the levels that may NAME a Sw:
 // session (0), prior day (10), prior full session (20), weekly (40), the 3h S / R (45). Not VAH / VAL (30), not the pre-open hour (50), no hour level.
 inline bool swMajor(const std::string& name, int hb) { if (hb != 0) return false; const int p = pri(name, 0); return p == 0 || p == 10 || p == 20 || p == 40 || p == 45; }
@@ -152,6 +203,16 @@ inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std
             if (dup) continue;
             int from = i; while (from > 0 && (*h3)[(size_t)from - 1].has(px[s2])) --from;
             Lv a; a.px = px[s2]; a.name = nm[s2]; a.from = from; a.hb = 0; a.high = s2 < 2; v.push_back(a); } }
+    // (1.17.0) the hourly pivots and the 4-hour high / low before candle i: Bk only (never a Sw / Cx / I level)
+    if (h3 && i > 0 && (size_t)i < h3->size() && h3->size() == B.size()) {
+        const H3& q = (*h3)[(size_t)i];
+        const long long hp[4] = { q.hr1, q.hr2, q.hs1, q.hs2 };
+        for (int s2 = 0; s2 < 4; ++s2) { if (hp[s2] <= 0) continue; bool dup = false; for (int u = 0; u < s2; ++u) if (hp[u] == hp[s2]) dup = true; if (dup) continue;
+            int from = i; while (from > 0 && (*h3)[(size_t)from - 1].hasHp(hp[s2])) --from;
+            Lv a; a.px = hp[s2]; a.name = s2 < 2 ? "HpH" : "HpL"; a.from = from; a.high = s2 < 2; a.bkOnly = true; v.push_back(a); }
+        const long long f4[2] = { q.h4h, q.h4l };
+        for (int s2 = 0; s2 < 2; ++s2) { if (f4[s2] <= 0) continue; int from = i; while (from > 0 && (*h3)[(size_t)from - 1].has4(f4[s2])) --from;
+            Lv a; a.px = f4[s2]; a.name = s2 == 0 ? "4hH" : "4hL"; a.from = from; a.high = s2 == 0; a.bkOnly = true; v.push_back(a); } }
     if (B.empty() || i <= 0) return v;
     const long long hp = wyr::hourOf(B[(size_t)i].t), h0 = wyr::hourOf(B[0].t);
     for (long long hh = hp - 1; hh >= hp - 3; --hh) {
@@ -165,7 +226,7 @@ inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std
     return v;
 }
 
-struct Cand { long long px = 0; std::string name; int hb = 0; bool high = false; };
+struct Cand { long long px = 0; std::string name; int hb = 0; bool high = false; bool bkOnly = false; };
 // the one level a mark shows: the best priority among its candidates (ties: the first given); none labels -> empty
 inline bool pick(const std::vector<Cand>& c, Cand& out) {
     int best = 1 << 30; bool ok = false;
@@ -202,6 +263,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
       for (int f = 5; f < n; ++f) {
         const std::vector<Lv> L = levelsAt(B, f, key, h3);
         for (const Lv& z : L) {
+            if (z.bkOnly) continue;   // (1.17.0) Sw: major levels only, never the hourly pivots / 4-hour levels
             const std::pair<long long, std::string> id(z.px, z.name); if (done.count(id)) continue;
             if (B[(size_t)f - 1].c == z.px) continue;   // (1.10.1) the close before sits ON the level: no side, so no sweep from it
             const bool sup = B[(size_t)f - 1].c > z.px;
@@ -231,7 +293,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     // (1.10.0) a Sw's label may be any KEY level its mark candle crossed (wick through it, close back on the other side), touched earlier or not:
     // the untouched level (often an hour high / low) decides THAT it is a sweep, the key level it crossed names it
     for (auto& kv : raw) { if (kv.second.first != 'S') continue; const int i = kv.first; const int d = rawDir[i]; const wyr::Bar& b = B[(size_t)i];
-        for (const Lv& z : levelsAt(B, i, key, h3)) { if (z.hb != 0 || pri(z.name, 0) < 0) continue;
+        for (const Lv& z : levelsAt(B, i, key, h3)) { if (z.hb != 0 || z.bkOnly || pri(z.name, 0) < 0) continue;
             const int a0 = rawA.count(i) ? rawA[i] : i; const long long pc = a0 > 0 ? B[(size_t)a0 - 1].c : b.o;   // the close before the attempt: still on the level's original side
             const bool crossed = d > 0 ? (pc > z.px && b.l < z.px && b.c > z.px) : (pc < z.px && b.h > z.px && b.c < z.px); if (!crossed) continue;
             bool have = false; for (const Cand& x : kv.second.second) if (x.px == z.px && x.name == z.name) have = true;
@@ -241,6 +303,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     for (auto it = raw.begin(); it != raw.end(); ) { bool mj = false; if (it->second.first == 'S') { for (const Cand& z : it->second.second) if (swMajor(z.name, z.hb)) mj = true; }
         if (it->second.first == 'S' && !mj) { rawDir.erase(it->first); rawA.erase(it->first); it = raw.erase(it); } else ++it; }
     // Bk: closes through a level
+    std::set<int> weakBk;   // (1.17.0) a Bk crossed ONLY hourly pivots / 4-hour levels: a Cx may still take its candle
     for (int i = 5; i < n; ++i) {
         const bool big = v[(size_t)i] >= maxV(i - 5, i);
         { const long long r0 = B[(size_t)i].h - B[(size_t)i].l, r1 = B[(size_t)i - 1].h - B[(size_t)i - 1].l;   // (1.3.0, 16:32 "implement the range rule for breaks also and the either rule") the BO candle rule
@@ -249,15 +312,17 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
         for (const Lv& z : levelsAt(B, i, key, h3)) {
             const long long pc = B[(size_t)i - 1].c, c = B[(size_t)i].c;
             if (!((pc > z.px && c < z.px) || (pc < z.px && c > z.px))) continue;
-            if (z.hb > 0 && !big) continue;
+            if ((z.hb > 0 || z.bkOnly) && !big) continue;   // (1.17.0) the hourly pivots / 4-hour levels: the hour levels' volume rule
             bool chop = false; for (int k = std::max(1, i - 10); k < i; ++k) if ((B[(size_t)k - 1].c > z.px) != (B[(size_t)k].c > z.px)) { chop = true; break; }
             if (chop) continue;
-            Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; crossed.push_back(std::make_pair(std::llabs(z.px - pc), cd));
+            Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; cd.bkOnly = z.bkOnly; crossed.push_back(std::make_pair(std::llabs(z.px - pc), cd));
         }
         if (crossed.empty() || raw.count(i)) continue;
         std::stable_sort(crossed.begin(), crossed.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first > b.first; });
         std::vector<Cand> cs; for (const auto& x : crossed) { bool dup = false; for (const Cand& y : cs) if (y.name == x.second.name) dup = true; if (!dup) cs.push_back(x.second); }
+        std::stable_partition(cs.begin(), cs.end(), [](const Cand& c) { return !c.bkOnly; });   // (1.17.0) the older levels first, so the cap of 4 never drops one for a new level
         if (cs.size() > 4) cs.resize(4);
+        { bool weak = true; for (const Cand& c : cs) if (!c.bkOnly) weak = false; if (weak) weakBk.insert(i); }
         raw[i] = std::make_pair('B', cs); rawDir[i] = B[(size_t)i].c < B[(size_t)i - 1].c ? -1 : 1;
     }
     // Cx: pivots confirmed (ZigZag leg starts), the pivot candle or the one before, biggest volume in 20+
@@ -267,12 +332,12 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
       for (const auto& p : piv) { const int k = p.first, side = p.second;
         for (int kk : { k, k - 1 }) {
             // (1.15.0) the 20 candles before kk: the session's own, then the ones before the session (preV)
-            const int pn = preV ? (int)preV->size() : 0; if (kk < 0 || kk + pn < 20 || raw.count(kk)) continue;
+            const int pn = preV ? (int)preV->size() : 0; if (kk < 0 || kk + pn < 20 || (raw.count(kk) && !weakBk.count(kk))) continue;   /* (1.17.0) a weak Bk (new levels only) gives way to the Cx */
             double mb = maxV(kk - 20, kk); for (int j = kk - 20; j < 0; ++j) { const int q = pn + j; if (q >= 0) mb = std::max(mb, (*preV)[(size_t)q]); }
             if (v[(size_t)kk] < mb) continue;
             const long long ext = side > 0 ? B[(size_t)k].l : B[(size_t)k].h;
             std::vector<std::pair<long long, Cand> > in;
-            for (const Lv& z : levelsAt(B, kk, key, h3)) if (B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), cd)); }
+            for (const Lv& z : levelsAt(B, kk, key, h3)) if (!z.bkOnly && B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), cd)); }
             std::stable_sort(in.begin(), in.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first < b.first; });
             std::vector<Cand> cs; for (size_t q = 0; q < in.size() && q < 4; ++q) cs.push_back(in[q].second);
             raw[kk] = std::make_pair('C', cs); rawDir[kk] = side; break; } } }
