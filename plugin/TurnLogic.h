@@ -69,7 +69,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) THE ABS READ: the order feed now keeps the book per price (added / pulled / most showing / refills) and the biggest single order a side; the read right of the last candle = the newest Abs of lsRevRead (Attack / Absorbed / Result / Ex or Next); RevRead\\turnabs-<MKT>-<spb>.txt = the P and Ex? of each Abs for the price-chart badge
+static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): RevRead\\turnexq-<MKT>-<spb>.txt = the sellers' / buyers' Ex? (last minute <= 0.5x the first 2 minutes' pace) of EVERY closed candle this pane saw whole - the E of the Tst badge's line 3 (lsRevReadMarks 0.28.0); nothing drawn changed
+// was static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) THE ABS READ: the order feed now keeps the book per price (added / pulled / most showing / refills) and the biggest single order a side; the read right of the last candle = the newest Abs of lsRevRead (Attack / Absorbed / Result / Ex or Next); RevRead\\turnabs-<MKT>-<spb>.txt = the P and Ex? of each Abs for the price-chart badge
 // was static const char* const VERSION = "1.4.2";   // (1.4.2, Rassul 2026-11-24 11:21 CT "first color the bars differently , top should be green and bottom should be red") host only: the Absorption bars in the attackers' colour (top green, bottom red)
 // was static const char* const VERSION = "1.4.1";   // (1.4.1, 2026-11-23 22:40 "fix everything") the top line shows a sweep of the current Globex session only (sessionOf); before, the newest sweep of an earlier session stayed there all evening
 // was static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-23 20:47 CT "build the read to the right llike you do for all the other indicators", 20:48 "i need something more specific because i already have the ratios on the bars", 20:52 "what else can you add that would be a bullish or bearish indication or telling me about direciton", 20:53 "lets go with this"): THE ABSORPTION READ right of the last candle - absRead() below: the direction from where price stands against the absorbed prices that still hold (or the one that just failed), the price, the lots, held / tested, rising lows / falling highs, and what to watch
@@ -1091,6 +1092,27 @@ inline bool parseTabFile(const std::string& txt, const std::string& mkt, int spb
     for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|'); long long t = 0, d = 0, p = 0;
         if (c.size() != 5 || !toLL(c[0], t) || t <= 0 || !toLL(c[1], d) || (d != 1 && d != -1) || !toLL(c[2], p) || p < -1 || p > 100000 || (c[3] != "0" && c[3] != "1") || (c[4] != "0" && c[4] != "1")) continue;
         TabRec r; r.dir = (int)d; r.p = (int)p; r.plus = c[3] == "1"; r.exq = c[4] == "1"; out[t] = r; }
+    return true;
+}
+
+// (1.6.0) THE EX? OF EVERY CANDLE for the Tst badge's 3rd line (LevelMarks 1.19.0 tstL3, lsRevReadMarks 0.28.0): the attackers' last minute fell to
+// 0.5x or less of their first 2 minutes' pace = late x 4 <= early (the same rule as the Abs badge's Ex?, research TST-REVERSE: E with or without
+// absorption). One line per closed candle this pane read whole: "stamp|sellers|buyers" (1 = Ex?, 0 = not); a candle it did not see whole has no
+// line (the Tst then decides E from the next candle only). Header "TEQ|1|<MKT>|<spb>|<ver>"; the newest HIST_P candles are kept.
+inline std::pair<int, int> exqOf(const Sum& s) {
+    return std::make_pair(s.early[0] > 0 && s.late[0] * 4 <= s.early[0] ? 1 : 0, s.early[1] > 0 && s.late[1] * 4 <= s.early[1] ? 1 : 0); }
+inline std::string teqFileText(const std::map<long long, std::pair<int, int> >& m, const std::string& mkt, int spb) {
+    std::string t = "TEQ|1|" + mkt + "|" + std::to_string(spb) + "|" + VERSION + "\n"; size_t skip = m.size() > HIST_P ? m.size() - HIST_P : 0;
+    for (std::map<long long, std::pair<int, int> >::const_iterator it = m.begin(); it != m.end(); ++it) { if (skip) { --skip; continue; }
+        t += std::to_string(it->first) + "|" + std::to_string(it->second.first) + "|" + std::to_string(it->second.second) + "\n"; }
+    return t;
+}
+inline bool parseTeqFile(const std::string& txt, const std::string& mkt, int spb, std::map<long long, std::pair<int, int> >& out) {
+    out.clear(); const std::vector<std::string> L = lines(txt, true); if (L.empty()) return false;
+    const std::vector<std::string> h = split(L[0], '|'); long long s = 0; if (h.size() < 4 || h[0] != "TEQ" || h[1] != "1" || h[2] != mkt || !toLL(h[3], s) || s != spb) return false;
+    for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|'); long long t = 0;
+        if (c.size() != 3 || !toLL(c[0], t) || t <= 0 || (c[1] != "0" && c[1] != "1") || (c[2] != "0" && c[2] != "1")) continue;
+        out[t] = std::make_pair(c[1] == "1" ? 1 : 0, c[2] == "1" ? 1 : 0); }
     return true;
 }
 inline const char* verdictText(int v, bool bestProven) {

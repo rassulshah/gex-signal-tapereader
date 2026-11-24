@@ -42,12 +42,13 @@ int main() {
     // a touch earlier in the day uses the level up (the first test only)
     { std::vector<wyr::Bar> C = B; C[30] = bar(T(7, 30), 1000, 1005, 992, 1003, 50, 50); const auto m = lvm::absMarks(C, key, "GC");   // ALO is used up; the same price is now the 7 AM hour low - a new level by name (the research keyed tests by name)
       CHECK(m.size() == 1 && m.begin()->second.lv == "1hL"); }
-    // the overlay: the Abs / Ex lines parse, the Turn file adds Ex? and P (left off under P5)
+    // the overlay: the Abs / Ex lines parse, the Turn file adds Ex? and P (WyMarks 2.8.0: always shown once known; -1 = not known = blank)
     { std::map<long long, std::vector<wyi::M> > m; const int n = wyi::parseAll("WY|1|GC|180|0.27.0\n100|Abs|1|Low 17%|992|ALO\n280|Ex|1\n", m);
       CHECK(n == 2 && m[100].size() == 1 && m[100][0].code == 'Q' && m[100][0].lv == "Low 17%" && m[100][0].st == "ALO" && m[280][0].code == 'E');
       CHECK(wyi::sideOf(m[100][0]) == -1 && wyi::sideOf(m[280][0]) == -1);
       std::map<long long, wyi::TurnAbs> ta; CHECK(wyi::parseTurnAbs("TAB|1|GC|180|1.5.0\n100|1|29|0|0\n200|-1|3|1|1\n300|-1|12|1|1\n", "GC", ta) && ta.size() == 3);
-      CHECK(wyi::absLine1(&ta[100]) == "Abs" && wyi::absLine3(&ta[100]) == "P29"); CHECK(wyi::absLine1(&ta[200]) == "Abs/Ex?" && wyi::absLine3(&ta[200]).empty());
+      CHECK(wyi::absLine1(&ta[100]) == "Abs" && wyi::absLine3(&ta[100]) == "P29"); CHECK(wyi::absLine1(&ta[200]) == "Abs/Ex?" && wyi::absLine3(&ta[200]) == "P3+");
+      { wyi::TurnAbs z0; z0.p = 0; wyi::TurnAbs zu; zu.p = -1; CHECK(wyi::absLine3(&z0) == "P0" && wyi::absLine3(&zu).empty()); }
       CHECK(wyi::absLine3(&ta[300]) == "P12+" && wyi::absLine1(nullptr) == "Abs" && wyi::absLine3(nullptr).empty());
       CHECK(!wyi::parseTurnAbs("TAB|1|ES|180|x\n", "GC", ta)); }
     std::printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;

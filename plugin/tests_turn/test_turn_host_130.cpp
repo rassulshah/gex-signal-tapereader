@@ -146,8 +146,15 @@ int main() {
         CHECK(ab.find("ABS|1 Abs lines in the wy file|1 decided") == 0 && ab.find("read shows an Abs 1") != std::string::npos);
         CHECK(rd.find("READ|bullish|") == 0 && rd.find("Bullish ? - absorbed at ONL 7105.00") != std::string::npos && rd.find("Attack: Sellers hit ") != std::string::npos && rd.find("no order feed") == std::string::npos);
         CHECK(rd.find("Absorbed: Bids showing up to ") != std::string::npos && rd.find("Result: Volume ") != std::string::npos && rd.find("last minute sellers ") != std::string::npos && rd.find("Ex: ") != std::string::npos);
-        CHECK(tb.compare(0, 13, "TAB|1|ES|180|") == 0 && tb.find("\n" + std::to_string(KA) + "|1|") != std::string::npos && tb.find("\n" + std::to_string(KA) + "|1|-1|") == std::string::npos); }
-    CHECK(st.find("VERSION|1.5.0") != std::string::npos && std::string(TURN_VERSION) == "1.5.0" && std::string(turn::VERSION) == "1.5.0");
+        CHECK(tb.compare(0, 13, "TAB|1|ES|180|") == 0 && tb.find("\n" + std::to_string(KA) + "|1|") != std::string::npos && tb.find("\n" + std::to_string(KA) + "|1|-1|") == std::string::npos);
+        // (1.6.0) every candle's Ex?: the turnexq file has the Abs candle, and its sellers' flag = the badge's Ex? (the same rule, the same candle)
+        const std::string te = get(P("RevRead\\turnexq-ES-180.txt")); const std::string te1 = lineOf(st, "TEQ|"); std::cout << "(1.6.0) " << te1 << "\n";
+        CHECK(te.compare(0, 13, "TEQ|1|ES|180|") == 0 && std::count(te.begin(), te.end(), '\n') >= 10 && te1.find("fails 0") != std::string::npos);
+        { const size_t a = tb.find("\n" + std::to_string(KA) + "|1|"); const size_t b = te.find("\n" + std::to_string(KA) + "|"); CHECK(a != std::string::npos && b != std::string::npos);
+          if (a != std::string::npos && b != std::string::npos) { const std::string la = tb.substr(a + 1, tb.find('\n', a + 1) - a - 1), lb = te.substr(b + 1, te.find('\n', b + 1) - b - 1);
+            std::cout << "(1.6.0) abs " << la << " / exq " << lb << "\n"; CHECK(la.substr(la.size() - 1) == lb.substr(lb.find('|') + 1, 1)); } }
+        std::map<long long, std::pair<int, int> > tq; CHECK(turn::parseTeqFile(te, "ES", 180, tq) && !tq.empty() && !turn::parseTeqFile(te, "NQ", 180, tq)); }
+    CHECK(st.find("VERSION|1.6.0") != std::string::npos && std::string(TURN_VERSION) == "1.6.0" && std::string(turn::VERSION) == "1.6.0");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----

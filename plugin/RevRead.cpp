@@ -109,7 +109,8 @@ static const bool RV_DRAW_BOOKFLOW = true;   // (0.21.5, Rassul 13:15 CT "lets g
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.27.0"   // (0.27.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) LevelMarks 1.18.0 / WyMarks 2.7.0 / RevReadLogic 0.16.0: the Abs badge - effort without result at the first test of a Bk level (Abs / Low 21% or Top 21% / P16 from lsTurn), "Abs/Ex?" when lsTurn saw the attackers' last minute fade, and the next candle's "Ex" (attackers 0.5x or less, closed further away); written "stamp|Abs|..." / "stamp|Ex|dir" in wy-<MKT>-<spb>.txt
+#define RVS_VERSION "0.28.0"   // (0.28.0, Rassul 2026-11-24 12:21 CT "use the third line which currently has the percentage .. show mockup", 12:51 "2. do the test", "3. yes"; tst-line3-mockup.html) LevelMarks 1.19.0 / WyMarks 2.8.0 / WyRead 1.11.0 / RevReadLogic 0.17.0 / lsTurn 1.6.0: the Tst badge's 3rd line = A+E / E / A! / blank (absorption and exhaustion at the Tst pivot) instead of the retrace %, decided once and kept in RevRead\\tstl3-<MKT>-<spb>.txt; the Abs badge's P line always shown once known
+// was #define RVS_VERSION "0.27.0"   // (0.27.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) LevelMarks 1.18.0 / WyMarks 2.7.0 / RevReadLogic 0.16.0: the Abs badge - effort without result at the first test of a Bk level (Abs / Low 21% or Top 21% / P16 from lsTurn), "Abs/Ex?" when lsTurn saw the attackers' last minute fade, and the next candle's "Ex" (attackers 0.5x or less, closed further away); written "stamp|Abs|..." / "stamp|Ex|dir" in wy-<MKT>-<spb>.txt
 // was #define RVS_VERSION "0.26.0"   // (0.26.0, Rassul 2026-11-24 08:33-09:01 CT "go for hourly pivots and 4h high and lows", "go for bk with hourly pivots and 4 hour highs and lows") LevelMarks 1.17.0: the pane also walks the HOURLY PIVOTS (1-hour 1-bar High / Low ZigZag, standing R1 R2 S1 S2) and the last completed 4-HOUR bar's high / low over the chart's closed candles and hands them to the Bk (HpH / HpL / 4hH / 4hL, Bk only, biggest volume in 5+); Sw / Cx / I unchanged
 // was #define RVS_VERSION "0.25.0"   // (0.25.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?", 23:20 "go") LevelMarks 1.16.0 liveCx: the climax candle shows "Cx?" from its own close while it is the extreme of the running leg (RevRead\\wylive-<MKT>-<spb>.txt, drawn by lsRevReadMarks); the Cx is unchanged
 // was #define RVS_VERSION "0.24.1"   // (0.24.1, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?", 20:16 "go") LevelMarks 1.15.0: the Cx look-back reaches into the 20 candles before the session (run() preV)
@@ -121,7 +122,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.27.0");
+    p->setVersion("0.28.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -298,7 +299,7 @@ public:
         long long wySig = -1; wyr::Out wy; int wyBars = 0;
         wyr::Out wyMore; std::map<long long, std::vector<wyr::SMk> > wyBC;   // (0.21.0) T / P / X of the session (WyRead 1.8.0 more(); drawn per showMore) and the B / C strip letters (the Bk / Cx candle marks)
         std::pair<long long, int> cxLive = std::make_pair(0LL, 0);   // (0.25.0) the live Cx? of the running leg (LevelMarks liveCx): stamp, side
-        std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::vector<lvm::SMark> > lvSeq; std::map<long long, lvm::AbsMk> absMk;   /* (0.27.0) the Abs badges (LevelMarks absMarks) */   /* (0.20.0) FT / Tst / Rev after a Bk */ std::map<long long, std::pair<std::string, long long> > iLv; std::map<long long, std::string> iSt; std::map<long long, int> iSw;   /* (0.21.2) the I's under a Sw (stamp -> dir): written flagged, not drawn */   /* (0.19.2) the I's strength */ std::vector<std::pair<long long, std::string> > lvKey;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
+        std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::vector<lvm::SMark> > lvSeq; std::map<long long, lvm::AbsMk> absMk;   /* (0.27.0) the Abs badges (LevelMarks absMarks) */ std::map<long long, std::pair<int, int> > teq; std::string teqSig; std::map<long long, std::string> tl3; bool tl3Loaded = false, tl3Dirty = false; std::string tl3Path;   /* (0.28.0) lsTurn's Ex? per candle + the Tst line-3 decisions */   /* (0.20.0) FT / Tst / Rev after a Bk */ std::map<long long, std::pair<std::string, long long> > iLv; std::map<long long, std::string> iSt; std::map<long long, int> iSw;   /* (0.21.2) the I's under a Sw (stamp -> dir): written flagged, not drawn */   /* (0.19.2) the I's strength */ std::vector<std::pair<long long, std::string> > lvKey;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
         // (0.7.0) the six checks
         rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
         int pvDir = 0; long long pvTp = 0, pvExt = 0, pvW = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000; long long mPostMs = -100000; int mPosts = 0;   // (0.14.0) fact M: the forming candle's market orders
@@ -707,11 +708,23 @@ public:
                     auto sessName = [&](int i) -> std::string { struct tm t; std::memset(&t, 0, sizeof t); if (!getLocaltime((RTDATE)times[i], &t)) return std::string();
                         if (t.tm_hour >= 17) { t.tm_mday += 1; t.tm_hour = 12; t.tm_isdst = -1; if (std::mktime(&t) == (time_t)-1) return std::string(); }
                         char b[16]; if (std::strftime(b, sizeof b, "%Y%m%d", &t) != 8) return std::string(); return std::string(b); };
+                    {   // (0.28.0) lsTurn 1.6.0's Ex? of every candle it read whole, and the Tst line-3 decisions made before (kept for good: no repaint)
+                        const std::string fx = rvh::flexDir(), mx = !e.mkt.empty() ? e.mkt : rvh::marketOf(S.market);
+                        auto rd = [](const std::string& path, size_t cap, std::string& out, std::string* sg) -> int { struct stat st; if (stat(path.c_str(), &st) != 0) return 0; if ((size_t)st.st_size > cap) return -1;
+                            const std::string z = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sg && *sg == z) return 2;
+                            std::ifstream f(path.c_str(), std::ios::binary); if (!f) return -1; out.assign((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>()); if (sg) *sg = z; return 1; };
+                        if (!fx.empty() && !mx.empty() && S.spb > 0) {
+                            const std::string base = rvh::recDir(fx), sp = std::to_string((long long)S.spb);
+                            std::string t; const int r1 = rd(base + "\\turnexq-" + mx + "-" + sp + ".txt", 262144, t, &e.teqSig);
+                            if (r1 == 1) { std::map<long long, std::pair<int, int> > m; if (wyi::parseTeq(t, mx, (long long)S.spb, m)) e.teq.swap(m); } else if (r1 == 0) { e.teq.clear(); e.teqSig.clear(); }
+                            const std::string p3 = base + "\\tstl3-" + mx + "-" + sp + ".txt"; if (p3 != e.tl3Path) { e.tl3Path = p3; e.tl3.clear(); e.tl3Loaded = false; e.tl3Dirty = false; }
+                            if (!e.tl3Loaded) { std::string u; const int r3 = rd(p3, 262144, u, nullptr); std::map<long long, std::string> m;
+                                if (r3 == 0) e.tl3Loaded = true; else if (r3 == 1) { if (wyi::parseTl3(u, mx, (long long)S.spb, m)) for (const auto& kv : m) e.tl3[kv.first] = kv.second; e.tl3Loaded = true; } } } }
                     for (int seg = 0; seg < 4 && segEnd >= 0 && (int)count - 2 - segEnd < 2400; ++seg) {
                     std::vector<wyr::Bar> WB; std::vector<lvm::H3> WH;   /* (0.24.0) WH[j] = the 3h S / R before WB[j] */ const long long sk = sessKey(segEnd); int first = segEnd;
                     while (first > 0 && segEnd - first < 600 && sessKey(first - 1) == sk) --first;
                     for (int i = first; i <= segEnd; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; wyr::Bar b; b.t = (long long)times[i];
-                        b.h = p->hi; b.l = p->lo; b.c = p->close; b.o = p->open > 0 ? p->open : p->close; b.buy = p->buy; b.sell = p->sell; b.qTop = p->qTop; b.qBot = p->qBot;   /* (0.27.0) the Abs position line */
+                        b.h = p->hi; b.l = p->lo; b.c = p->close; b.o = p->open > 0 ? p->open : p->close; b.buy = p->buy; b.sell = p->sell; b.qTop = p->qTop; b.qBot = p->qBot; if (p->hi - p->lo + 1 >= 4) { b.qTopLots = p->qTopLots; b.qBotLots = p->qBotLots; }   /* (0.28.0) Tst line 3 */   /* (0.27.0) the Abs position line */
                         if (const off::Rec* r = recClosed(i)) { b.book = true; for (int s2 = 0; s2 < 2; ++s2) { b.addNet[s2] = r->addC[s2] - r->pullC[s2]; b.pull[s2] = r->pullC[s2]; /* (0.21.0) P / X */ b.aggrMax[s2] = r->aggrMax[s2]; b.sweepLv[s2] = r->sweepLv[s2]; b.ice[s2] = r->ice[s2]; } }
                         struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)times[i], &t)) b.when = off::clock12(t.tm_hour, t.tm_min);
                         WB.push_back(b); WH.push_back((size_t)i < h3All.size() ? h3All[(size_t)i] : lvm::H3()); }
@@ -737,6 +750,12 @@ public:
                         if (seg == 0) { try { e.cxLive = lvm::liveCx(WB, lm, &preV); } catch (...) { e.cxLive = std::make_pair(0LL, 0); } }   // (0.25.0) the live Cx? (this session, the last closed candle)
                         // (0.20.0, Rassul 15:35-16:58 CT, price-pane-cleanup-mockup.html) Bk -> FT -> Tst -> Rev (LevelMarks 1.3.0 seq), the session by itself
                         const std::map<long long, std::vector<lvm::SMark> > sq = lvm::seq(WB, lm); for (const auto& kv : sq) seqAll[kv.first] = kv.second;
+                        if (e.tl3Loaded) {   // (0.28.0) the Tst's 3rd line (LevelMarks 1.19.0 tstL3), decided once the candle after the pivot closed; an older session decides its last pivot too
+                            std::vector<double> preR; std::vector<lvm::PreQ> preQ;
+                            for (int i = first - 1; i >= 0 && (int)preR.size() < 20; --i) { const rvs::Poc* p = pocAt(i); if (!p) continue; preR.push_back((double)(p->hi - p->lo)); lvm::PreQ z; if (p->hi - p->lo + 1 >= 4) { z.top = p->qTopLots; z.bot = p->qBotLots; } preQ.push_back(z); }
+                            std::reverse(preR.begin(), preR.end()); std::reverse(preQ.begin(), preQ.end());
+                            const std::map<long long, std::string> l3 = lvm::tstL3(WB, sq, &e.teq, &preV, &preR, &preQ, seg > 0);
+                            for (const auto& kv : l3) if (!e.tl3.count(kv.first)) { e.tl3[kv.first] = kv.second; e.tl3Dirty = true; } }
                         { const std::map<long long, lvm::AbsMk> am = lvm::absMarks(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), !e.mkt.empty() ? e.mkt : rvh::marketOf(S.market), WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr, &preV); for (const auto& kv : am) absAll[kv.first] = kv.second; }   // (0.27.0) the Abs badge (LevelMarks 1.18.0)
                         { const std::vector<lvm::ArCand> ac = lvm::arCands(WB, lm); arAll.insert(arAll.end(), ac.begin(), ac.end()); }   // (0.23.0) the AR after a Cx: colour + overlap here, BRMax below
                         dg += " lv " + std::to_string(lm.size()) + " keys " + std::to_string(seg == 0 ? lvNow.size() : 0) + (seg == 0 ? " 3h " + std::to_string(h3Now) : std::string()); } catch (const std::exception& ex) { dg += std::string(" lv ERR ") + ex.what(); } catch (...) { dg += " lv ERR"; }
@@ -796,7 +815,7 @@ public:
                             for (const auto& kv : e.lvMarks) txt += std::to_string(kv.first) + "|" + lvm::codeText(kv.second.code) + "|" + std::to_string(kv.second.dir) + "|" + kv.second.lv + "|" + std::to_string(kv.second.px) + "|" + kv.second.st + "\n";   // (0.19.0) Bk / Sw / Cx; (0.19.2) + the strength (6th field, may be empty)
                             for (const auto& kv : e.lvSeq) for (const lvm::SMark& m : kv.second) {   // (0.20.0) FT: 3 fields; Tst: level + its % (no dashed line: px 0); Rev: + its strength
                                 txt += std::to_string(kv.first) + "|" + lvm::seqText(m.code) + "|" + std::to_string(m.dir);
-                                if (m.code == 'T') txt += "|" + m.lv + "|0|" + std::to_string(m.pct) + "%"; else if (m.code == 'R' || m.code == 'A') txt += "||0|" + m.st;   // (0.23.0) AR: as a Rev - no level, its strength
+                                if (m.code == 'T') { const auto q3 = e.tl3.find(kv.first); txt += "|" + m.lv + "|0|" + (q3 != e.tl3.end() ? q3->second : std::string()); }   /* (0.28.0) line 3 = A+E / E / A! / blank (was the retrace %) */ else if (m.code == 'R' || m.code == 'A') txt += "||0|" + m.st;   // (0.23.0) AR: as a Rev - no level, its strength
                                 txt += "\n"; }
                             // (0.27.0) the Abs badge: "stamp|Abs|dir|<Top 21% / Low 21% or empty>|<level px>|<level short name>"; its next-candle Ex: "stamp|Ex|dir"
                             for (const auto& kv : e.absMk) { txt += std::to_string(kv.first) + "|Abs|" + std::to_string(kv.second.dir) + "|" + lvm::absPos(kv.second) + "|" + std::to_string(kv.second.lvPx) + "|" + kv.second.lv + "\n";
@@ -828,6 +847,7 @@ public:
                                 for (const auto& kv : e.wyMore.marks) for (const wyr::Mark& m : kv.second) jx += std::to_string(kv.first) + "|" + wyr::label(m) + "|" + std::to_string(m.dir) + "|" + (wyr::showMore(m.k, mk) ? "1" : "0") + "\n";
                                 putFile(rvh::recDir(flex) + "\\wyx-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", jx); }
                             putFile(rvh::recDir(flex) + "\\wy-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", out);
+                            if (e.tl3Dirty && e.tl3Loaded && !e.tl3Path.empty()) { putFile(e.tl3Path, wyi::tl3Text(e.tl3, mk, (long long)S.spb, RVS_VERSION)); e.tl3Dirty = false; }   // (0.28.0)
                             // (0.25.0) the live Cx? in a file of its own (lsRevReadMarks draws it; nothing else reads it; never in the wy / wymarks records):
                             // RevRead\wylive-<MKT>-<spb>.txt  "WYL|1|<MKT>|<spb>|<version>" then "stamp|Cx?|dir" (or no line)
                             putFile(rvh::recDir(flex) + "\\wylive-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", "WYL|1|" + mk + "|" + std::to_string((long long)S.spb) + "|" + RVS_VERSION + "\n"
@@ -1208,7 +1228,7 @@ extern "C" cppExtension* CreateExtension(void) {
     RevReadMarks* p = new RevReadMarks();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);
-    p->setDescription("LRA Reversal Read marks 0.21.2 - Bk / Sw / I / Cx on the candles with their level and strength (I under a bullish candle, over a bearish one; a Sw candle shows only the Sw), and after a Bk its FT, Tst (level + %) and Rev (+ strength); green = bullish, red = bearish. Needs the Reversal Read pane on the same chart. No settings.");
+    p->setDescription("LRA Reversal Read marks 0.21.2 - Bk / Sw / I / Cx on the candles with their level and strength (I under a bullish candle, over a bearish one; a Sw candle shows only the Sw), and after a Bk its FT, Tst (level + A+E / E / A!) and Rev (+ strength); green = bullish, red = bearish. Needs the Reversal Read pane on the same chart. No settings.");
     rvh::stamp(p);   // RVS_VERSION
     return p;
 }

@@ -105,7 +105,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.5.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.6.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -361,7 +361,7 @@ struct State {
     // (1.2.0) what the pane shows besides Effort: lsFlexLevels\TurnPane\display.txt (no file = Effort only), re-read when its stamp changes
     turn::Show show; long long showSig = -2; std::string showPath; bool showChanged = false;
     // (1.5.0) the Abs candles lsRevRead published (wy file) and this pane's P / Ex? for each (RevRead\\turnabs-<MKT>-<spb>.txt, read by lsRevReadMarks)
-    std::vector<turn::AbsLine> abs; std::map<long long, turn::TabRec> tab; std::string tabPath; bool tabLoaded = false, tabDirty = false; long long tabWrites = 0, tabFails = 0; int absShown = 0; std::string absHead, absWhy;
+    std::map<long long, std::pair<int, int> > teq; std::string teqPath; bool teqLoaded = false, teqDirty = false; long long teqWrites = 0, teqFails = 0;   /* (1.6.0) every candle's Ex? */ std::vector<turn::AbsLine> abs; std::map<long long, turn::TabRec> tab; std::string tabPath; bool tabLoaded = false, tabDirty = false; long long tabWrites = 0, tabFails = 0; int absShown = 0; std::string absHead, absWhy;
     std::map<long long, turn::AbsCalc> absC; std::map<long long, turn::NextCalc> absN; std::string absRecPath; bool absRecLoaded = false, absRecDirty = false;   // (1.5.0) the read's numbers once decided (a restart draws the same read)
 };
 
@@ -456,6 +456,7 @@ private:
         S.wyPath = flex.empty() || !S.supported || spb <= 0 ? std::string() : flex + "\\RevRead\\wy-" + S.market + "-" + std::to_string(spb) + ".txt";
         S.recPath = own.empty() || !S.supported || spb <= 0 ? std::string() : own + "\\turn-" + S.market + "-" + std::to_string(spb) + ".txt";
         S.showPath = own.empty() || !S.supported ? std::string() : own + "\\display.txt"; S.showSig = -2; S.show = turn::Show(); S.showChanged = false;   // (1.2.0)
+        S.teqPath = flex.empty() || !S.supported || spb <= 0 ? std::string() : flex + "\\RevRead\\turnexq-" + S.market + "-" + std::to_string(spb) + ".txt"; S.teq.clear(); S.teqLoaded = false; S.teqDirty = false;   // (1.6.0)
         S.tabPath = flex.empty() || !S.supported || spb <= 0 ? std::string() : flex + "\\RevRead\\turnabs-" + S.market + "-" + std::to_string(spb) + ".txt"; S.abs.clear(); S.tab.clear(); S.tabLoaded = false; S.tabDirty = false;   // (1.5.0)
         S.absRecPath = own.empty() || !S.supported || spb <= 0 ? std::string() : own + "\\absread-" + S.market + "-" + std::to_string(spb) + ".txt"; S.absC.clear(); S.absN.clear(); S.absRecLoaded = false; S.absRecDirty = false;
         S.paramsSig = S.wySig = -2; S.P = turn::defaults(S.market); S.sweeps.clear(); S.levels.clear(); S.swAt.clear(); S.histAt.clear();
@@ -563,6 +564,10 @@ private:
         if (!S.tabLoaded && !S.tabPath.empty()) {                       // (1.5.0) what this pane (or another chart of the market) decided before
             std::string t; long long sig = -1;
             if (readCapped(S.tabPath, 256 * 1024, t, sig)) { std::map<long long, turn::TabRec> f; if (sig >= 0 && turn::parseTabFile(t, S.market, S.spb, f)) for (const auto& kv : f) if (!S.tab.count(kv.first)) S.tab[kv.first] = kv.second; S.tabLoaded = true; }
+        }
+        if (!S.teqLoaded && !S.teqPath.empty()) {                       // (1.6.0)
+            std::string t; long long sig = -1;
+            if (readCapped(S.teqPath, 256 * 1024, t, sig)) { std::map<long long, std::pair<int, int> > f; if (sig >= 0 && turn::parseTeqFile(t, S.market, S.spb, f)) for (const auto& kv : f) if (!S.teq.count(kv.first)) S.teq[kv.first] = kv.second; S.teqLoaded = true; }
         }
         if (!S.absRecLoaded && !S.absRecPath.empty()) {
             std::string t; long long sig = -1;
@@ -697,6 +702,15 @@ private:
 #endif
         }
         if (S.tabDirty && S.tabLoaded) { if (publishFile(S.tabPath, turn::tabFileText(S.tab, S.market, S.spb))) { ++S.tabWrites; S.tabDirty = false; } else ++S.tabFails; }   // written at once (lsRevReadMarks waits for it)
+        // (1.6.0) every closed candle this pane read whole: its sellers' / buyers' Ex? (the Tst badge's E), decided once
+        if (S.teqLoaded) for (const turn::Sum& x : S.live.sums) {
+            if (x.key > S.lastClosedKey || S.teq.count(x.key) || !x.complete) continue;
+            const std::map<long long, long long>::const_iterator cs = S.closedSeen.find(x.key);
+            if (cs == S.closedSeen.end() || (now - cs->second < DECIDE_WAIT_MS && now >= cs->second)) continue;
+            long long vol = -1; for (long i = count - 2; i >= 0 && i >= count - 40; --i) if ((long long)times[(int)i] == x.key) { vol = (long long)vols[(int)i]; break; }
+            long long pct = -1; if (vol <= 0 || !covered(x, vol, pct)) continue;
+            S.teq[x.key] = turn::exqOf(x); S.teqDirty = true; }
+        if (S.teqDirty && S.teqLoaded) { if (publishFile(S.teqPath, turn::teqFileText(S.teq, S.market, S.spb))) { ++S.teqWrites; S.teqDirty = false; } else ++S.teqFails; }
         // (1.5.0) the candle after each Abs: its attackers and book, decided once it closed
         for (const turn::AbsLine& a : S.abs) {
             if (!S.absRecLoaded || S.absN.count(a.t)) continue;
@@ -1029,6 +1043,7 @@ private:
         o << "DISPLAY|" << TURN_VERSION << "|strip on the pane top: " << (S.stripKind == 1 ? "a sweep" : S.stripKind == 2 ? "a candle at a level" : S.stripKind == 3 ? "a candle" : "none")
           << "|ratios " << (S.labMode == 2 ? "on every bar (wide candles)" : S.labMode == 1 ? "one per candle side" : "none") << " " << S.labDrawn << " of " << S.labOffered
           << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "|effort candles " << S.effCandles << "\n";
+        o << "TEQ|" << S.teq.size() << " candles with their Ex? (turnexq file)|writes " << S.teqWrites << " fails " << S.teqFails << "\n";   // (1.6.0)
         o << "ABS|" << S.abs.size() << " Abs lines in the wy file|" << S.tab.size() << " decided (P / Ex?)|writes " << S.tabWrites << " fails " << S.tabFails << "|read shows an Abs " << S.absShown << "|" << S.absWhy << "\n";   // (1.5.0)
         o << "READ|" << (S.readVerdict == 1 ? "bullish" : S.readVerdict == -1 ? "bearish" : S.readVerdict == 2 ? "range" : "quiet") << "|" << S.readHead << "|" << S.readWhy << "|" << S.readWatch << "|lines drawn " << S.readLines << "\n";   // (1.4.0) the Absorption read right of the last candle
         o << "SHOW|" << S.show.why << "|" << turn::showText(S.show) << "\n";   // (1.2.0) what the pane draws: Effort + the pieces the display file switched on
@@ -1052,6 +1067,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.3 - Stop Run / Absorption / Exhaustion / Initiative. Absorption on every closed candle: the heaviest price at its high (up) and at its low (down) against the 20 candles before; red at a high / green at a low from 2.0 when the candle closed away from that end, grey otherwise. Top line: the last sweep's read, or the candle under the mouse.");
-    p->setVersion("1.5.0");
+    p->setVersion("1.6.0");
     return p;
 }

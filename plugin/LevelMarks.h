@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-24 11:12 CT "ok. build this" - the Abs badge, abs-badge-mockup.html v15): absMarks() - effort without result at the FIRST test of a Bk level (research ABS-ORDERBOOK 2026-11-24, ported line by line) with its position line, and the next-candle Ex (ABS-EXHAUSTION part 2). Bk / Sw / Cx / FT / Tst / Rev / AR / I unchanged
+static const char* const VERSION = "1.19.0";   // (1.19.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): tstL3() - the Tst badge's 3rd line A+E / E / A! / blank instead of the retrace % (research TST-REVERSE 2026-11-24, tst.py / tst2.py ported line by line). Everything else unchanged
+// was static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-24 11:12 CT "ok. build this" - the Abs badge, abs-badge-mockup.html v15): absMarks() - effort without result at the FIRST test of a Bk level (research ABS-ORDERBOOK 2026-11-24, ported line by line) with its position line, and the next-candle Ex (ABS-EXHAUSTION part 2). Bk / Sw / Cx / FT / Tst / Rev / AR / I unchanged
 // was static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-24 08:33 CT "go for hourly pivots and 4h high and lows", 08:34 "absorption levels should match bk levels", 09:01 "go for bk with hourly pivots and 4 hour highs and lows"): Bk (and the Tst / FT / Rev that follow it) gains two level groups - the HOURLY PIVOTS (HpH / HpL: his 1-bar High / Low ZigZag on 1-hour bars, R1 R2 / S1 S2 as HtfSr.h walks the 3-hour ones, standing only) and the last completed 4-HOUR bar's high / low (4hH / 4hL, 4-hour bars from 5 PM CT). Both rank after every older level (4h 65, pivots 70) so no earlier mark changes its name, and a Bk made only by them never takes a candle from a Cx, need the hour levels' rule (the Bk candle's volume the biggest in 5+) and never make or name a Sw, Cx or I (Sw stays major-only)
 // was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-23 23:18 CT "the CX came late .. why ?" (HG 11:03 PM climax, drawn 11:12 PM when the 3-bar ZigZag confirmed the low), 23:20 "go" on the live Cx?): liveCx() below - the climax candle shows "Cx?" from its own close while it is still the low (high) of the running leg; the Cx itself is unchanged
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-23 19:54 CT "why isnt this a cmx ?" - GC 5:51 PM, the pivot low on 324 lots, the biggest in 35 candles: the Cx look-back counted only the session's own candles, so no Cx could come in the first hour after 5:00 PM; 20:16 "go"): the Cx's "biggest volume in 20+" reaches into the candles BEFORE the session (run() preV = their volumes, oldest first), as the Volume pane's BVMax does. Nothing else changes
@@ -679,4 +680,55 @@ inline std::map<long long, AbsMk> absMarks(const std::vector<wyr::Bar>& B, const
     (void)endMin; return out;
 }
 inline std::string absPos(const AbsMk& m) { if (m.pos < 0) return std::string(); return std::string(m.dir > 0 ? "Low " : "Top ") + std::to_string(m.pos) + "%"; }
+
+// (1.19.0, Rassul 2026-11-24 12:21 CT "use the third line which currently has the percentage .. show mockup", 12:51 "2. do the test"; mockup
+// tst-line3-mockup.html; research research-artifacts/setups/TST-REVERSE-2026-11-24.md, 943 Tst / 697 decided, his PB Rev win rule on the Tst):
+// the Tst badge's 3rd line says whether the pullback's attackers were ABSORBED and then EXHAUSTED at the Tst pivot candle:
+//   A = absorption on the pivot candle (the attackers = the pullback's side: sellers into a bullish Tst's low, buyers into a bearish Tst's high):
+//       effort without result - volume >= 1.5x the 20 candles before (10+), range <= 1.3x, closed in the far half (> 0.5) - OR the Turn pane's
+//       Absorption bar - the lots at the heaviest single attacking price inside the end quarter >= 2.0x the same over the 20 candles before
+//       (10+ with 4+ price levels), with the close outside that quarter
+//   E = exhaustion: the attackers' last minute <= 0.5x the pace of their first 2 minutes (lsTurn's Ex?, from the order feed: exq) OR the next
+//       candle - attackers <= 0.5x the pivot candle's, closed further the Tst's way, traded no more than 1 tick past the pivot's extreme
+//   "A+E" both (75% win, +0.33R, n 60, +0.17 / +0.59 on the two halves), "E" exhaustion only (+0.02R), "A!" absorption without exhaustion
+//   = a warning (-0.19R on both halves), "" neither (+0.07R). LEARNING: 4-16 a market.
+// Decided once the candle after the pivot has closed (the Tst is drawn only after its pivot is confirmed, so it always has); the host keeps
+// the first decision (no repaint). exq: candle stamp -> {sellers' Ex?, buyers' Ex?} (0 / 1), absent = not known.
+struct PreQ { long long top = -1, bot = -1; };   // the candles before the session: the lots at the quarter prices (-1 = not known)
+inline std::string l3Text(bool a, bool e) { return a && e ? "A+E" : e ? "E" : a ? "A!" : std::string(); }
+inline std::map<long long, std::string> tstL3(const std::vector<wyr::Bar>& B, const std::map<long long, std::vector<SMark> >& sq,
+        const std::map<long long, std::pair<int, int> >* exq = nullptr, const std::vector<double>* preV = nullptr, const std::vector<double>* preR = nullptr,
+        const std::vector<PreQ>* preQ = nullptr, bool decideLast = false) {
+    std::map<long long, std::string> out; const int n = (int)B.size(); if (n < 2) return out;
+    std::map<long long, int> at; for (int i = 0; i < n; ++i) at[B[(size_t)i].t] = i;
+    std::vector<double> V, R; std::vector<long long> QT, QB; const size_t np = preV ? preV->size() : 0;
+    for (size_t k = 0; k < np; ++k) { V.push_back((*preV)[k]); R.push_back(preR && preR->size() == np ? (*preR)[k] : -1.0);
+        QT.push_back(preQ && preQ->size() == np ? (*preQ)[k].top : -1); QB.push_back(preQ && preQ->size() == np ? (*preQ)[k].bot : -1); }
+    for (const wyr::Bar& b : B) { V.push_back((double)(b.buy + b.sell)); R.push_back((double)(b.h - b.l));
+        const bool q4 = b.h - b.l + 1 >= 4; QT.push_back(q4 ? b.qTopLots : -1); QB.push_back(q4 ? b.qBotLots : -1); }
+    auto mean20 = [](const std::vector<double>& x, size_t a, double& m) { double s = 0; int c = 0; for (size_t k = a; k > 0 && c < 20; --k) { const double v = x[k - 1]; if (v < 0) continue; s += v; ++c; } if (c < 10) return false; m = s / c; return true; };
+    for (const auto& kv : sq) for (const SMark& m : kv.second) {
+        if (m.code != 'T') continue;
+        const auto it = at.find(kv.first); if (it == at.end()) continue;
+        const int pi = it->second, dr = m.dir; if (pi + 1 >= n && !decideLast) continue;   // not decided before the candle after the pivot closed
+        const wyr::Bar& b = B[(size_t)pi]; const size_t ai = np + (size_t)pi; const double rg = (double)(b.h - b.l);
+        // A: effort without result (the absMarks rule)
+        bool a = false; double mv = 0, mr = 0;
+        if (mean20(V, ai, mv) && mean20(R, ai, mr) && mv > 0 && mr > 0) {
+            const double cp = rg > 0 ? (dr > 0 ? (double)(b.c - b.l) / rg : (double)(b.h - b.c) / rg) : 0.5;
+            a = V[ai] / mv >= 1.5 && R[ai] / mr <= 1.3 && cp > 0.5; }
+        // A: the Absorption bar (heaviest attacking price in the end quarter vs the 20 candles before, 10+ known; closed outside the quarter)
+        const std::vector<long long>& Q = dr > 0 ? QB : QT; const long long L = b.h - b.l + 1;
+        if (!a && L >= 4 && Q[ai] >= 0) { double s = 0; int c = 0; for (size_t k = ai; k > 0 && k + 20 > ai; --k) { const long long v = Q[k - 1]; if (v < 0) continue; s += (double)v; ++c; }
+            const long long z = std::max(1LL, (L + 2) / 4); const bool away = dr > 0 ? b.c >= b.l + z : b.c <= b.h - z;
+            if (c >= 10 && s > 0 && (double)Q[ai] / (s / c) >= 2.0 && away) a = true; }
+        // E: the attackers' last minute (lsTurn) or the next candle
+        bool e = false;
+        if (exq) { const auto q = exq->find(b.t); if (q != exq->end()) e = (dr > 0 ? q->second.first : q->second.second) == 1; }
+        if (!e && pi + 1 < n) { const wyr::Bar& x = B[(size_t)pi + 1]; const long long a0 = dr > 0 ? b.sell : b.buy, a1 = dr > 0 ? x.sell : x.buy;
+            const bool held = dr > 0 ? x.l >= b.l - 1 : x.h <= b.h + 1;
+            if (a0 > 0 && 2 * a1 <= a0 && (x.c - b.c) * dr > 0 && held) e = true; }
+        out[kv.first] = l3Text(a, e); }
+    return out;
+}
 } // namespace lvm

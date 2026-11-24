@@ -14,7 +14,8 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.7.0";   // (2.7.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15): + the Abs badge (code Q: "Abs" / position / P) and its next-candle "Ex" (code E), drawn at the absorbed end; + parseTurnAbs (lsTurn's RevRead\\turnabs-<MKT>-<spb>.txt: the biggest print P and the same-candle Ex?)
+static const char* const VERSION = "2.8.0";   // (2.8.0, Rassul 2026-11-24 12:51 CT "2. do the test" / "3. yes"): the Abs badge's P line always shows once known ("P0" .. "P12+"; blank only when the order feed did not see the candle); + parseTeq (lsTurn 1.6.0 turnexq file) and the Tst line-3 decision file (tl3Text / parseTl3, lsRevRead 0.28.0)
+// was static const char* const VERSION = "2.7.0";   // (2.7.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15): + the Abs badge (code Q: "Abs" / position / P) and its next-candle "Ex" (code E), drawn at the absorbed end; + parseTurnAbs (lsTurn's RevRead\\turnabs-<MKT>-<spb>.txt: the biggest print P and the same-candle Ex?)
 // was static const char* const VERSION = "2.6.0";   // (2.6.0, Rassul 2026-11-23 23:20 CT "go" on the live Cx?): + parseLive (the wylive file of lsRevRead 0.25.0)
 // was static const char* const VERSION = "2.5.0";   // (2.5.0, Rassul 2026-11-23 09:25-09:34 CT "implement the AR ... automatic rally bar that occurs after a cx", "the AR bar should also have a strength line", "go"; lsRevRead 0.23.0 / LevelMarks 1.13.0, mockup ar-mockup.html): + the AR badge - "AR" and its strength line (stamp|AR|dir||0|R51), over a green candle, under a red one, as Bk / Sw / Cx
 // was VERSION = "2.4.0";   // (2.4.0, Rassul 2026-11-20 09:20 CT "add it ... add the badge for it also and include the level and strength line", 09:24 "build"; lsRevRead 0.21.2, mockup i-badge-mockup.html): the I badge is back - letter / level / strength like Bk / Sw; a bullish (green) I goes UNDER its candle, a bearish (red) I OVER it; iLine() writes the I line, with a 7th field "Sw" when the same candle is a Sw (recorded for the nightly, never drawn - parseAll reads 3 / 5 / 6 fields only)
@@ -167,5 +168,44 @@ inline bool parseTurnAbs(const std::string& txt, const std::string& mkt, std::ma
 }
 // (2.7.0) the badge's three lines: "Abs" or "Abs/Ex?" / the position / "P16" (left off under P5, as agreed: no "P0")
 inline std::string absLine1(const TurnAbs* z) { return z && z->exq ? "Abs/Ex?" : "Abs"; }
-inline std::string absLine3(const TurnAbs* z) { if (!z || z->p < 5) return std::string(); return "P" + std::to_string(z->p) + (z->plus ? "+" : ""); }
+inline std::string absLine3(const TurnAbs* z) { if (!z || z->p < 0) return std::string(); return "P" + std::to_string(z->p) + (z->plus ? "+" : ""); }   // (2.8.0, Rassul 12:51 CT "3. yes") always shown once known (was: left off under P5)
+// (2.8.0) lsTurn 1.6.0's Ex? of every candle it read whole (RevRead\\turnexq-<MKT>-<spb>.txt): "TEQ|1|<MKT>|<spb>|<ver>", then "stamp|sellers|buyers"
+// (1 = the attackers' last minute 0.5x or less of their first 2 minutes). false = a missing / foreign / garbled header (no lines kept)
+inline bool parseTeq(const std::string& txt, const std::string& mkt, long long spb, std::map<long long, std::pair<int, int> >& out) {
+    out.clear(); size_t a = 0; bool head = false;
+    while (a < txt.size()) {
+        size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size();
+        std::string l = txt.substr(a, e - a); a = e + 1;
+        if (!l.empty() && l[l.size() - 1] == '\r') l.erase(l.size() - 1);
+        if (l.empty()) continue;
+        std::vector<std::string> f; size_t p = 0; while (true) { const size_t q = l.find('|', p); f.push_back(l.substr(p, q == std::string::npos ? std::string::npos : q - p)); if (q == std::string::npos) break; p = q + 1; }
+        if (!head) { if (f.size() < 4 || f[0] != "TEQ" || f[1] != "1" || f[2] != mkt || f[3] != std::to_string(spb)) return false; head = true; continue; }
+        if (f.size() != 3 || (f[1] != "0" && f[1] != "1") || (f[2] != "0" && f[2] != "1")) continue;
+        char* x = nullptr; const long long t = std::strtoll(f[0].c_str(), &x, 10); if (!x || *x || t <= 0) continue;
+        out[t] = std::make_pair(f[1] == "1" ? 1 : 0, f[2] == "1" ? 1 : 0);
+    }
+    return head;
+}
+// (2.8.0) the Tst line-3 decisions lsRevRead made (RevRead\\tstl3-<MKT>-<spb>.txt): "TL3|1|<MKT>|<spb>|<ver>", then "stamp|code" with code
+// A+E / E / A! / - (blank). The first decision of a Tst is kept for good (no repaint across restarts); the newest 2,000 are kept.
+inline bool tl3Ok(const std::string& c) { return c == "A+E" || c == "E" || c == "A!" || c.empty(); }
+inline std::string tl3Text(const std::map<long long, std::string>& m, const std::string& mkt, long long spb, const std::string& ver) {
+    std::string t = "TL3|1|" + mkt + "|" + std::to_string(spb) + "|" + ver + "\n"; size_t skip = m.size() > 2000 ? m.size() - 2000 : 0;
+    for (const auto& kv : m) { if (skip) { --skip; continue; } t += std::to_string(kv.first) + "|" + (kv.second.empty() ? std::string("-") : kv.second) + "\n"; }
+    return t; }
+inline bool parseTl3(const std::string& txt, const std::string& mkt, long long spb, std::map<long long, std::string>& out) {
+    out.clear(); size_t a = 0; bool head = false;
+    while (a < txt.size()) {
+        size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size();
+        std::string l = txt.substr(a, e - a); a = e + 1;
+        if (!l.empty() && l[l.size() - 1] == '\r') l.erase(l.size() - 1);
+        if (l.empty()) continue;
+        if (!head) { if (l.compare(0, 6, "TL3|1|") != 0 || l.compare(6, mkt.size() + std::to_string(spb).size() + 2, mkt + "|" + std::to_string(spb) + "|") != 0) return false; head = true; continue; }
+        const size_t p = l.find('|'); if (p == std::string::npos) continue;
+        char* x = nullptr; const long long t = std::strtoll(l.c_str(), &x, 10); if (!x || *x != '|' || t <= 0) continue;
+        std::string c = l.substr(p + 1); if (c == "-") c.clear(); if (!tl3Ok(c)) continue;
+        out[t] = c;
+    }
+    return head;
+}
 } // namespace wyi
