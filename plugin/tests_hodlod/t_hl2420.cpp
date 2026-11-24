@@ -55,7 +55,7 @@ int main() {
     }
     { const htop::Row R = htop::rowLayout(std::vector<htop::Chip>(), "COB", meas, 10, 610, 100, 118); CHECK(R.ok && R.shown == 0 && R.items.size() == 1, "an empty row shows only its head"); }
     { htop::Chip u; u.mkt = "ES"; u.when = "9:03"; u.lv = "ONH/LonHI"; u.num = "51"; u.dir = 1; CHECK(htop::chipLv(u.lv) == "ONH \xB7 LonHI", "Cob levels with a middle dot"); }
-    CHECK(std::string(hl::HL_VERSION) == "2.33.0" && std::string(hlset::PLUGIN_VERSION) == "2.42.4" && std::string(htop::VERSION) == "1.2.0" && std::string(tsig::VERSION) == "1.2.2", "versions");
+    CHECK(std::string(hl::HL_VERSION) == "2.44.0" && std::string(hlset::PLUGIN_VERSION) == "2.42.4" && std::string(htop::VERSION) == "1.2.0" && std::string(tsig::VERSION) == "1.2.2", "versions");
     std::printf("t_hl2420 (lsHodLod 2.42.0): %d passed, %d failed\n", pass, fail);
     return fail ? 1 : 0;
 }
