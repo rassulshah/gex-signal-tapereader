@@ -105,7 +105,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.4.1"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.4.2"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -723,7 +723,7 @@ private:
         const int xl = one ? x - w / 2 : x - gap / 2 - w, xr = one ? x - w / 2 : x + (gap - gap / 2);
         const bool pushUp = dir < 0;                                    // a swept high: the buyers' bars go up, the turn's bars down
         struct One { const turn::Bar1* b; int left; bool up; COLOR c; };
-        const One all[4] = { { &bs.stop, xl, pushUp, pushUp ? C_LGREEN : C_LRED }, { &bs.eff, xr, pushUp, pushUp ? C_RED : C_GREEN },   // (1.3.0) Absorption in the winner's colour: absorbed at a high = red, at a low = green
+        const One all[4] = { { &bs.stop, xl, pushUp, pushUp ? C_LGREEN : C_LRED }, { &bs.eff, xr, pushUp, pushUp ? C_GREEN : C_RED },   // (1.4.2, Rassul 2026-11-24 11:21 CT "top should be green and bottom should be red") Absorption in the attackers' colour: the top bar (buyers at the offer) green, the bottom bar (sellers at the bid) red   // (1.3.0) was the winner's colour (a high red, a low green)
                              { &bs.exh, xl, !pushUp, pushUp ? C_LRED : C_LGREEN }, { &bs.ans, xr, !pushUp, pushUp ? C_RED : C_GREEN } };
         int drawn = 0, bestH[2] = { 0, 0 }; const One* best[2] = { nullptr, nullptr };   // [0] the bars going up, [1] the bars going down
         for (const One& o : all) {
@@ -1004,6 +1004,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.3 - Stop Run / Absorption / Exhaustion / Initiative. Absorption on every closed candle: the heaviest price at its high (up) and at its low (down) against the 20 candles before; red at a high / green at a low from 2.0 when the candle closed away from that end, grey otherwise. Top line: the last sweep's read, or the candle under the mouse.");
-    p->setVersion("1.4.1");
+    p->setVersion("1.4.2");
     return p;
 }
