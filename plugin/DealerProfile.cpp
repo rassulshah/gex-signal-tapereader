@@ -162,7 +162,7 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.70.0";   // (2.70.0, Rassul 2026-11-24 13:53 CT "there are too many levels on the limit profile , remeive the gamma levels. list the key levels"): CR0 / PS0 (the last MenthorQ / gamma levels) are no longer rows, dim lines or level-liquidity watches - DP_ZERO_DTE false; nothing else changed
+static const char* DP_VERSION = "2.70.0";   // (2.70.0, Rassul 2026-11-24 13:53 CT "there are too many levels on the limit profile , remeive the gamma levels. list the key levels", 14:0x CT picked "Volume VAH/VAL/DPoc/WPoc, Asia AsiaHI / AsiaLO, Prior hour PhrH / PhrL"): CR0 / PS0 (gamma), the volume levels, Asia and the prior-hour levels are no longer rows, dim lines or level-liquidity watches (dpKeepLevel); a merged name keeps its other parts ("Open/PhrH" -> "Open"). Kept: PW / PF / PD / ON / London highs and lows, Open, VWAP, the 3h R1 / R2 / S1 / S2
 // was static const char* DP_VERSION = "2.69.1";   // (2.69.1, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2) a level line across the chart whose row carries R1 / R2 is RED, S1 / S2 GREEN (hsr::rsSide / rsColour) - same fade and width as before; the badges keep their colours; a row that is only R / S still leaves its line to lsCobSignal / lsHtfSR (now red / green there too)
 // was DP_VERSION = "2.69.0";   // (2.69.0, 2026-11-20 Rassul 11:16 CT "the key levels like overnight pdl pfl etc are too dim, make them a little more noticable", 11:19 "B" on key-level-lines-mockup.html) the KEY level lines across the chart (session / PD / PF / London / Asia / weekly / prior hour / Open) at 55% of their colour and 2 px (DP_XLINE_KEY_FADE / _W); volume and gamma lines stay 30%, 1 px
 // was DP_VERSION = "2.68.0";   // (2.68.0, 2026-11-20 Rassul approved 06:02 CT "ok. i'll go with your recommendation", mockup level-liquidity-states-mockup.html) WHAT THE LIQUIDITY ON A LEVEL LINE DID (LevelLiq.h 1.0.0, own MBO feed only): for every bright level-line stretch BUILDING / LEAVING (node lots vs when price came within 1 ATR, +-10%), at the contact candle's close X (attackers slowing, size stays), H (hit, held, closed back), P (pulled while hit); scored per market (NOTES-LP2680.md): all LEARNING, so only H is DRAWN (a small green box on a bid line / red on an offer line at the contact candle - a description) and a line ENDS at the candle that broke 3+ ticks through and closed through; everything else is computed, recorded (<MKT>-<spb>-levelliq-<session>.csv for the nightly lra.levelliq_score) and published for lsHodLod's Now line (DealerProfile\levelliq-<MKT>-<spb>.txt, shown = 0 for states that did not pass); no numbers, no hovers, decided on closed candles, redrawn from the record after a restart
@@ -258,6 +258,20 @@ static bool dpLevelLiqName(const std::string& name, int src)
     return src == 0 && u.find("VWAP") == std::string::npos;
 }
 
+// (2.70.0, Rassul 2026-11-24 13:53-14:0x CT) the Limit Profile's level list: no gamma, no volume levels (POC / VAH / VAL / HVN ...), no Asia, no
+// prior-hour levels. A merged name ("ONL/LonLO", "Open/PhrH") keeps the parts that stay; "" = the row is not shown at all.
+static std::string dpKeepLevel(const std::string& nm)
+{
+    std::string out, t; char sep = '/';
+    for (size_t i = 0; i <= nm.size(); ++i) { const char c = i < nm.size() ? nm[i] : '/';
+        if (c == '/' || c == '\xB7') { if (!t.empty()) { std::string u; for (char x : t) u += (char)std::toupper((unsigned char)x);
+                const bool drop = llt::kindOf(t) == llt::GAMMA || llt::kindOf(t) == llt::VOLUME || u.compare(0, 4, "ASIA") == 0
+                    || u == "PHH" || u == "PHL" || u == "PHRH" || u == "PHRL";
+                if (!drop) { if (!out.empty()) out += sep; out += t; } }
+            t.clear(); if (i < nm.size()) sep = c; }
+        else t += c; }
+    return out;
+}
 struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode, keyHow, inds, levelsW, badgeFont, liqBadge, levelPct; };
 static PIdx PX;
 // (2.11.0) width = the DEALER column (40-250, default 80), levelsW = the LEVELS column (30-150, 40), badgeFont = the level badges (9 pt),
@@ -2116,6 +2130,7 @@ void DealerProfile::flushLines(const Settings& S)
             if (isVw) ++cs.vwapBadges;
         }
         lvc::In x; x.px = P.px; x.name = dcol::compactName(klv::displayName(P.name0)); x.src = P.src;
+        {   const std::string kept = dpKeepLevel(x.name); if (kept.empty()) { ++cs.keysFiltered; continue; } x.name = kept; }   // (2.70.0) no volume / Asia / prior-hour levels
         x.col = (unsigned long)P.col; x.pick = P.pick; x.stale = P.stale; x.idx = i; in.push_back(x);
     }
     for (size_t ti = 0; ti < cs.eb.tags.size(); ++ti) {   // (2.56.0) a key-row tag: its level row in the column (added while the tag lives)
