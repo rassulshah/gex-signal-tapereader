@@ -126,8 +126,7 @@
 #endif
 
 static const bool BKO_REV_LINES = false;   // (1.27.5, Rassul 19:55 CT) no Stop / T1 / T2 lines on the Rev signals
-#define BKO_VERSION "1.30.0"   // (1.30.0, Rassul 2026-11-23 19:23-19:34 CT "the 3hr bo just looks for breaks of pivots and then their test", "the close should take out the pivot", "it should have been drawn", "the test needs to be .33 at of the pivot break", "yes both", "build"; mockup breakout-3h-mockup.html v5): on a 180-MINUTE chart the indicator DRAWS the 3-hour BO / BD / Tst (BreakoutLogic.h b3h 1.0.0: letters only, green bullish / red bearish, the Tst live on the running leg). Every other chart: nothing changes (still records only, draws nothing)
-// was #define BKO_VERSION "1.29.0"   // (1.29.0, Rassul 2026-11-19 15:35-16:58 CT "just keep BK because it focuses on levels", "2. drop it" (Rly), mockup price-pane-cleanup-mockup.html, "ok"): NOTHING is drawn any more (BO / BD, FT, Pb, Rev, Rly) - the Bk -> FT -> Tst -> Rev of lsRevReadMarks replaces it; every decision and record file is still written (the PB Rev history and the nightly scoring continue)
+#define BKO_VERSION "1.29.0"   // (1.29.0, Rassul 2026-11-19 15:35-16:58 CT "just keep BK because it focuses on levels", "2. drop it" (Rly), mockup price-pane-cleanup-mockup.html, "ok"): NOTHING is drawn any more (BO / BD, FT, Pb, Rev, Rly) - the Bk -> FT -> Tst -> Rev of lsRevReadMarks replaces it; every decision and record file is still written (the PB Rev history and the nightly scoring continue)
 // was #define BKO_VERSION "1.28.0"   // (1.28.0, Rassul 2026-11-19 10:50 CT "ok build"): a BO / BD that lsRevRead marks Bk (same direction, its candle or the next) is not drawn; the Rly carries its level on a 2nd line (BreakoutLogic.h 1.28.0)
 // was #define BKO_VERSION "1.27.5"   // (1.27.5, Rassul 2026-11-18 19:55 CT "get rid of the stop and targets for rev signals": the Rev Stop / T1 / T2 lines are no longer drawn; Rev decisions, records and facts unchanged)   // was "1.27.4"   // (1.27.4) Rev = (> 0.8 x ATR and closes beyond the prior bar) or >= 1.2 x ATR   // was "1.27.3"   // (1.27.3) Rev must close beyond the prior bar's high / low   // was "1.27.2"   // (1.27.2) Rev range bigger than 0.8 x ATR(13)   // was "1.27.1"   // (1.27.1) FT within 3 candles   // was "1.27.0"   // (1.27.0) FT label on the follow-through candle; Rev range >= 1.0 x ATR(13) required; Rev bigger than a same-colour bar before it   // was "1.26.0"   // (1.26.0) "Rev N" + the BT / P / S marks from lsRevRead (fact X), the Stop / T1 / 1.382 lines, fact W for lsRevRead   // was "1.25.0"   // (1.25.0) no Pboc after a Rly without a BO / BD   // was "1.24.0"   // (1.24.0) Rly without the vwapTrend condition (aligned with the hourly breakout bar)   // was "1.23.2"   // (1.23.0) book gate off; RevA   // was "1.22.0"   // (1.22.0) a Rev needs the book to agree (lsBookFlow fact F)   // was "1.21.0"   // (1.21.0) Rly only inside an hourly breakout bar
 // was "1.20.0"   // (1.20.0) the retracement % under every decided pullback label
@@ -186,9 +185,6 @@ struct BState {
     long long bkMs = -1; int bkFacts = -1, bkDecided = 0;   // (1.22.0) fact kind F (lsBookFlow's defend ratios): last read (steady ms), facts read (-1 = none on this chart), Revs decided
     size_t wPosted = 0; int xRead = -1;   // (1.26.0) fact W posted / fact X read (-1 = lsRevRead is not on this chart)
     long long eMs = -1; size_t ePosted = 0;   // (1.14.0) fact kind E: last post (steady ms) and how many
-    // (1.30.0) the 3-hour BO / Tst (b3h): marks by chart bar index with that candle's high / low as calc read them; recomputed only when the chart changed
-    struct H3M { int bar = 0; char code = 0; int dir = 0; bool live = false; double h = 0, l = 0; };
-    std::vector<H3M> h3; long h3N = -1; long long h3T0 = 0; double h3K[3] = { 0, 0, 0 }; int h3Cnt[4] = { 0, 0, 0, 0 }; int h3Drawn = 0;
     bool vapFault = false;   // (1.12.0) a faulting VAP read is never re-entered (no Pboc then: the Pbs wait - status VAP)
 };
 
@@ -205,8 +201,6 @@ public:
     void pump();
     bool identify(BState& S);
     void feed(BState& S);
-    void feed3h(BState& S);   // (1.30.0)
-    void draw3h(BState& S);   // (1.30.0)
     void feedCob(BState& S, int first, const std::vector<bko::In>& B);
     void feedWy(BState& S);   // (1.28.0)
     int vapRows(BState& S, int chartBar, std::vector<wpc::VRow>& out);   // (1.12.0) lsWavePOC's reader
@@ -277,61 +271,6 @@ void Breakout::feed(BState& S) {
 
 // (1.28.0) lsRevRead's letters file lsFlexLevels\RevRead\wy-<MKT>-<secs>.txt (bounded 1 MB, looked at every 3 s, re-read only when its size or
 // time changed; a torn / foreign file keeps the last good copy; gone = nothing merged): the Bk directions and the key / volume levels
-// (1.30.0) the 3-hour BO / Tst: the chart's own candles (every bar of a 180-minute chart is a 3-hour bar; the last one is forming) through
-// b3h::run. Recomputed only when a bar was added, the history changed or the forming candle moved. Marks keep the candle's high / low so
-// draw reads no bars.
-void Breakout::feed3h(BState& S) {
-    const long n = getBarCount(); if (n < 4) { S.h3.clear(); S.h3N = n; return; }
-    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
-    if ((long)times.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) return;
-    const double kh = hi[(int)n - 1], kl = lo[(int)n - 1], kc = cl[(int)n - 1];
-    if (S.h3N == n && S.h3T0 == (long long)times[0] && S.h3K[0] == kh && S.h3K[1] == kl && S.h3K[2] == kc) return;
-    const int first = std::max(0, (int)n - b3h::MAX_BARS);
-    std::vector<b3h::Bar> B((size_t)(n - first));
-    for (int k = first; k < (int)n; ++k) { b3h::Bar& b = B[(size_t)(k - first)]; b.h = hi[k]; b.l = lo[k]; b.c = cl[k]; }
-    const std::vector<b3h::Mark> M = b3h::run(B);
-    S.h3.clear(); S.h3Cnt[0] = S.h3Cnt[1] = S.h3Cnt[2] = S.h3Cnt[3] = 0;
-    for (const b3h::Mark& m : M) { if (m.bar < 0 || m.bar >= (int)B.size()) continue;
-        BState::H3M x; x.bar = m.bar + first; x.code = m.code; x.dir = m.dir; x.live = m.live; x.h = B[(size_t)m.bar].h; x.l = B[(size_t)m.bar].l; S.h3.push_back(x);
-        if (m.code == 'T') { ++S.h3Cnt[2]; if (m.live) ++S.h3Cnt[3]; } else ++S.h3Cnt[m.dir > 0 ? 0 : 1]; }
-    S.h3N = n; S.h3T0 = (long long)times[0]; S.h3K[0] = kh; S.h3K[1] = kl; S.h3K[2] = kc;
-}
-
-// (1.30.0) letters only, lsBigBidAsk's style (a 1 px black edge, then the colour): BO green above its candle, BD red below; a bullish Tst
-// green below the pullback low, a bearish Tst red above the pullback high. Two marks on one side of a candle stack outward.
-void Breakout::draw3h(BState& S) {
-    S.h3Drawn = 0; if (S.h3.empty()) return;
-    try {
-        const long n = getBarCount(); if (n < 4 || n < S.h3N) return;
-        RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
-        int axisR = pane.right;
-        if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) axisR = scale.left - 2;
-        if (pane.bottom - pane.top < 60 || axisR - pane.left < 60) return;
-        int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK || vs < 0 || ve < vs) { vs = std::max(0, (int)n - 200); ve = (int)n - 1; }
-        const int aL = pane.left + 2, aT = pane.top + 20, aR = axisR - 1, aB = pane.bottom - 1;   // the IRT title row stays clear
-        FONT f0; f0.id = HELVETICA; f0.size = bko::FONT_BO; f0.style = BOLD; setFont(f0);
-        int ll = 0, la = 0, ld = 0; getFontMetrics(&ll, &la, &ld);
-        const int lh = std::max((int)f0.size + 5, la + ld), lift = std::max(1, (ll + ld + 1) / 2);
-        std::map<std::pair<int, int>, int> rows;   // (bar, above) -> marks already there
-        for (const BState::H3M& m : S.h3) {
-            if (m.bar < vs || m.bar > ve || m.bar >= (int)n) continue;
-            const char* tx = m.code == 'T' ? "Tst" : m.dir > 0 ? "BO" : "BD";
-            const bool above = m.code == 'T' ? m.dir < 0 : m.dir > 0;
-            PNT p; p.set(m.bar, 0.0f, kBarCenter); const int cx = (int)p.h;
-            const int yh = (int)getVerticalDrawPosition((float)m.h), yl = (int)getVerticalDrawPosition((float)m.l), top = std::min(yh, yl), bot = std::max(yh, yl);
-            const int w = (int)getTextWidth(tx, -1) + 2; const int row = rows[std::make_pair(m.bar, above ? 1 : 0)]++;
-            const int l = cx - w / 2, r = l + w, t = above ? top - bko::GAP - lh * (row + 1) : bot + bko::GAP + lh * row, b = t + lh;
-            if (l < aL || r > aR || t < aT || b > aB) continue;
-            setTextColor(0x00000000);
-            for (int d = 0; d < 4; ++d) { const int dx = d == 0 ? -1 : d == 1 ? 1 : 0, dy = d == 2 ? -1 : d == 3 ? 1 : 0;
-                RCT q; q.set(bkoC(l + dx), bkoC(t - lift + dy), bkoC(r + dx), bkoC(b - lift + dy)); q.drawText(tx, true, false); }
-            setTextColor((COLOR)(m.dir > 0 ? bko::C_UP : bko::C_DN));
-            RCT q; q.set(bkoC(l), bkoC(t - lift), bkoC(r), bkoC(b - lift)); q.drawText(tx, true, false);
-            ++S.h3Drawn;
-        }
-    } catch (...) {}
-}
-
 void Breakout::feedWy(BState& S) {
     const long long ms = bkoMs(); if (ms - S.wyCk < 3000 && ms >= S.wyCk) return; S.wyCk = ms;
     const std::string f = bkoFlex(), mk = mkey::norm(S.mkt); if (f.empty() || mk.empty() || S.spb <= 0) return;
@@ -457,10 +396,9 @@ void Breakout::status(BState& S, long long now) {
         + ",lines written " + std::to_string(S.recAdded) + ",pending " + std::to_string(S.recPend) + ",write fails " + std::to_string(S.recFails) + "\n"
         + "REV_SIX,posted " + std::to_string(S.wPosted) + " Revs / pullbacks as kind W,read " + (S.xRead < 0 ? std::string("none (lsRevRead not on this chart)") : std::to_string(S.xRead)) + " six-check reads (kind X),kept " + std::to_string(S.E.six.size()) + ",marks drawn " + std::to_string(S.last.sixMarks) + "\n"
         + "ENTRY_FACTS,EntryFacts " + efx::VERSION + "," + (BKO_ONE_BAR ? std::string("off (lsBreakout1: lsBreakout posts kind E)") : "posted " + std::to_string(S.ePosted) + " drawn decided Pb / Pboc / Pdoc as kind E (the Limit Profile ENT / EXIT tags)") + "\n";   // (1.3.0) (1.14.0)
-    const std::string body3 = (!BKO_ONE_BAR && S.spb == b3h::PERIOD) ? body + "H3," + std::string("b3h ") + b3h::VERSION + ",BO " + std::to_string(S.h3Cnt[0]) + ",BD " + std::to_string(S.h3Cnt[1]) + ",Tst " + std::to_string(S.h3Cnt[2]) + ",live " + std::to_string(S.h3Cnt[3]) + ",bars " + std::to_string(S.h3N) + ",drawn " + std::to_string(S.h3Drawn) + "\n" : body;
-    if (body3 == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
-    S.statusMs = now; S.statusBody = body3;
-    bkoMkdir(bkoFlex()); bkoPublish(S.statusPath, body3);
+    if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
+    S.statusMs = now; S.statusBody = body;
+    bkoMkdir(bkoFlex()); bkoPublish(S.statusPath, body);
 }
 
 // (1.3.0) RECORDS: after a new engine run (or while lines wait after a failed write, retried once a second), every record line of the last
@@ -495,15 +433,13 @@ void Breakout::records(BState& S, long long now) {
 void Breakout::pump() {
     BState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); if (!BKO_ONE_BAR && S->spb == b3h::PERIOD) { try { feed3h(*S); } catch (...) { S->h3.clear(); S->h3N = -1; } }
-    const long long now = bkoMs(); readBook(*S, now); records(*S, now); postEntry(*S, now); status(*S, now);
+    feed(*S); const long long now = bkoMs(); readBook(*S, now); records(*S, now); postEntry(*S, now); status(*S, now);
 }
 
 static const bool BKO_DRAW = false;   // (1.29.0) the BO indicator draws nothing (records only); true brings the letters back
 int Breakout::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     BState* S = slot_.get(this, false);
     if (!BKO_DRAW) {   // (1.29.0) hidden: an empty SignalBoard 'L' list so readers do not keep old letter boxes
-        if (S && !BKO_ONE_BAR && S->spb == b3h::PERIOD) draw3h(*S);   // (1.30.0) the 3-hour BO / BD / Tst are drawn
         try { const char* sy = getSymbol(); const char* chl = getChartLabel(); sb::publish('L', sy ? sy : "", getSecondsPerBar(), chl ? chl : "", bkoMs(), std::vector<sb::Ev>()); } catch (...) {}
         return RTX_OK; }
     if (!S || S->E.bars.size() < 3) return RTX_OK;   // draw never reads bars for decisions (calc does)
@@ -572,6 +508,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA BO v1.14.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.30.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.29.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
