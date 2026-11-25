@@ -25,5 +25,5 @@ int main() {
     CHECK(parseCrec(tx + "C|x|1|1|2|3|4|5|6|7|8|9\nC|200|0|1|2|3|4|5|6|7|8|9\n", "GC", 180, r) && r.size() == 2);
     CHECK(r[std::make_pair(100LL, -1)].putBack == -120 && r[std::make_pair(100LL, 1)].iceN == 2 && r[std::make_pair(100LL, 1)].big.lots == 12 && r[std::make_pair(100LL, -1)].big.hi == 35403);
     CHECK(!parseCrec(tx, "HG", 180, r) && !parseCrec(tx, "GC", 60, r));
-    CHECK(std::string(VERSION) == "1.7.0");
+    CHECK(std::string(VERSION) == "1.8.0");
     std::printf("t_cr170: %d checks, %d fails\n", checks, fails); return fails ? 1 : 0; }

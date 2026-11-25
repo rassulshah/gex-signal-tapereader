@@ -69,7 +69,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-24 17:28 CT "i think absorbtion read should be in the absorption indicator but it should be more compact without the result and next", 17:30 "lets go with this for now" / "build" on turn-read-mockup.html): THE COMPACT READ - for the candle under the mouse (else the last closed one): who won at the end that was pushed (Passive defense / Aggressor), then Attack and Absorbed / Not absorbed only; an Abs names its level in the heading. Research VERDICT 2026-11-24: 12,406 candles 1.5x+, passive defense held 40% (both halves 40 / 40) vs aggressor 15% (16 / 13); aggressor ran on 1 ATR 42% vs 26%, all 7 markets
+static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-24 17:52 CT "the absorbtion indicator can be updated to have two bars per candle , 1 for absorbtion and 1 for initiative", 18:01 "i want more detail for the intiative buyers", 18:53 "build" on turn-initiative-mockup.html v3): INITIATIVE = the counter side's heaviest single price in the end quarter (buys at the low, sells at the high) / its 20-candle mean, on when >= 1.5, bigger than the attackers' heaviest price there and the candle closed outside that quarter. Each candle: left bar = Absorption, right bar = Initiative, each at its stronger end. The read: Initiative / How (burst, sweep, biggest order) / Against. Research 2026-11-24 (new 10-candle lows / highs, 7 markets): initiative only 66% went 1 ATR first (n 711, halves 66 / 67) vs 57% ordinary, 61% absorption only; burst at the market's 90th percentile of the prior hour's pace 83% vs 67% (n 30, "?"), swept 4+ prices 76% vs 67% (n 55, "?")
+// was static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-24 17:28 CT "i think absorbtion read should be in the absorption indicator but it should be more compact without the result and next", 17:30 "lets go with this for now" / "build" on turn-read-mockup.html): THE COMPACT READ - for the candle under the mouse (else the last closed one): who won at the end that was pushed (Passive defense / Aggressor), then Attack and Absorbed / Not absorbed only; an Abs names its level in the heading. Research VERDICT 2026-11-24: 12,406 candles 1.5x+, passive defense held 40% (both halves 40 / 40) vs aggressor 15% (16 / 13); aggressor ran on 1 ATR 42% vs 26%, all 7 markets
 // was static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): RevRead\\turnexq-<MKT>-<spb>.txt = the sellers' / buyers' Ex? (last minute <= 0.5x the first 2 minutes' pace) of EVERY closed candle this pane saw whole - the E of the Tst badge's line 3 (lsRevReadMarks 0.28.0); nothing drawn changed
 // was static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) THE ABS READ: the order feed now keeps the book per price (added / pulled / most showing / refills) and the biggest single order a side; the read right of the last candle = the newest Abs of lsRevRead (Attack / Absorbed / Result / Ex or Next); RevRead\\turnabs-<MKT>-<spb>.txt = the P and Ex? of each Abs for the price-chart badge
 // was static const char* const VERSION = "1.4.2";   // (1.4.2, Rassul 2026-11-24 11:21 CT "first color the bars differently , top should be green and bottom should be red") host only: the Absorption bars in the attackers' colour (top green, bottom red)
@@ -164,20 +165,23 @@ inline std::string clockText(int hour, int minute) {   // 12-hour clock: "9:03 A
 // EFFORT (IRT volume at price), as lsEffortRewardPane 0.2.0
 // ---------------------------------------------------------------------------------------------------------------------------------
 struct Row { long long tick = 0, buy = 0, sell = 0; };       // buy = traded at the offer, sell = traded at the bid
-struct Bars { bool topOk = false, botOk = false; double top = 0, bot = 0; long long levels = 0, zone = 0; long long topMax = -1, botMax = -1; long long topMaxTick = 0, botMaxTick = 0; };   // (1.4.0) + the price (tick) of that heaviest price: the highest such price at the top, the lowest at the bottom   // (1.3.0) topMax / botMax = the lots at the heaviest single price in the end quarter (buys at the top, sells at the bottom); -1 = no candle
+struct Bars { bool topOk = false, botOk = false; double top = 0, bot = 0; long long levels = 0, zone = 0; long long topMax = -1, botMax = -1; long long topMaxTick = 0, botMaxTick = 0; long long topIni = -1, botIni = -1, topIniTick = 0, botIniTick = 0; };   // (1.8.0) topIni / botIni = the COUNTER side's heaviest single price in the end quarter (sells at the top, buys at the bottom) - Initiative   // (1.4.0) + the price (tick) of that heaviest price: the highest such price at the top, the lowest at the bottom   // (1.3.0) topMax / botMax = the lots at the heaviest single price in the end quarter (buys at the top, sells at the bottom); -1 = no candle
 inline long long zoneOf(long long L) { const long long z = (L + 2) / 4; return z < 1 ? 1 : z; }   // round(0.25 L), half up
 inline Bars barRatios(const std::vector<Row>& rows, long long lo, long long hi) {
     Bars b; if (hi < lo) return b;
     const long long L = hi - lo + 1; if (L < 4 || L > 200000) return b;
     const long long z = zoneOf(L); b.levels = L; b.zone = z;
-    long long bt = 0, br = 0, st = 0, sr = 0, bmx = 0, smx = 0, bmt = 0, smt = 0;
+    long long bt = 0, br = 0, st = 0, sr = 0, bmx = 0, smx = 0, bmt = 0, smt = 0, tix = 0, bix = 0, tit = 0, bit = 0;
     for (const Row& r : rows) {
         if (r.tick < lo || r.tick > hi || r.buy < 0 || r.sell < 0) continue;
         if (r.tick > hi - z) bt += r.buy; else br += r.buy;
         if (r.tick < lo + z) st += r.sell; else sr += r.sell;
         if (r.tick > hi - z && (r.buy > bmx || (r.buy == bmx && bmx > 0 && r.tick > bmt))) { bmx = r.buy; bmt = r.tick; }
         if (r.tick < lo + z && (r.sell > smx || (r.sell == smx && smx > 0 && r.tick < smt))) { smx = r.sell; smt = r.tick; }
+        if (r.tick > hi - z && (r.sell > tix || (r.sell == tix && tix > 0 && r.tick > tit))) { tix = r.sell; tit = r.tick; }   // (1.8.0) sellers at the top
+        if (r.tick < lo + z && (r.buy > bix || (r.buy == bix && bix > 0 && r.tick < bit))) { bix = r.buy; bit = r.tick; }      // (1.8.0) buyers at the bottom
     }
+    b.topIni = tix; b.botIni = bix; b.topIniTick = tix > 0 ? tit : hi; b.botIniTick = bix > 0 ? bit : lo;
     const double nz = (double)z, nr = (double)(L - z);
     b.topMax = bmx; b.botMax = smx; b.topMaxTick = bmx > 0 ? bmt : hi; b.botMaxTick = smx > 0 ? smt : lo;
     if (br > 0) { b.top = ((double)bt / nz) / ((double)br / nr); b.topOk = std::isfinite(b.top); }
@@ -438,12 +442,17 @@ struct Exh { bool ok = false, hasDecay = false; double late = 0, decay = 0, afte
 // (an order topped up after it filled = an iceberg tranche) - and per side the biggest single aggressive order (fills grouped by aggressor ID)
 struct BookCell { long long add[2] = { 0, 0 }, pull[2] = { 0, 0 }, shownMax[2] = { 0, 0 }, refills[2] = { 0, 0 }, refillLots[2] = { 0, 0 }, filled[2] = { 0, 0 }; };
 struct BigPr { long long lots = 0, lo = 0, hi = 0; };
+// (1.8.0) how the counter side took an end quarter: [0] = buyers at the bottom, [1] = sellers at the top. big = the biggest single order (fills grouped
+// by aggressor ID) with a fill in the quarter; sweep = the most ticks one such order spanned; burst = its most lots in one 5-second step in the quarter
+struct IniQ { BigPr big; long long sweep = 0, burst = 0; };
 static const size_t BOOK_CAP = 60000, HIST_P = 400;
 struct Sum {
     long long key = 0, start = 0; bool complete = false, overflow = false, stopOk = false, thin = true;
     std::map<long long, BookCell> book;                                   // (1.5.0) the prices that traded this candle: their book changes
     long long bigAny[2] = { -1, -1 };                                     // (1.5.0) the biggest single order of the sellers [0] / buyers [1] anywhere in the candle (-1 = not known)
     BigPr qBig[2];                                                        // (1.5.0) the biggest single SELL order wholly inside the bottom quarter [0], BUY order inside the top quarter [1]
+    IniQ iq[2];                                                           // (1.8.0) [0] buyers at the bottom, [1] sellers at the top
+    long long sideLots[2] = { 0, 0 };                                     // (1.8.0) sellers [0] / buyers [1] lots in the whole candle (the pace of the hour before)
     long long early[2] = { 0, 0 }, late[2] = { 0, 0 };                    // (1.5.0) sellers [0] / buyers [1] lots in the first 2/3 of the candle and in its last 1/3 (the last minute of 3)
     std::map<long long, Cell> cells; long long hiPx = 0, loPx = 0;
     Turn hi, lo; Exh exHi, exLo;
@@ -456,7 +465,7 @@ public:
     int spb = 0;
     Counters n;
     std::deque<Sum> sums;                                                 // closed candles, oldest first
-    struct Hist { long long key = 0, big[2] = { -1, -1 }; };
+    struct Hist { long long key = 0, big[2] = { -1, -1 }, lots[2] = { -1, -1 }; };   // (1.8.0) lots = the side's lots in the candle (-1 = not known)
     std::deque<Hist> hist;                                                // (1.5.0) every closed candle's biggest order a side (-1 = not known), oldest first, HIST_P kept
     // a fresh start (new chart / symbol / reconnect): everything open is dropped and the next candle cannot be complete
     void reset(int barSecs) {
@@ -590,7 +599,7 @@ private:
         summarize(s);
         for (std::map<long long, BookCell>::const_iterator it = curBook_.begin(); it != curBook_.end(); ++it) if (s.cells.count(it->first)) s.book.insert(*it);   // (1.5.0) the traded prices only (as the research store)
         curBook_.clear(); if (depth_.size() > 4096) bookPrune();
-        { Hist h; h.key = key; if (s.complete) { h.big[0] = std::max(0LL, s.bigAny[0]); h.big[1] = std::max(0LL, s.bigAny[1]); } hist.push_back(h); while (hist.size() > HIST_P) hist.pop_front(); }
+        { Hist h; h.key = key; if (s.complete) { h.big[0] = std::max(0LL, s.bigAny[0]); h.big[1] = std::max(0LL, s.bigAny[1]); h.lots[0] = s.sideLots[0]; h.lots[1] = s.sideLots[1]; } hist.push_back(h); while (hist.size() > HIST_P) hist.pop_front(); }
         while (sums.size() > SUMS_KEEP) sums.pop_front();
         fills_.clear(); if (fills_.capacity() > 65536) std::vector<Fill>().swap(fills_);
         if (ords_.size() > SHOWN_CAP / 2) prune();
@@ -619,7 +628,7 @@ private:
             struct G { long long lots = 0, lo = 0, hi = 0; int sd = 0; }; std::unordered_map<long long, G> g;
             const long long cut = s.start + (long long)spb * 2 / 3;
             for (size_t k = 0; k < nf; ++k) { const Fill& f = F[k]; if (f.ag == 0) continue; const int sd = f.ag > 0 ? 1 : 0;
-                (f.sec < cut ? s.early[sd] : s.late[sd]) += f.size;
+                (f.sec < cut ? s.early[sd] : s.late[sd]) += f.size; s.sideLots[sd] += f.size;
                 if (!f.aid) continue;
                 std::unordered_map<long long, G>::iterator gi = g.find(f.aid);
                 if (gi == g.end()) { if (g.size() >= 200000) continue; G x; x.lo = x.hi = f.px; x.sd = sd; gi = g.insert(std::make_pair(f.aid, x)).first; }
@@ -630,7 +639,14 @@ private:
                 if (x.lots > s.bigAny[x.sd]) s.bigAny[x.sd] = x.lots;
                 if (z <= 0) continue;
                 const bool in = x.sd == 0 ? x.hi < s.loPx + z : x.lo > s.hiPx - z;
-                if (in && x.lots > s.qBig[x.sd].lots) { s.qBig[x.sd].lots = x.lots; s.qBig[x.sd].lo = x.lo; s.qBig[x.sd].hi = x.hi; } } }
+                if (in && x.lots > s.qBig[x.sd].lots) { s.qBig[x.sd].lots = x.lots; s.qBig[x.sd].lo = x.lo; s.qBig[x.sd].hi = x.hi; }
+                const int e = x.sd == 1 ? 0 : 1; const bool touch = x.sd == 1 ? x.lo < s.loPx + z : x.hi > s.hiPx - z;   // (1.8.0) the counter side's orders with a fill in the quarter
+                if (touch) { IniQ& q = s.iq[e]; if (x.lots > q.big.lots) { q.big.lots = x.lots; q.big.lo = x.lo; q.big.hi = x.hi; } if (x.hi - x.lo + 1 > q.sweep) q.sweep = x.hi - x.lo + 1; } }
+            if (z > 0) for (int e = 0; e < 2; ++e) {                     // (1.8.0) the burst: the counter side's most lots in one 5-second step inside the quarter
+                std::map<long long, long long> st; const int sd = e == 0 ? 1 : 0;
+                for (size_t k = 0; k < nf; ++k) { const Fill& f = F[k]; if (f.ag == 0 || (f.ag > 0 ? 1 : 0) != sd) continue;
+                    if (e == 0 ? !(f.px < s.loPx + z) : !(f.px > s.hiPx - z)) continue;
+                    const long long b5 = f.sec >= 0 ? f.sec / 5 : (f.sec - 4) / 5; long long& v = st[b5]; v += f.size; if (v > s.iq[e].burst) s.iq[e].burst = v; } } }
         s.hi = turnOf(-1); s.lo = turnOf(1);
         if (!s.thin) { s.exHi = exhOf(s, -1, s.hi); s.exLo = exhOf(s, 1, s.lo); }
     }
@@ -1127,6 +1143,59 @@ inline CText quietText(const std::string& when, long long up1000, long long dn10
     if (up1000 >= 0 || dn1000 >= 0) o.title += " (top " + (up1000 >= 0 ? xText((double)up1000 / 1000.0) : std::string("-")) + " / bottom " + (dn1000 >= 0 ? xText((double)dn1000 / 1000.0) : std::string("-")) + ")";
     return o;
 }
+// ---------------------------------------------------------------------------------------------------------------------------------
+// (1.8.0) INITIATIVE - the counter side TAKING an end: buyers lifting the offer in the bottom quarter, sellers hitting the bid in the top one
+// ---------------------------------------------------------------------------------------------------------------------------------
+//   number = the counter side's heaviest single price in the end quarter / its average over the 20 candles before (as Absorption)
+//   on     = number >= 1.5 AND those lots > the attackers' heaviest price there (buyers bigger than sellers at the low) AND the candle closed
+//            outside that quarter. Colour = the side that attacked: buyers at the low green, sellers at the high red.
+// Research 2026-11-24 (RTH candles at a new 10-candle low / high, 7 markets, decided at the close; went 1 ATR the turn's way before 1 tick past
+// the extreme within 10 candles): initiative only 66% (n 711, halves 66 / 67), absorption only 61%, both 61%, ordinary 57%; better in all 7
+// markets (ES weakest 61 vs 59). Initiative >= 1.5 with the attackers bigger there: 54% (no better than ordinary) - hence the "bigger" rule.
+static const long long INI_FROM1000 = 1500, SWEEP_MIN = 4;
+struct Ini { long long x1000 = -1, attX1000 = -1, lots = -1, att = -1, tick = 0; bool away = false; };
+inline bool iniOn(const Ini& i) { return i.x1000 >= INI_FROM1000 && i.away && i.lots > i.att && i.lots > 0; }
+inline Bar1 iniBar(const Ini& i) { Bar1 b = ratioBar(i.x1000, 0); b.on = b.show && iniOn(i); return b; }
+// the end whose initiative is on: +1 the bottom (buyers), -1 the top (sellers), 0 = none; both on = the bigger number (ties: the bottom)
+inline int iniEnd(const Ini& up, const Ini& dn) { const bool u = iniOn(up), d = iniOn(dn); if (!u && !d) return 0; if (u && d) return dn.x1000 >= up.x1000 ? 1 : -1; return d ? 1 : -1; }
+// burst level per market (tenths): the 90th percentile of the burst against the prior hour's pace among initiative candles, research 2026-11-24
+// (267 candles with the order-by-order trades; at it 83% vs 67%, n 30 - LEARNING, shown with "?")
+inline long long burstLevel10(const std::string& mkt) {
+    static const char* const M[] = { "CL", "ES", "EU", "6E", "GC", "HG", "NG", "NQ" }; static const long long V[] = { 86, 54, 121, 121, 104, 130, 95, 77 };
+    for (int k = 0; k < 8; ++k) if (mkt == M[k]) return V[k];
+    return 100;
+}
+struct IniCalc { bool feed = false; long long bigLots = 0, bigLo = 0, bigHi = 0, sweep = 0, burst = 0, burst1000 = -1; };
+// end +1 = the bottom (buyers), -1 = the top (sellers); the pace = the side's lots per 5 s over the 20 candles before (10+ known, else no burst number)
+inline IniCalc iniCalc(const Live& Lv, long long key, int end, int spb) {
+    IniCalc c; const Sum* s = Lv.find(key); if (!s || !s->complete || s->thin || s->overflow || spb <= 0) return c;
+    const int e = end > 0 ? 0 : 1, sd = end > 0 ? 1 : 0; const IniQ& q = s->iq[e];
+    c.feed = true; c.bigLots = q.big.lots; c.bigLo = q.big.lo; c.bigHi = q.big.hi; c.sweep = q.sweep; c.burst = q.burst;
+    long long sum = 0; int n = 0;
+    for (std::deque<Live::Hist>::const_reverse_iterator it = Lv.hist.rbegin(); it != Lv.hist.rend() && n < 20; ++it) { if (it->key >= key) continue; if (it->lots[sd] < 0) continue; sum += it->lots[sd]; ++n; }
+    if (n >= 10 && sum > 0) { const double pace = (double)sum / ((double)n * (double)spb / 5.0); if (pace > 0) c.burst1000 = x1000((double)c.burst / pace); }
+    return c;
+}
+// the read: heading, Initiative, How (burst / sweep / biggest order), Against
+inline CText iniText(int end, const Ini& in, const IniCalc& c, const std::string& when, double tick, const std::string& mkt) {
+    CText o; const bool low = end > 0; o.win = low ? 1 : -1;
+    const std::string who = low ? "buyers" : "sellers", other = low ? "sellers" : "buyers";
+    o.title = (when.empty() ? std::string() : when + "  ") + "Initiative - " + who + (low ? " lifted the offer at the bottom" : " hit the bid at the top");
+    o.rows.push_back(std::make_pair("Initiative", who + " " + std::to_string(in.lots) + " lots at " + pxText(in.tick, tick) + " (" + xText((double)in.x1000 / 1000.0) + ")"));
+    if (!c.feed) o.rows.push_back(std::make_pair("How", std::string("no order feed for this candle")));
+    else {
+        const long long bl = burstLevel10(mkt); char lv[48]; std::snprintf(lv, sizeof lv, "%lld.%lldx", bl / 10, bl % 10);
+        std::string h = c.burst1000 >= 0 ? "Burst " + xText((double)c.burst1000 / 1000.0) + " pace (" + lv + ") ?" : std::string("Burst - (no pace yet)");
+        h += "  |  Swept " + std::to_string(c.sweep) + (c.sweep == 1 ? " price" : " prices") + " (" + std::to_string(SWEEP_MIN) + ") ?";
+        if (c.bigLots > 0) h += "  |  Biggest " + std::to_string(c.bigLots);
+        o.rows.push_back(std::make_pair("How", h));
+    }
+    std::string ag = other + " " + (in.att >= 0 ? std::to_string(in.att) : std::string("-")) + " lots there";
+    if (in.attX1000 >= 0) ag += " (" + xText((double)in.attX1000 / 1000.0) + ")";
+    ag += " - " + who + " won the " + (low ? "low" : "high");
+    o.rows.push_back(std::make_pair("Against", ag));
+    return o;
+}
 // the end that was pushed: +1 bottom (sellers), -1 top (buyers), 0 = neither 1.5+; ties go to the top
 inline int pushedEnd(long long up1000, long long dn1000) { const long long u = up1000 >= CR_FROM1000 ? up1000 : -1, d = dn1000 >= CR_FROM1000 ? dn1000 : -1; if (u < 0 && d < 0) return 0; return u >= d ? -1 : 1; }
 // (1.7.0) the order-book numbers of every closed candle this pane read whole, both ends, kept once decided (TurnPane\cread-<MKT>-<spb>.txt) so
@@ -1139,6 +1208,14 @@ inline std::string crecText(const std::map<std::pair<long long, int>, AbsCalc>& 
            + "|" + std::to_string(a.iceLots) + "|" + std::to_string(a.iceN) + "|" + std::to_string(a.big.lots) + "|" + std::to_string(a.big.lo) + "|" + std::to_string(a.big.hi) + "\n"; }
     return t;
 }
+// (1.8.0) + the Initiative numbers: "N|stamp|end|feed|bigLots|bigLo|bigHi|sweep|burst|burst1000" (older readers skip the N lines)
+inline std::string crecText(const std::map<std::pair<long long, int>, AbsCalc>& m, const std::map<std::pair<long long, int>, IniCalc>& n, const std::string& mkt, int spb) {
+    std::string t = crecText(m, mkt, spb); size_t skip = n.size() > CR_KEEP ? n.size() - CR_KEEP : 0;
+    for (const auto& kv : n) { if (skip) { --skip; continue; } const IniCalc& a = kv.second;
+        t += "N|" + std::to_string(kv.first.first) + "|" + std::to_string(kv.first.second) + "|" + (a.feed ? "1" : "0") + "|" + std::to_string(a.bigLots) + "|" + std::to_string(a.bigLo) + "|" + std::to_string(a.bigHi)
+           + "|" + std::to_string(a.sweep) + "|" + std::to_string(a.burst) + "|" + std::to_string(a.burst1000) + "\n"; }
+    return t;
+}
 inline bool parseCrec(const std::string& txt, const std::string& mkt, int spb, std::map<std::pair<long long, int>, AbsCalc>& out) {
     out.clear(); const std::vector<std::string> L = lines(txt, true); if (L.empty()) return false;
     const std::vector<std::string> h = split(L[0], '|'); long long s = 0; if (h.size() < 4 || h[0] != "CRD" || h[1] != "1" || h[2] != mkt || !toLL(h[3], s) || s != spb) return false;
@@ -1146,6 +1223,15 @@ inline bool parseCrec(const std::string& txt, const std::string& mkt, int spb, s
         for (size_t k = 1; k < c.size(); ++k) { long long x = 0; if (!toLL(c[k], x)) { v.clear(); break; } v.push_back(x); }
         if (v.size() != 11 || v[0] <= 0 || (v[1] != 1 && v[1] != -1)) continue;
         AbsCalc a; a.feed = v[2] != 0; a.attQ = v[3]; a.defShow = v[4]; a.putBack = v[5]; a.iceLots = v[6]; a.iceN = v[7]; a.big.lots = v[8]; a.big.lo = v[9]; a.big.hi = v[10]; out[std::make_pair(v[0], (int)v[1])] = a; }
+    return true;
+}
+inline bool parseCrec(const std::string& txt, const std::string& mkt, int spb, std::map<std::pair<long long, int>, AbsCalc>& out, std::map<std::pair<long long, int>, IniCalc>& nout) {
+    nout.clear(); if (!parseCrec(txt, mkt, spb, out)) return false;
+    const std::vector<std::string> L = lines(txt, true);
+    for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|'); if (c.size() != 10 || c[0] != "N") continue; std::vector<long long> v;
+        for (size_t k = 1; k < c.size(); ++k) { long long x = 0; if (!toLL(c[k], x)) { v.clear(); break; } v.push_back(x); }
+        if (v.size() != 9 || v[0] <= 0 || (v[1] != 1 && v[1] != -1) || v[3] < 0 || v[6] < 0 || v[7] < 0 || v[8] < -1) continue;
+        IniCalc a; a.feed = v[2] != 0; a.bigLots = v[3]; a.bigLo = v[4]; a.bigHi = v[5]; a.sweep = v[6]; a.burst = v[7]; a.burst1000 = v[8]; nout[std::make_pair(v[0], (int)v[1])] = a; }
     return true;
 }
 // (1.5.0) lsTurn's line per Abs candle for lsRevReadMarks (RevRead\turnabs-<MKT>-<spb>.txt): "stamp|dir|P|plus|exq" (P -1 = not known)
@@ -1189,7 +1275,7 @@ inline const char* verdictText(int v, bool bestProven) {
     return v == V_UNCLEAR ? "UNCLEAR" : v == V_ASIDE ? "STAND ASIDE" : v == V_WAIT ? "WAIT" : v == V_BEST ? (bestProven ? "BEST ODDS" : "BEST ODDS ?") : "NO READ";
 }
 // prefix = which sweep ("PhrH 9:03 AM"); numbers = add the ratios to the words (when the bars are too narrow for labels)
-inline Strip stripOf(const Read& r, bool bestProven, bool numbers, const std::string& prefix, const Abs& ab = Abs(), long long from10 = ABS_FROM10) {
+inline Strip stripOf(const Read& r, bool bestProven, bool numbers, const std::string& prefix, const Abs& ab = Abs(), long long from10 = ABS_FROM10, const Ini* ini = nullptr) {
     Strip s;
     struct Add { Strip& s; void operator()(const std::string& t, int tone, bool bold) const { Seg g; g.text = t; g.tone = tone; g.bold = bold; s.segs.push_back(g); s.flat += t; } } add = { s };
     const std::string sep = " / ";
@@ -1206,7 +1292,11 @@ inline Strip stripOf(const Read& r, bool bestProven, bool numbers, const std::st
         add(std::string(word4(r.exh)) + " Exhaustion" + (numbers ? " " + ratioText(exhBar((double)r.dem1e4 / 1e4)) : std::string()) + (r.verdict == V_UNCLEAR ? " ?" : ""), r.exh == 0 ? T_MUTED : T_DIR, true); }
     else add("\x96 Exhaustion", T_MUTED, true);
     add(sep, T_MUTED, false);
-    if (r.marks >= 0 && r.ansOk) add(std::string(word4(r.marks)) + " Initiative" + (numbers ? " " + std::to_string(r.marks) + "/3" : std::string()), r.marks == 0 ? T_MUTED : T_DIR, true);
+    if (ini) {   // (1.8.0) the new Initiative of the turn's end (the old Answer 0-3 is no longer drawn)
+        if (ini->x1000 >= 0) { const double x = (double)ini->x1000 / 1000.0; const int k = iniOn(*ini) ? 3 : (ini->away && ini->lots > ini->att && x >= 1.0) ? 1 : 0;
+            add(std::string(word4(k)) + " Initiative" + (numbers ? " " + ratioText(x) : std::string()), k == 0 ? T_MUTED : k == 3 ? T_DIR : T_TEXT, true); }
+        else add("\x96 Initiative", T_MUTED, true); }
+    else if (r.marks >= 0 && r.ansOk) add(std::string(word4(r.marks)) + " Initiative" + (numbers ? " " + std::to_string(r.marks) + "/3" : std::string()), r.marks == 0 ? T_MUTED : T_DIR, true);
     else add("\x96 Initiative", T_MUTED, true);
     const int vt = r.verdict == V_BEST ? T_DIR : r.verdict == V_WAIT ? T_AMBER : T_MUTED;
     add("   \xBB ", T_MUTED, false);

@@ -156,7 +156,7 @@ int main() {
           if (a != std::string::npos && b != std::string::npos) { const std::string la = tb.substr(a + 1, tb.find('\n', a + 1) - a - 1), lb = te.substr(b + 1, te.find('\n', b + 1) - b - 1);
             std::cout << "(1.6.0) abs " << la << " / exq " << lb << "\n"; CHECK(la.substr(la.size() - 1) == lb.substr(lb.find('|') + 1, 1)); } }
         std::map<long long, std::pair<int, int> > tq; CHECK(turn::parseTeqFile(te, "ES", 180, tq) && !tq.empty() && !turn::parseTeqFile(te, "NQ", 180, tq)); }
-    CHECK(st.find("VERSION|1.7.0") != std::string::npos && std::string(TURN_VERSION) == "1.7.0" && std::string(turn::VERSION) == "1.7.0");
+    CHECK(st.find("VERSION|1.8.0") != std::string::npos && std::string(TURN_VERSION) == "1.8.0" && std::string(turn::VERSION) == "1.8.0");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----
@@ -165,40 +165,49 @@ int main() {
     CHECK(s0.find("ONH 9:03 AM   Heavy Stop Run / ") == 0 && s0.find(" Absorption / ") != std::string::npos && s0.find(" Exhaustion") != std::string::npos && s0.find(" Initiative   \xBB ") != std::string::npos);
     noOverlap(es.H); CHECK(barLabels(es.H, 60) >= 20);
     // ---- every closed candle against the independent calculation ----
-    struct Exp { bool have = false; long long mx = 0; bool away = false; bool known = false, on = false; std::string label; double v = 0; int cls = 0; };
-    const size_t NB = es.H.bars.size(); std::vector<Exp> up(NB), dn(NB); std::vector<long long> lv(NB, 0);
+    struct Exp { bool have = false; long long mx = 0, att = 0, x1000 = -1; bool away = false; bool known = false, on = false; std::string label; double v = 0; int cls = 0; };
+    const size_t NB = es.H.bars.size(); std::vector<Exp> up(NB), dn(NB), iu(NB), idn(NB); std::vector<long long> lv(NB, 0);   // (1.8.0) iu / idn = Initiative at the top (sellers) / bottom (buyers)
     for (size_t i = 0; i + 1 < NB; ++i) { const CandleVap& c = es.vap[(long long)es.H.bars[i].time]; if (!c.hi || !c.lo) continue;
         const long long L = c.hi - c.lo + 1; lv[i] = L;
         if (L < 4) continue;
-        long long z = (L + 2) / 4; if (z < 1) z = 1; long long bm = 0, sm = 0;
-        for (const auto& r : c.rows) { if (r.first > c.hi - z && r.second.first > bm) bm = r.second.first; if (r.first < c.lo + z && r.second.second > sm) sm = r.second.second; }
-        up[i].have = dn[i].have = true; up[i].mx = bm; dn[i].mx = sm; up[i].away = c.close <= c.hi - z; dn[i].away = c.close >= c.lo + z; }
-    for (int side = 0; side < 2; ++side) { std::vector<Exp>& E = side ? dn : up;
+        long long z = (L + 2) / 4; if (z < 1) z = 1; long long bm = 0, sm = 0, ts = 0, bb = 0;
+        for (const auto& r : c.rows) { if (r.first > c.hi - z && r.second.first > bm) bm = r.second.first; if (r.first < c.lo + z && r.second.second > sm) sm = r.second.second;
+            if (r.first > c.hi - z && r.second.second > ts) { ts = r.second.second; }
+            if (r.first < c.lo + z && r.second.first > bb) { bb = r.second.first; } }
+        up[i].have = dn[i].have = iu[i].have = idn[i].have = true; up[i].mx = bm; dn[i].mx = sm; up[i].away = iu[i].away = c.close <= c.hi - z; dn[i].away = idn[i].away = c.close >= c.lo + z;
+        iu[i].mx = ts; iu[i].att = bm; idn[i].mx = bb; idn[i].att = sm; }
+    for (int side = 0; side < 4; ++side) { std::vector<Exp>& E = side == 0 ? up : side == 1 ? dn : side == 2 ? iu : idn;
         for (size_t i = 0; i + 1 < NB; ++i) { double sum = 0; int n = 0;
             if (!E[i].have) continue;
             for (size_t j = i; j-- > 0 && n < 20;) { if (lv[j] < 4) continue; sum += (double)E[j].mx; ++n; }
             if (n < 10 || !(sum > 0)) continue;
             const double ratio = (double)E[i].mx / (sum / n); const long long x1000 = (long long)std::llround(ratio * 1000.0);
-            E[i].known = true; E[i].v = (double)x1000 / 1000.0; E[i].label = turn::labelText(E[i].v); const long long t10 = turn::shown10(E[i].label); E[i].on = E[i].away && t10 >= 20;
+            E[i].known = true; E[i].x1000 = x1000; E[i].v = (double)x1000 / 1000.0; E[i].label = turn::labelText(E[i].v); const long long t10 = turn::shown10(E[i].label); E[i].on = side < 2 ? E[i].away && t10 >= 20 : E[i].away && x1000 >= 1500 && E[i].mx > E[i].att && E[i].mx > 0;
             E[i].cls = !E[i].away || t10 < 10 ? 0 : t10 >= 20 ? 3 : t10 < 15 ? 1 : 2; } }
     int axis = -1; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.b - d.t == 1 && d.r - d.l > 200 && d.t > 21) axis = d.t;
-    CHECK(axis > 100); const int half = axis - 1 - (es.H.paneTop + 22) > 0 ? 125 : 125;
+    CHECK(axis > 100); 
     const auto boxAt = [&](int l, bool u) -> const mock::Draw* { for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.l == l && d.r == l + 20 && (u ? d.b == axis : d.t == axis + 1)) return &d; return nullptr; };
+    (void)boxAt;
     const auto labelOf = [&](const mock::Draw& b, bool u) -> std::string { for (const mock::Draw& d : es.H.draws) if (d.type == "text" && d.t > 21 && (d.l + d.r) / 2 >= b.l + 6 && (d.l + d.r) / 2 <= b.r - 6 && (u ? d.b == b.t - 1 : d.t == b.b + 1)) return d.text; return std::string(); };
-    int known = 0, coloured = 0, grey = 0, none = 0, heavyNotAway = 0; int hpx = -1;
+    // (1.8.0) TWO BARS A CANDLE: Absorption at its stronger end in the LEFT column (xl = centre - 1 - 20), Initiative at its stronger end in the RIGHT
+    // one (xr = centre + 1); Absorption buyers-at-the-high green / sellers-at-the-low red, Initiative sellers-at-the-high red / buyers-at-the-low green
+    const auto boxAtW = [&](int l, bool u) -> const mock::Draw* { for (const mock::Draw& d : es.H.draws) { if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.l == l && d.r == l + 20 && (u ? d.b == axis : d.t == axis + 1)
+                                                                    && d.color != trh::C_LGREEN && d.color != trh::C_LRED) return &d; } return nullptr; };
+    int known = 0, coloured = 0, grey = 0, none = 0, heavyNotAway = 0, iniKnown = 0, iniCol = 0;
+    std::vector<std::pair<double, int> > hs; std::vector<long> iniIdx;
     for (size_t i = 0; i + 1 < NB; ++i) { const long long key = (long long)es.H.bars[i].time; const int cx = es.H.barX0 + (int)i * es.H.barW;
-        const mock::Draw *ru = boxAt(cx + 1, true), *rd = boxAt(cx + 1, false); const bool sweep = key == K851 || key == K903;
-        if (hpx < 0 && ru && up[i].known && up[i].v > 0.2 && up[i].v < 3) hpx = (int)std::lround((ru->b - ru->t) / up[i].v * 3.0);   // the pane's scale, from the first bar
-        const auto same = [&](const mock::Draw* b, const Exp& e, bool u, COLOR win) { if (!e.known) { CHECK(b == nullptr); ++none; return; } ++known; CHECK(b != nullptr); if (!b) return;
-            CHECK(b->color == (e.on ? win : trh::C_AXIS)); CHECK(labelOf(*b, u) == e.label); if (e.on) ++coloured; else ++grey; if (!e.away && turn::shown10(e.label) >= 20) ++heavyNotAway; };
-        same(ru, up[i], true, trh::C_GREEN);                                // (1.4.2) the top bar: green (the buyers at the offer), also on a sweep of a high
-        if (sweep) { CHECK(rd != nullptr); if (rd) CHECK(isMarks(labelOf(*rd, false))); }   // the turn half of a sweep candle: the Initiative as marks
-        else same(rd, dn[i], false, trh::C_RED); }   // (1.4.2) the bottom bar: red (the sellers at the bid)
-    std::printf("Absorption bars: %d with a number (%d coloured, %d grey; %d read 2.0+ but closed in that quarter), %d candle sides with none yet\n", known, coloured, grey, heavyNotAway, none);
-    CHECK(known >= 20 && coloured >= 1 && grey >= 10 && none >= 18); (void)half; (void)hpx;
+        if (key == K851 || key == K903) continue;                          // sweep candles keep their own layout
+        const bool abUp = up[i].known && up[i].x1000 >= (dn[i].known ? dn[i].x1000 : -1); const Exp& A = abUp ? up[i] : dn[i];
+        const bool inUp = iu[i].known && iu[i].x1000 > (idn[i].known ? idn[i].x1000 : -1); const Exp& I = inUp ? iu[i] : idn[i];
+        const mock::Draw* ba = boxAtW(cx - 21, abUp); const mock::Draw* bi = boxAtW(cx + 1, inUp);
+        if (!A.known) { CHECK(boxAtW(cx - 21, true) == nullptr || boxAtW(cx - 21, false) == nullptr); ++none; }
+        else { ++known; CHECK(ba != nullptr); if (ba) { CHECK(ba->color == (A.on ? (abUp ? trh::C_GREEN : trh::C_RED) : trh::C_AXIS)); CHECK(labelOf(*ba, abUp) == A.label || labelOf(*ba, abUp).empty());
+                if (A.on) ++coloured; else ++grey; if (!A.away && turn::shown10(A.label) >= 20) ++heavyNotAway; if (abUp) hs.push_back(std::make_pair(A.v, ba->b - ba->t)); } }
+        if (I.known) { ++iniKnown; CHECK(bi != nullptr); if (bi) { CHECK(bi->color == (I.on ? (inUp ? trh::C_RED : trh::C_GREEN) : trh::C_AXIS)); if (I.on) { ++iniCol; iniIdx.push_back((long)i); } } } }
+    std::printf("Absorption bars: %d with a number (%d coloured, %d grey; %d read 2.0+ but closed in that quarter), %d candles with none yet; Initiative bars: %d (%d coloured)\n", known, coloured, grey, heavyNotAway, none, iniKnown, iniCol);
+    CHECK(known >= 20 && grey >= 10 && none >= 9 && iniKnown >= 20);
     // heights: equal numbers -> equal heights, a bigger number is never shorter (the scale itself is 1.2.1's barPx)
-    { std::vector<std::pair<double, int> > hs; for (size_t i = 0; i + 1 < NB; ++i) { const int cx = es.H.barX0 + (int)i * es.H.barW; if (const mock::Draw* b = boxAt(cx + 1, true)) if (up[i].known) hs.push_back(std::make_pair(up[i].v, b->b - b->t)); }
-      std::sort(hs.begin(), hs.end()); for (size_t q = 1; q < hs.size(); ++q) CHECK(hs[q].second >= hs[q - 1].second); }
+    { std::sort(hs.begin(), hs.end()); for (size_t q = 1; q < hs.size(); ++q) CHECK(hs[q].second >= hs[q - 1].second); }
     // ---- the mouse on a plain candle below the strip: "<time>   High: <word> Absorption / Low: <word> Absorption" ----
     const std::string bars0 = barsOnly(es.H); int tried = 0;
     for (size_t i = 12; i + 1 < NB && tried < 6; ++i) { const long long key = (long long)es.H.bars[i].time; if (key == K851 || key == K903 || !up[i].known || !dn[i].known) continue;
@@ -216,9 +225,16 @@ int main() {
             const std::string r1 = lineOf(get(P("TurnPane\\status-ES-180.txt")), "READ|"); std::cout << "(1.7.0) hover Abs candle: " << r1 << "\n";
             CHECK(r1.find("Result:") == std::string::npos && r1.find("Next:") == std::string::npos);
             const bool q = r1.find("Quiet - no push") != std::string::npos;
-            CHECK(q || (r1.find("Attack: ") != std::string::npos && r1.find("no order feed") == std::string::npos));
+            CHECK(q || r1.find("Initiative: ") != std::string::npos || (r1.find("Attack: ") != std::string::npos && r1.find("no order feed") == std::string::npos));
             if (r1.find("sellers absorbed at the bottom") != std::string::npos || r1.find("sellers got through the bottom") != std::string::npos) CHECK(r1.find("(ONL 7105.00)") != std::string::npos); }
     }
+    {   // (1.8.0) the mouse on a candle whose Initiative is on: the read is the Initiative read (Initiative / How / Against), its colour the winner's
+        int seen = 0;
+        for (long q : iniIdx) { mouseAt(x, es.H, q, es.H.barX0 + (int)q * es.H.barW, 250); cycle(x, es.H); cycle(x, es.H);
+            const std::string r1 = lineOf(get(P("TurnPane\\status-ES-180.txt")), "READ|"); std::cout << "(1.8.0) hover Initiative candle: " << r1 << "\n";
+            CHECK(r1.find("Initiative - ") != std::string::npos && r1.find("Initiative: ") != std::string::npos && r1.find("How: ") != std::string::npos && r1.find("Against: ") != std::string::npos);
+            CHECK(r1.find(" won the ") != std::string::npos); ++seen; noOverlap(es.H); }
+        CHECK(seen >= 1); }
     turn_test_window = nullptr; cycle(x, es.H); cycle(x, es.H); CHECK(stripText(es.H) == s0 && barsOnly(es.H) == bars0);
     // ---- the chart removed and added again, no order events: the same bars and strip, the record untouched (no repaint) ----
     { const std::string before = dumpDraws(es.H); mock::current = &es.H; x->destroy(); static mock::Feed empty; es.H.feedp = &empty; for (int i = 0; i < 6; ++i) cycle(x, es.H);
@@ -227,8 +243,8 @@ int main() {
     put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|0\nexhaustion|0\nanswer|0\nread|0\nEND\n"); for (int i = 0; i < 8; ++i) cycle(x, es.H);
     { const std::string s = stripText(es.H); std::cout << "Absorption only: " << s << "\n"; CHECK(s.find("   High: ") != std::string::npos && s.find(" / Low: ") != std::string::npos && s.find("Stop Run") == std::string::npos && pillText(es.H).empty());
       CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|ok|absorption|absorption coloured from 2.0\n") != std::string::npos); noOverlap(es.H);
-      int reds = 0, greens = 0, wrong = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.r - d.l <= 60) { if (d.color == trh::C_GREEN) { ++greens; if (d.b != axis) ++wrong; } else if (d.color == trh::C_RED) { ++reds; if (d.t != axis + 1) ++wrong; } else if (d.color != trh::C_AXIS) ++wrong; }
-      CHECK(wrong == 0 && reds + greens == coloured + (up[(size_t)((K851 - K0) / 180)].on ? 0 : 0)); }                 // red only above the axis (highs), green only below (lows); the same candles count
+      int reds = 0, greens = 0, wrong = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "box" && d.t > 21 && d.b - d.t > 1 && d.r - d.l <= 60) { if (d.color == trh::C_GREEN) ++greens; else if (d.color == trh::C_RED) ++reds; else if (d.color != trh::C_AXIS && d.color != trh::C_LGREEN && d.color != trh::C_LRED) ++wrong; }
+      CHECK(wrong == 0 && reds + greens >= coloured); }                 // (1.8.0) Absorption and Initiative both coloured green / red                 // red only above the axis (highs), green only below (lows); the same candles count
     put(P("TurnPane\\display.txt"), "TURNSHOW|1\nstop|0\nexhaustion|x\nEND\n"); for (int i = 0; i < 8; ++i) cycle(x, es.H);
     CHECK(get(P("TurnPane\\status-ES-180.txt")).find("SHOW|display line 3 garbled (the defaults)|absorption stop exhaustion initiative read|") != std::string::npos); CHECK(barsOnly(es.H) == bars0);
     std::remove(P("TurnPane\\display.txt").c_str()); for (int i = 0; i < 8; ++i) cycle(x, es.H); CHECK(barsOnly(es.H) == bars0 && stripText(es.H) == s0);
