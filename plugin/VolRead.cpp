@@ -58,7 +58,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.11.0";   // (1.11.0, Rassul 2026-11-23 09:34 CT "go" on the AR bar) the Range pane shows the price chart's AR (VolRangeLogic 1.11.0)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-23 07:32 CT "go with badge for both", 07:33 "why is cx on the range ?") the Volume pane's Cx = the price chart's Cx (the marks file); no Cx in the Range pane (VolRangeLogic 1.10.0)   // was "1.9.0";   // (1.9.0, Rassul 18:35 CT) the coloured numbers column back next to the read (VolRangeLogic 1.9.0)   // was "1.8.0";   // (1.8.0) Bk / Sw read from the price chart's marks (lsRevRead wy file); Bk / Sw count from 10   // was "1.7.0"   // (1.7.0) Bk / Sw on the price chart's rules (VolRangeLogic 1.7.0)   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.12.0";   // (1.12.0) the Volume read: how much / orders / icebergs, no verdict (VolRangeLogic 1.12.0)   // was "1.11.0";   // (1.11.0, Rassul 2026-11-23 09:34 CT "go" on the AR bar) the Range pane shows the price chart's AR (VolRangeLogic 1.11.0)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-23 07:32 CT "go with badge for both", 07:33 "why is cx on the range ?") the Volume pane's Cx = the price chart's Cx (the marks file); no Cx in the Range pane (VolRangeLogic 1.10.0)   // was "1.9.0";   // (1.9.0, Rassul 18:35 CT) the coloured numbers column back next to the read (VolRangeLogic 1.9.0)   // was "1.8.0";   // (1.8.0) Bk / Sw read from the price chart's marks (lsRevRead wy file); Bk / Sw count from 10   // was "1.7.0"   // (1.7.0) Bk / Sw on the price chart's rules (VolRangeLogic 1.7.0)   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -320,6 +320,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA Volume Read v1.4.0 - (1.4.0: the read right of the last candle - verdict, candle, two behaviour lines and the numbers, for the candle under the mouse; it looks inside the candle through the Book Flow record) its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = the break / sweep candles the price chart marks, Ct = a counter bar bigger than every bar since the Cob origin, Cx = climactic volume, exactly on the candles the price chart marks Cx; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.11.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.12.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

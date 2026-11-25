@@ -19,7 +19,8 @@
 
 namespace vrd {
 
-static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
+static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-24 19:28-19:44 CT "i'll let you determine the display and the read", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) volPlain(): the VOLUME read answers layers 1, 4 and 5 of his volume model only - how much (size), the biggest orders / sweeps, icebergs, and a neutral note - with NO bullish / bearish verdict (the Turn pane calls the winner; the buy / sell pane says who hit whom). The Range read is unchanged
+// was static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
 // was "1.1.1";   // (1.1.1, his 09:32 CT screenshot: "narrowing" was the verdict but the sentence under it was about the 9:21 candle) the sentences behind the verdict come first, the side notes after   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
 static const int NORM_N = 20, NORM_MIN = 5, EXT_N = 10;
 static const double BIG_X = 2.0;        // volume / range "big": 2x the median of the 20 candles before
@@ -36,7 +37,7 @@ struct Ctx { std::vector<Cd> c;            // oldest -> newest; the LAST one is 
              double atr = 0; int cx = 0;   // Wilder ATR(13) of the candle before; cx: +1 a climax at a pivot LOW on it or the candle before, -1 at a pivot HIGH
              Inside in; int dec = 2; };
 struct Row { std::string lab, a, b; int ca = 0, cb = 0; };   // +1 green, -1 red, 0 white, 2 grey
-struct Out { bool ok = false; int verdict = 0; std::string head, why, candle, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; };   // ex (1.1.0) = the explanation sentences   // verdict +1 / -1 / 2 mixed / 0 quiet
+struct Out { bool ok = false; int verdict = 0; std::string head, why, candle, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; std::vector<std::string> notes; };   // (1.3.0) notes = neutral facts for the Volume read (no side)   // ex (1.1.0) = the explanation sentences   // verdict +1 / -1 / 2 mixed / 0 quiet
 
 inline std::string commas(long long v) { std::string s = std::to_string(v < 0 ? -v : v); for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ","); return v < 0 ? "-" + s : s; }
 inline std::string xx(double v) { char b[24]; std::snprintf(b, sizeof b, v > 0 && v < 0.095 ? "%.2fx" : "%.1fx", (std::min)(v, 99.9)); return b; }   // (1.1.1) 0.01x, not 0.0x
@@ -89,10 +90,11 @@ inline Out volumeRead(const Ctx& x) {
     for (int j = i; j >= 0 && j >= i - 2; --j) {   // heavy volume that went nowhere, on this candle or the two before
         const double v2 = volX(x.c, j), r2 = rngX(x.c, j); if (!(v2 >= BIG_X && r2 > 0 && r2 < 1.0)) continue;
         E.push_back((j == i ? std::string("Big volume (") : "At " + x.c[(size_t)j].when + ", big volume (") + xx(v2) + ") moved price only " + xx(r2) + " - someone absorbed it.");
-        B.push_back((j == i ? std::string() : x.c[(size_t)j].when + ": ") + xx(v2) + " volume moved price only " + xx(r2) + " - absorbed ?"); Y.push_back(Why{ x.c[(size_t)j].green() ? -1 : 1, "volume absorbed" }); break; }
-    if (x.cx) { E.push_back(std::string("Climax volume at the ") + (x.cx < 0 ? "high" : "low") + " - a common place for the move to turn."); B.push_back(std::string("Climax volume at the ") + (x.cx < 0 ? "high" : "low") + " ?"); Y.push_back(Why{ x.cx * 2, std::string("climax at the ") + (x.cx < 0 ? "high" : "low") }); }
-    { int run = 0; for (int j = i; j >= 0; --j) { const double v2 = volX(x.c, j); if (v2 >= BIG_X) ++run; else break; } if (run >= 3) { E.push_back(std::to_string(run) + " heavy candles in a row - a strong push is under way."); B.push_back("Volume run: " + std::to_string(run) + " candles in a row at 2x or more"); Y.push_back(Why{ 0, "volume run" }); } }
-    if (vx > 0 && vx < SMALL_X && i >= 1) { const double v1 = volX(x.c, i - 1); if (v1 > 0 && v1 < SMALL_X) { E.push_back("Volume is drying up two candles in a row - the move is losing interest."); B.push_back("Volume drying up: " + xx(vx)); Y.push_back(Why{ 0, "volume drying up" }); } }
+        B.push_back((j == i ? std::string() : x.c[(size_t)j].when + ": ") + xx(v2) + " volume moved price only " + xx(r2) + " - absorbed ?"); Y.push_back(Why{ x.c[(size_t)j].green() ? -1 : 1, "volume absorbed" });
+        o.notes.push_back((j == i ? std::string("Heavy volume (") : "At " + x.c[(size_t)j].when + ", heavy volume (") + xx(v2) + ") moved price only " + xx(r2) + "."); break; }
+    if (x.cx) { o.notes.push_back(std::string("Climax volume at the ") + (x.cx < 0 ? "high" : "low") + "."); E.push_back(std::string("Climax volume at the ") + (x.cx < 0 ? "high" : "low") + " - a common place for the move to turn."); B.push_back(std::string("Climax volume at the ") + (x.cx < 0 ? "high" : "low") + " ?"); Y.push_back(Why{ x.cx * 2, std::string("climax at the ") + (x.cx < 0 ? "high" : "low") }); }
+    { int run = 0; for (int j = i; j >= 0; --j) { const double v2 = volX(x.c, j); if (v2 >= BIG_X) ++run; else break; } if (run >= 3) { o.notes.push_back(std::to_string(run) + " heavy candles in a row."); E.push_back(std::to_string(run) + " heavy candles in a row - a strong push is under way."); B.push_back("Volume run: " + std::to_string(run) + " candles in a row at 2x or more"); Y.push_back(Why{ 0, "volume run" }); } }
+    if (vx > 0 && vx < SMALL_X && i >= 1) { const double v1 = volX(x.c, i - 1); if (v1 > 0 && v1 < SMALL_X) { o.notes.push_back("Volume drying up two candles in a row."); E.push_back("Volume is drying up two candles in a row - the move is losing interest."); B.push_back("Volume drying up: " + xx(vx)); Y.push_back(Why{ 0, "volume drying up" }); } }
     if (rx >= BIG_X && vx > 0 && vx < 1.2) { E.push_back("Price moved " + xx(rx) + " its normal range on normal volume - little stood in the way."); B.push_back("Easy movement: range " + xx(rx) + " on normal volume"); Y.push_back(Why{ cd, "easy movement" }); }
     if (!B.empty()) o.b1 = B[0];
     if (B.size() > 1) o.b2 = B[1];
@@ -211,6 +213,32 @@ inline plr::Plain plain(const Out& o, bool range) {
         if (!R.empty()) { p.why = one(R[0]); p.watch = R[0] == "narrowing" ? "Watch: the break out of the coil." : "Nothing to act on."; }
         else { p.why = o.ex.empty() ? std::string("Nothing unusual.") : plr::noParens(o.ex[0]); p.watch = "Nothing to act on."; } }
     return p;
+}
+// (1.3.0) THE VOLUME READ: line 1 how much (Heavy 1.5x+ / Above normal 1.2x+ / Normal / Below normal under 0.8x / Light under 0.5x, + "the biggest
+// (green / red) bar in N candles" from 20), coloured by the candle only when it is the biggest in 20+; line 2 the biggest order each way and the longest
+// sweep (3+ prices); line 3 icebergs traded (bids / offers); line 4 the first neutral note (climax, absorbed volume, a run, drying up)
+static const double HEAVY_X = 1.5, ABOVE_X = 1.2, BELOW_X = 0.8; static const int BIG_IN = 20;
+inline Out volPlain(const Ctx& x, Out o) {
+    if (!o.ok) { return o; }
+    const int n = (int)x.c.size();
+    if (n < 1) { return o; }
+    const Cd& k = x.c[(size_t)n - 1]; const double vx = volX(x.c, n - 1); const bool g = k.green();
+    std::string sz = vx >= HEAVY_X ? "Heavy" : vx >= ABOVE_X ? "Above normal" : vx > 0 && vx < SMALL_X ? "Light" : vx > 0 && vx < BELOW_X ? "Below normal" : vx > 0 ? "Normal" : "Not rated yet";
+    const bool bigSame = x.cntSame >= BIG_IN && x.cntSame >= x.cntAll, bigAll = x.cntAll >= BIG_IN;
+    if (bigAll) sz += " - the biggest bar in " + cnt(x.cntAll) + " candles";
+    else if (bigSame) sz += std::string(" - the biggest ") + (g ? "green" : "red") + " bar in " + cnt(x.cntSame) + " candles";
+    if (vx > 0) sz += " (" + xx(vx) + ")";
+    o.head = sz; o.why.clear(); o.verdict = (bigAll || bigSame) ? (g ? 1 : -1) : 0;
+    std::vector<std::string> L; const Inside& q = x.in;
+    if (q.ok) {
+        std::string l = "Biggest orders: buyers " + commas(q.bigBuy) + ", sellers " + commas(q.bigSell);
+        const int sw = q.swBuy > q.swSell ? q.swBuy : q.swSell;
+        if (sw >= (int)SWEEP_LV) { const bool sb = q.swSell > q.swBuy; l += std::string("; one ") + (sb ? "sell" : "buy") + " order swept " + std::to_string(sw) + " prices, " + (sb ? "buyers " : "sellers ") + std::to_string(sb ? q.swBuy : q.swSell); }
+        L.push_back(l + ".");
+        if (q.hidBuy > 0 || q.hidSell > 0) L.push_back("Icebergs: bids refilled " + commas(q.hidBuy) + " lots, offers " + commas(q.hidSell) + ".");
+    } else L.push_back("No order detail for this candle.");
+    if (!o.notes.empty()) L.push_back(o.notes[0]);
+    o.ex = L; o.rows.clear(); o.b1.clear(); o.b2.clear(); return o;
 }
 inline Out toPlain(Out o, bool range) { if (!o.ok) return o; const plr::Plain p = plain(o, range); o.head = p.head; o.why.clear(); o.ex = plr::lines(p); o.rows.clear(); o.b1.clear(); o.b2.clear(); return o; }
 } // namespace vrd

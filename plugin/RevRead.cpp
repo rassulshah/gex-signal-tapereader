@@ -89,6 +89,7 @@
 #include <memory>
 #include <set>
 #include "CombRead.h"          // (0.15.0) the one read + the Cx rule - both plugins use it
+#include "BsRead.h"            // (0.29.0) the buy / sell read
 #include "WyRead.h"            // (0.17.0) the Wyckoff strip: E / A / Sp / Ut / I + their plain read
 #include "WyMarks.h"           // (0.21.2) the pane writes the I lines with wyi::iLine (SDK-free, tests_wymarks / tests_rr0212)
 #include "WyFreeze.h"          // (0.20.3) each finished session's wy lines, frozen (SDK-free, tests_wyfreeze)
@@ -105,11 +106,13 @@
 static const double BF_RATIO_MIN = 1.2;
 static const double BF_LABEL_X = 2.0;   // (0.21.5) a Book Flow label = the side's net 2x its normal or more   // (0.11.1) a Book Flow ratio label needs the bigger side 1.2x the smaller or more
 static const bool ACC_READ_DRAWN = false;   // (0.12.0, Rassul 2026-11-17 06:03 CT "remove what is there currently now") the Accum / Distrib read is not drawn in the pane (the boxes on the price chart stay; the read stays in the status file)
-static const bool RV_DRAW_BOOKFLOW = true;   // (0.21.5, Rassul 13:15 CT "lets go with this") drawn again, on top   // was false   // (0.17.3, Rassul 09:29 CT "can we hide bookflow for now and just keep delta + change") the Book Flow half is not drawn - delta + change take the whole pane; Book Flow is still read in the background (the read, the Wyckoff springs)
+static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i would also hide the book flow") hidden again; its numbers stay in the background
+// was static const bool RV_DRAW_BOOKFLOW = true;   // (0.21.5, Rassul 13:15 CT "lets go with this") drawn again, on top   // was false   // (0.17.3, Rassul 09:29 CT "can we hide bookflow for now and just keep delta + change") the Book Flow half is not drawn - delta + change take the whole pane; Book Flow is still read in the background (the read, the Wyckoff springs)
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.28.1"   // (0.28.1, Rassul 2026-11-24 16:01 CT "bullish breaks are of highs and bearish breaks are of lows") LevelMarks 1.20.0: a Bk is drawn only through a level on its own side (a high for a bullish Bk, a low for a bearish one; Open / POC either way)
+#define RVS_VERSION "0.29.0"   // (0.29.0, Rassul 2026-11-24 19:31-19:44 CT "should this be updated to buy and sell volume instead", "i would also hide the book flow", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) the pane: Book Flow hidden, the delta-change bars replaced by BUY / SELL VOLUME bars (both up from zero, "biggest in N" from 10), the read = who hit whom (BsRead.h); the signal strip and every mark unchanged
+// was #define RVS_VERSION "0.28.1"   // (0.28.1, Rassul 2026-11-24 16:01 CT "bullish breaks are of highs and bearish breaks are of lows") LevelMarks 1.20.0: a Bk is drawn only through a level on its own side (a high for a bullish Bk, a low for a bearish one; Open / POC either way)
 // was #define RVS_VERSION "0.28.0"   // (0.28.0, Rassul 2026-11-24 12:21 CT "use the third line which currently has the percentage .. show mockup", 12:51 "2. do the test", "3. yes"; tst-line3-mockup.html) LevelMarks 1.19.0 / WyMarks 2.8.0 / WyRead 1.11.0 / RevReadLogic 0.17.0 / lsTurn 1.6.0: the Tst badge's 3rd line = A+E / E / A! / blank (absorption and exhaustion at the Tst pivot) instead of the retrace %, decided once and kept in RevRead\\tstl3-<MKT>-<spb>.txt; the Abs badge's P line always shown once known
 // was #define RVS_VERSION "0.27.0"   // (0.27.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) LevelMarks 1.18.0 / WyMarks 2.7.0 / RevReadLogic 0.16.0: the Abs badge - effort without result at the first test of a Bk level (Abs / Low 21% or Top 21% / P16 from lsTurn), "Abs/Ex?" when lsTurn saw the attackers' last minute fade, and the next candle's "Ex" (attackers 0.5x or less, closed further away); written "stamp|Abs|..." / "stamp|Ex|dir" in wy-<MKT>-<spb>.txt
 // was #define RVS_VERSION "0.26.0"   // (0.26.0, Rassul 2026-11-24 08:33-09:01 CT "go for hourly pivots and 4h high and lows", "go for bk with hourly pivots and 4 hour highs and lows") LevelMarks 1.17.0: the pane also walks the HOURLY PIVOTS (1-hour 1-bar High / Low ZigZag, standing R1 R2 S1 S2) and the last completed 4-HOUR bar's high / low over the chart's closed candles and hands them to the Bk (HpH / HpL / 4hH / 4hL, Bk only, biggest volume in 5+); Sw / Cx / I unchanged
@@ -123,7 +126,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.28.1");
+    p->setVersion("0.29.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -889,7 +892,27 @@ public:
                 for (auto& kv : all) { std::vector<long long>& v = kv.second; std::sort(v.begin(), v.end()); const long long p95 = v.empty() ? 0 : v[(size_t)std::min(v.size() - 1, (size_t)(0.95 * (double)v.size()))]; mxS[kv.first] = std::max(1LL, p95 * 115 / 100); } }
             const long long mx = 1;
             const int w = std::max(1, (int)std::lround(bw * 0.5));   // (0.21.5) one bar per candle now
-            if (dH > 8 && mx > 0 && !D.empty()) { setFont(fb); int lastR = -100000; double lastX = 0;
+            if (!RV_DRAW_BOOKFLOW) {   // (0.29.0) BUY / SELL VOLUME over the whole pane under the strip: per candle buys (green, left) and sells (red, right), up from
+                                       // zero, scaled per session on its 95th percentile; the "biggest in N" count on a bar from 10 (Poc.bbv / bsv); the forming candle not drawn
+                bool any = false; for (int i = v0; i <= v1 && i <= (int)count - 2 && !any; ++i) if (pocAt(i)) any = true;
+                const int bTop = wyTop + WY_ROW + 14, bBot = (int)pane.bottom - 2, bH = bBot - bTop;
+                if (bH > 8 && any) {
+                    std::map<long long, long long> mxB; { std::map<long long, std::vector<long long> > all;
+                        for (int i = v0; i <= v1 && i <= (int)count - 2; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; std::vector<long long>& v = all[sessKey(i)]; v.push_back(p->buy); v.push_back(p->sell); }
+                        for (auto& kv : all) { std::vector<long long>& v = kv.second; std::sort(v.begin(), v.end()); const long long p95 = v.empty() ? 0 : v[(size_t)std::min(v.size() - 1, (size_t)(0.95 * (double)v.size()))]; mxB[kv.first] = std::max(1LL, p95 * 115 / 100); } }
+                    const int wb = std::max(1, (int)std::lround(bw * 0.36)); setFont(fb);
+                    for (int i = v0; i <= v1 && i <= (int)count - 2; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; PNT pt; pt.set(i, 0.0f, kBarCenter); const int x = (int)pt.h; const double m2 = (double)mxB[sessKey(i)];
+                        const int hB = p->buy > 0 ? std::min(bH, std::max(1, (int)std::llround((double)p->buy * bH / m2))) : 0, hS = p->sell > 0 ? std::min(bH, std::max(1, (int)std::llround((double)p->sell * bH / m2))) : 0;
+                        if (hB > 0) off::fillFlat(this, x - wb, bBot - hB, x, bBot, rvh::C_GREEN);
+                        if (hS > 0) off::fillFlat(this, x + 1, bBot - hS, x + 1 + wb, bBot, rvh::C_RED);
+                        const int nB = p->bbv >= 10 ? p->bbv : 0, nS = p->bsv >= 10 ? p->bsv : 0;
+                        if (nB) { const std::string t = nB >= 99 ? std::string("99+") : std::to_string(nB); const int w2 = (int)getTextWidth(t.c_str(), -1); const int cx = x - wb / 2 - (nS ? w2 / 2 : 0); const int yy = std::max(bTop - 13, bBot - hB - 13);
+                            setTextColor(rvh::C_GREEN); RCT r; r.set(rvh::coord(cx - w2 / 2), rvh::coord(yy), rvh::coord(cx - w2 / 2 + w2 + 1), rvh::coord(yy + 12)); r.drawText(t.c_str(), false, false); }
+                        if (nS) { const std::string t = nS >= 99 ? std::string("99+") : std::to_string(nS); const int w2 = (int)getTextWidth(t.c_str(), -1); const int cx = x + 1 + wb / 2 + (nB ? w2 / 2 : 0); const int yy = std::max(bTop - 13, bBot - hS - 13);
+                            setTextColor(rvh::C_RED); RCT r; r.set(rvh::coord(cx - w2 / 2), rvh::coord(yy), rvh::coord(cx - w2 / 2 + w2 + 1), rvh::coord(yy + 12)); r.drawText(t.c_str(), false, false); } }
+                }
+            }
+            else if (dH > 8 && mx > 0 && !D.empty()) { setFont(fb); int lastR = -100000; double lastX = 0;
                 const std::string ttl = "Delta change"; const int tlR = (int)pane.left + 6 + (int)getTextWidth(ttl.c_str(), -1) + 4, tlB = dTop + 14;   // the title's box: no ratio label over it
                 for (const DB& d : D) { const double m2 = (double)mxS[d.sess]; const int h1 = std::min(dH, (int)((double)std::llabs(d.dl) * dH / m2)), h2 = std::min(dH, (int)((double)std::llabs(d.chg) * dH / m2));
                     (void)h1;   // (0.21.5, Rassul 13:15 CT) the delta bar itself is not drawn - only its change from the candle before, green / red by sign
@@ -899,7 +922,7 @@ public:
                         if (l < tlR && dBot - h2 - 13 < tlB) continue;     // (0.15.2) never over the "Delta + change" title
                         setTextColor(d.chg >= 0 ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(l), rvh::coord(dBot - h2 - 13), rvh::coord(l + tw2 + 1), rvh::coord(dBot - h2 - 1)); r.drawText(t, false, false); lastR = l + tw2; lastX = d.lab; } }
                 setFont(fb); put(ttl, (int)pane.left + 6, dTop, rvh::C_GRAY, (int)pane.right - 6); }
-            {   // (0.21.5, Rassul 2026-11-20 13:15 CT "lets go with this") BOOK FLOW, the top half - "are they defending?": per candle the bids' net (green, left)
+            if (RV_DRAW_BOOKFLOW) {   // (0.29.0) hidden: not drawn   // (0.21.5, Rassul 2026-11-20 13:15 CT "lets go with this") BOOK FLOW, the top half - "are they defending?": per candle the bids' net (green, left)
                 // and the offers' net (red, right), up from zero; solid = more added than pulled, hollow = more pulled; a label at BF_LABEL_X+ the side's normal.
                 // No legend row (13:16 CT "dont keep the extra line at the top ... i dont want it taking up too much space")
                 const int tY = wyTop + WY_ROW + 1, bBot = bfBottom - 1, bTop = tY + 14, bH = bBot - bTop;
@@ -921,7 +944,7 @@ public:
                             labs.push_back(L); } }
                     for (const BL& L : labs) { setTextColor(L.side == 0 ? rvh::C_GREEN : rvh::C_RED); RCT rr; rr.set(rvh::coord(L.l), rvh::coord(L.t), rvh::coord(L.r), rvh::coord(L.t + 12)); rr.drawText(L.tx, false, false); } }
                 setFont(fb); put(bt, (int)pane.left + 6, tY, rvh::C_GRAY, (int)pane.right - 6); }
-            if (split) {   // a thin line between the halves, under the candles only (the read right of the last candle runs over both halves)
+            if (split && RV_DRAW_BOOKFLOW) {   // (0.29.0) no halves while Book Flow is hidden   // a thin line between the halves, under the candles only (the read right of the last candle runs over both halves)
                 int xEnd = (int)pane.right; if (v1 >= (int)count - 1) { PNT q; q.set((int)count - 1, 0.0f, kBarCenter); xEnd = (int)q.h + (int)bw; }
                 setPen(rvh::C_DIM, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = rvh::coord((int)pane.left); a.v = rvh::coord(bfBottom + 2); a.setDrawPosition(); PNT b2; b2.set(0, 0.0f); b2.h = rvh::coord(xEnd); b2.v = rvh::coord(bfBottom + 2); b2.drawLineTo(); }
             // the aggressive side of the one read
@@ -1032,15 +1055,25 @@ public:
             }
         }
         (void)flowOk;
-        if ((cb.bookOk || cb.deltaOk) && cbBar >= 0 && v1 >= (int)count - 1) {   // (0.15.0, Rassul 15:31 CT "1 effective read") THE ONE READ: Book Flow (passive) + delta (aggressive)
+        if ((cb.bookOk || cb.deltaOk || !RV_DRAW_BOOKFLOW) && cbBar >= 0 && v1 >= (int)count - 1) {   // (0.29.0) with Book Flow hidden: the buy / sell read   // (0.15.0, Rassul 15:31 CT "1 effective read") THE ONE READ: Book Flow (passive) + delta (aggressive)
             const std::string mk = rvh::marketOf(getRootSymbol() ? getRootSymbol() : "", getSymbol() ? getSymbol() : ""); cb.mkt = mk;
             std::string when; { struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)times[cbBar], &t)) when = off::clock12(t.tm_hour, t.tm_min); } cb.when = when;
-            cbr::Out fo = cbr::toPlain(cb, cbr::read(cb));   // (0.16.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no table
+            cbr::Out fo;
+            if (RV_DRAW_BOOKFLOW) fo = cbr::toPlain(cb, cbr::read(cb));
+            else {   // (0.29.0) THE BUY / SELL READ (BsRead.h): who hit whom on the candle under the mouse (else the last closed one), from IRT's volume at price
+                auto pk = [&](int i) -> const rvs::Poc* { if (i < 0 || i >= (int)count) return nullptr; const auto it = e.ps.poc.find((long long)times[i]); return it != e.ps.poc.end() && it->second.ok ? &it->second : nullptr; };
+                bsr::In bi; const rvs::Poc* p0 = pk(cbBar);
+                if (p0) { bi.ok = true; bi.buy = p0->buy; bi.sell = p0->sell; bi.nB = p0->bbv; bi.nS = p0->bsv;
+                    if (const rvs::Poc* q0 = pk(cbBar - 1)) { bi.prevOk = true; bi.prevDelta = q0->buy - q0->sell; }
+                    for (int k = cbBar - 1; k >= 0 && (int)bi.pb.size() < bsr::NORM_N && cbBar - k <= 40; --k) { const rvs::Poc* a = pk(k); if (!a) continue; bi.pb.push_back(a->buy); bi.ps.push_back(a->sell);
+                        if (const rvs::Poc* b2 = pk(k - 1)) bi.pswing.push_back(std::llabs((a->buy - a->sell) - (b2->buy - b2->sell))); } }
+                const bsr::Out bo = bsr::read(bi); fo.verdict = bo.verdict; fo.head = bo.ok ? bo.head : std::string("No volume at price for this candle"); fo.ex = bo.ex; storySent.clear(); }   // (0.16.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no table
             {   // (0.17.0) a lettered candle reads its Wyckoff step: the candle under the mouse, or (no mouse) the newest letter of the last 3 candles
                 int wb = -1; const int hbW = S.hov.hover.bar;
                 if (hbW >= 0 && hbW < (int)count - 1) { if (e.wy.reads.count((long long)times[hbW])) wb = hbW; }
                 else for (int k = (int)count - 2; k >= 0 && k >= (int)count - 4; --k) if (e.wy.reads.count((long long)times[k])) { wb = k; break; }
-                if (wb >= 0) { const wyr::Read& wr = e.wy.reads.at((long long)times[wb]); fo = cbr::Out(); fo.head = wr.head; fo.verdict = wr.dir > 0 ? 1 : wr.dir < 0 ? -1 : 0;
+                if (wb >= 0 && !RV_DRAW_BOOKFLOW) { if (wb == cbBar) { const wyr::Read& wr = e.wy.reads.at((long long)times[wb]); if (!wr.head.empty()) fo.ex.push_back("Strip: " + wr.head); } }   // (0.29.0) the strip letter's step as one more line of the same candle
+                else if (wb >= 0) { const wyr::Read& wr = e.wy.reads.at((long long)times[wb]); fo = cbr::Out(); fo.head = wr.head; fo.verdict = wr.dir > 0 ? 1 : wr.dir < 0 ? -1 : 0;
                     for (const std::string& l : wr.lines) if (!l.empty()) fo.ex.push_back(l);
                     struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)times[wb], &t)) when = off::clock12(t.tm_hour, t.tm_min); storySent.clear(); } }
             setFont(fb); const int rowH = 14, y0 = pane.top + 2; PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter);
