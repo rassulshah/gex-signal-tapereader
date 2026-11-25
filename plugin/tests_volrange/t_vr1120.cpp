@@ -29,5 +29,10 @@ int main() {
       const vrd::Out p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.head == "Light (0.3x)" && p.ex.size() == 2 && p.ex[0] == "No order detail for this candle." && p.ex[1] == "Climax volume at the low.", "light, no detail, the climax note"); }
     { vrd::Ctx x; vrd::Cd k; k.o = 1; k.c = 1; k.h = 1; k.l = 1; k.vol = 5; x.c.push_back(k); const vrd::Out p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.head == "Not rated yet", "no normal yet"); }
     C(!vrd::volPlain(vrd::Ctx(), vrd::Out()).ok, "nothing in, nothing out");
-    C(std::string(vrr::VERSION) == "1.12.0" && std::string(vrd::VERSION) == "1.3.0", "versions");
+    // (1.4.0) the Big Lot tier: GC RTH S20 = 32 / S10 43 / S5 56; overnight S20 39
+    { vrd::Ctx x; x.dec = 1; x.c.assign(Cd.begin(), Cd.end()); vrd::Inside q; q.ok = true; q.bigBuy = 45; q.bigSell = 31; x.in = q; x.mkt = "GC"; x.rth = true;
+      vrd::Out p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.ex[0] == "Biggest orders: buyers 45 (S10), sellers 31.", "GC RTH: 45 = S10, 31 below S20");
+      x.rth = false; q.bigSell = 39; x.in = q; p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.ex[0].find("buyers 45 (S20), sellers 39 (S20)") != std::string::npos, "GC overnight: 45 and 39 = S20");
+      x.mkt.clear(); p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.ex[0].find("(S") == std::string::npos, "no market: no tier"); }
+    C(std::string(vrr::VERSION) == "1.13.0" && std::string(vrd::VERSION) == "1.4.0", "versions");
     std::printf("%s %d pass, %d fail\n", bad ? "FAILED" : "ALL PASS", ok, bad); return bad ? 1 : 0; }

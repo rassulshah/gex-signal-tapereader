@@ -66,10 +66,12 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "BigTier.h"   // (1.9.0) Big Lot S20 / S10 / S5
 
 namespace turn {
 
-static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-24 17:52 CT "the absorbtion indicator can be updated to have two bars per candle , 1 for absorbtion and 1 for initiative", 18:01 "i want more detail for the intiative buyers", 18:53 "build" on turn-initiative-mockup.html v3): INITIATIVE = the counter side's heaviest single price in the end quarter (buys at the low, sells at the high) / its 20-candle mean, on when >= 1.5, bigger than the attackers' heaviest price there and the candle closed outside that quarter. Each candle: left bar = Absorption, right bar = Initiative, each at its stronger end. The read: Initiative / How (burst, sweep, biggest order) / Against. Research 2026-11-24 (new 10-candle lows / highs, 7 markets): initiative only 66% went 1 ATR first (n 711, halves 66 / 67) vs 57% ordinary, 61% absorption only; burst at the market's 90th percentile of the prior hour's pace 83% vs 67% (n 30, "?"), swept 4+ prices 76% vs 67% (n 55, "?")
+static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-24 19:59-20:00 CT "So have the indicators implemented the volume model", "Go"): layer 4 MAGNITUDE - the biggest market order carries its Big Lot tier ("Biggest 41 (S20)", BigTier.h); layer 6 PRICE AGREEMENT - one "Price" line under the read: went 1 ATR the turn's way (agreed) or traded through the extreme (failed), first of the next 10 closed candles, else held / waiting
+// was static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-24 17:52 CT "the absorbtion indicator can be updated to have two bars per candle , 1 for absorbtion and 1 for initiative", 18:01 "i want more detail for the intiative buyers", 18:53 "build" on turn-initiative-mockup.html v3): INITIATIVE = the counter side's heaviest single price in the end quarter (buys at the low, sells at the high) / its 20-candle mean, on when >= 1.5, bigger than the attackers' heaviest price there and the candle closed outside that quarter. Each candle: left bar = Absorption, right bar = Initiative, each at its stronger end. The read: Initiative / How (burst, sweep, biggest order) / Against. Research 2026-11-24 (new 10-candle lows / highs, 7 markets): initiative only 66% went 1 ATR first (n 711, halves 66 / 67) vs 57% ordinary, 61% absorption only; burst at the market's 90th percentile of the prior hour's pace 83% vs 67% (n 30, "?"), swept 4+ prices 76% vs 67% (n 55, "?")
 // was static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-24 17:28 CT "i think absorbtion read should be in the absorption indicator but it should be more compact without the result and next", 17:30 "lets go with this for now" / "build" on turn-read-mockup.html): THE COMPACT READ - for the candle under the mouse (else the last closed one): who won at the end that was pushed (Passive defense / Aggressor), then Attack and Absorbed / Not absorbed only; an Abs names its level in the heading. Research VERDICT 2026-11-24: 12,406 candles 1.5x+, passive defense held 40% (both halves 40 / 40) vs aggressor 15% (16 / 13); aggressor ran on 1 ATR 42% vs 26%, all 7 markets
 // was static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): RevRead\\turnexq-<MKT>-<spb>.txt = the sellers' / buyers' Ex? (last minute <= 0.5x the first 2 minutes' pace) of EVERY closed candle this pane saw whole - the E of the Tst badge's line 3 (lsRevReadMarks 0.28.0); nothing drawn changed
 // was static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) THE ABS READ: the order feed now keeps the book per price (added / pulled / most showing / refills) and the biggest single order a side; the read right of the last candle = the newest Abs of lsRevRead (Attack / Absorbed / Result / Ex or Next); RevRead\\turnabs-<MKT>-<spb>.txt = the P and Ex? of each Abs for the price-chart badge
@@ -1108,7 +1110,7 @@ inline bool parseAbsRec(const std::string& txt, const std::string& mkt, int spb,
 // they describe, they do not grade. Under 1.5 at both ends = one quiet line.
 static const long long CR_FROM1000 = 1500;
 struct CText { std::string title; int win = 0; std::vector<std::pair<std::string, std::string> > rows; bool quiet = false; };
-inline CText compactText(int dir, long long x1000, bool passive, const AbsCalc& c, const std::string& when, const std::string& lv, long long lvPx, double tick) {
+inline CText compactText(int dir, long long x1000, bool passive, const AbsCalc& c, const std::string& when, const std::string& lv, long long lvPx, double tick, const std::string& mkt = std::string(), bool rth = true) {
     CText o; const bool bull = dir > 0;   // dir +1 = sellers pushed into the bottom, -1 = buyers into the top
     const std::string Att = bull ? "Sellers" : "Buyers", Def = bull ? "Bids" : "Offers", end = bull ? "bottom" : "top";
     o.win = passive ? (bull ? 1 : -1) : (bull ? -1 : 1);
@@ -1119,7 +1121,7 @@ inline CText compactText(int dir, long long x1000, bool passive, const AbsCalc& 
     std::string at;
     if (!c.feed) at = Att + " into the " + end + " " + xs + " - no order feed for this candle.";
     else { at = Att + " " + std::to_string(c.attQ) + " lots into the " + end + " " + xs;
-        if (c.big.lots > 0) { at += ", biggest print " + std::to_string(c.big.lots); if (c.big.lo != c.big.hi) at += " (swept " + std::to_string(c.big.hi - c.big.lo + 1) + " ticks)"; }
+        if (c.big.lots > 0) { at += ", biggest print " + btr::lotsText(c.big.lots, mkt, rth);   /* (1.9.0) its Big Lot tier */ if (c.big.lo != c.big.hi) at += " (swept " + std::to_string(c.big.hi - c.big.lo + 1) + " ticks)"; }
         else { at += ", no big print"; }
         at += "."; }
     o.rows.push_back(std::make_pair("Attack", at));
@@ -1177,7 +1179,7 @@ inline IniCalc iniCalc(const Live& Lv, long long key, int end, int spb) {
     return c;
 }
 // the read: heading, Initiative, How (burst / sweep / biggest order), Against
-inline CText iniText(int end, const Ini& in, const IniCalc& c, const std::string& when, double tick, const std::string& mkt) {
+inline CText iniText(int end, const Ini& in, const IniCalc& c, const std::string& when, double tick, const std::string& mkt, bool rth = true) {
     CText o; const bool low = end > 0; o.win = low ? 1 : -1;
     const std::string who = low ? "buyers" : "sellers", other = low ? "sellers" : "buyers";
     o.title = (when.empty() ? std::string() : when + "  ") + "Initiative - " + who + (low ? " lifted the offer at the bottom" : " hit the bid at the top");
@@ -1187,7 +1189,7 @@ inline CText iniText(int end, const Ini& in, const IniCalc& c, const std::string
         const long long bl = burstLevel10(mkt); char lv[48]; std::snprintf(lv, sizeof lv, "%lld.%lldx", bl / 10, bl % 10);
         std::string h = c.burst1000 >= 0 ? "Burst " + xText((double)c.burst1000 / 1000.0) + " pace (" + lv + ") ?" : std::string("Burst - (no pace yet)");
         h += "  |  Swept " + std::to_string(c.sweep) + (c.sweep == 1 ? " price" : " prices") + " (" + std::to_string(SWEEP_MIN) + ") ?";
-        if (c.bigLots > 0) h += "  |  Biggest " + std::to_string(c.bigLots);
+        if (c.bigLots > 0) h += "  |  Biggest " + btr::lotsText(c.bigLots, mkt, rth);   // (1.9.0) its Big Lot tier
         o.rows.push_back(std::make_pair("How", h));
     }
     std::string ag = other + " " + (in.att >= 0 ? std::to_string(in.att) : std::string("-")) + " lots there";
@@ -1195,6 +1197,31 @@ inline CText iniText(int end, const Ini& in, const IniCalc& c, const std::string
     ag += " - " + who + " won the " + (low ? "low" : "high");
     o.rows.push_back(std::make_pair("Against", ag));
     return o;
+}
+// (1.9.0) LAYER 6 - PRICE AGREEMENT, the read's "Price" line. end +1 = the candle's low, -1 its high; hold = the read says that end should HOLD (Initiative,
+// passive defense) - false = the aggressor got through (price should go ON). ext = that extreme (ticks); nx = the closed candles after it, oldest first
+// (up to 10); atr = Wilder ATR(13) in ticks before the candle (0 = not known). The first of: agreed = 1 ATR the expected way; failed = (hold) traded more
+// than 1 tick through the extreme / (go on) 1 ATR the other way. Research 2026-11-24: initiative lows went 1 ATR first 66%, ordinary 57% (10 candles).
+struct Nx { long long hi = 0, lo = 0; std::string when; };
+inline std::string agreeText(int end, bool hold, long long ext, const std::vector<Nx>& nx, long long atr, double tick) {
+    const int sg = end > 0 ? 1 : -1;   // the way price should go from a hold at the low: up
+    const int want = hold ? sg : -sg;  // the expected direction
+    const size_t n = nx.size() < 10 ? nx.size() : 10;
+    for (size_t k = 0; k < n; ++k) { const Nx& b = nx[k];
+        const long long fav = want > 0 ? b.hi - ext : ext - b.lo, adv = want > 0 ? ext - b.lo : b.hi - ext;
+        const bool fail = hold ? adv > 1 : (atr > 0 && adv >= atr), ok = atr > 0 && fav >= atr;
+        if (fail && (!ok || hold)) return hold ? "failed - traded through " + pxText(ext, tick) + " at " + b.when + "." : "failed - came back 1 ATR by " + b.when + ".";
+        if (ok) return "agreed - went 1 ATR (" + pxText(atr, tick) + ") " + (want > 0 ? "up" : "down") + " by " + b.when + "."; }
+    if (n == 0) return "waiting for the next candle.";
+    if (n >= 10) return std::string("neither 1 ATR nor through it in 10 candles.");
+    return hold ? "held " + std::to_string(n) + (n == 1 ? " candle" : " candles") + " so far." : "no follow-through yet (" + std::to_string(n) + (n == 1 ? " candle)." : " candles).");
+}
+// Wilder ATR(13) in ticks of candles (hi, lo, close) oldest first; 0 = under 14 candles
+inline long long atrTicks(const std::vector<std::vector<long long> >& c) {
+    if (c.size() < 14) { return 0; }
+    double a = 0; for (size_t k = 1; k <= 13; ++k) { const long long h = c[k][0], l = c[k][1], pc = c[k - 1][2]; a += (double)std::max(h - l, std::max(std::llabs(h - pc), std::llabs(l - pc))); } a /= 13.0;
+    for (size_t k = 14; k < c.size(); ++k) { const long long h = c[k][0], l = c[k][1], pc = c[k - 1][2]; a = (a * 12.0 + (double)std::max(h - l, std::max(std::llabs(h - pc), std::llabs(l - pc)))) / 13.0; }
+    return (long long)std::llround(a);
 }
 // the end that was pushed: +1 bottom (sellers), -1 top (buyers), 0 = neither 1.5+; ties go to the top
 inline int pushedEnd(long long up1000, long long dn1000) { const long long u = up1000 >= CR_FROM1000 ? up1000 : -1, d = dn1000 >= CR_FROM1000 ? dn1000 : -1; if (u < 0 && d < 0) return 0; return u >= d ? -1 : 1; }

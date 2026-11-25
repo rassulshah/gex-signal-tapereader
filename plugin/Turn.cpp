@@ -1,5 +1,9 @@
 /*
- *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.8"  1.8.0  (2026-11-24; 1.3.0 .. 1.7.0 2026-11-23 / 24; 1.0.0 2026-11-22)
+ *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.9"  1.9.0  (2026-11-24; 1.8.0 the same evening; 1.3.0 .. 1.7.0 2026-11-23 / 24; 1.0.0 2026-11-22)
+ *
+ *  (1.9.0) Rassul 2026-11-24 19:59-20:00 CT "So have the indicators implemented the volume model", "Go": the read's biggest orders carry their Big Lot
+ *  tier ("Biggest 41 (S20)", BigTier.h - layer 4, magnitude) and a "Price" line says whether price agreed over the next 10 closed candles: went 1 ATR
+ *  the expected way, failed (traded through the extreme / came back 1 ATR), held so far or waiting (layer 6). Notes NOTES-TURN190.md.
  *
  *  (1.8.0) Rassul 2026-11-24 CT: 17:52 "the absorbtion indicator can be updated to have two bars per candle , 1 for absorbtion and 1 for
  *  initiative"; 18:01 "i want more detail for the intiative buyers .. we have icebergs for passive buyers so what would be for initiative
@@ -116,7 +120,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.8.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.9.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -931,7 +935,7 @@ private:
                 if (ie) {
                     const std::map<std::pair<long long, int>, turn::IniCalc>::const_iterator sn = S.niC.find(std::make_pair(key, ie));
                     const turn::IniCalc nc = sn != S.niC.end() ? sn->second : turn::iniCalc(S.live, key, ie, S.spb);   // decided numbers first (a restart draws the same read)
-                    ct = turn::iniText(ie, ie > 0 ? iDn : iUp, nc, when, S.tick, S.market);
+                    ct = turn::iniText(ie, ie > 0 ? iDn : iUp, nc, when, S.tick, S.market, btr::rthOf(key, S.spb));
                 }
                 else if (!dir) ct = turn::quietText(when, up.x1000, dn.x1000);
                 else {
@@ -940,9 +944,20 @@ private:
                     const std::map<std::pair<long long, int>, turn::AbsCalc>::const_iterator sc = S.crC.find(std::make_pair(key, dir));
                     if (sa != S.absC.end()) c = sa->second; else if (sc != S.crC.end()) c = sc->second; else c = turn::absCalc(S.live, key, dir);   // decided numbers first (a restart draws the same read)
                     const turn::Abs& e = dir > 0 ? dn : up;
-                    ct = turn::compactText(dir, e.x1000, e.away, c, when, ab ? ab->lv : std::string(), ab ? ab->lvPx : 0, S.tick);
+                    ct = turn::compactText(dir, e.x1000, e.away, c, when, ab ? ab->lv : std::string(), ab ? ab->lvPx : 0, S.tick, S.market, btr::rthOf(key, S.spb));
                     if (ab) S.absShown = 1;
                 }
+                if (!ct.quiet) {   // (1.9.0) LAYER 6 - the Price line: did price agree with the read, over the next (up to 10) closed candles
+                    const int pe = ie ? ie : dir; const bool hold = ie ? true : (pe > 0 ? dn.away : up.away);
+                    const std::map<long long, BarVal>::const_iterator bc = S.bars.find(key);
+                    if (pe && bc != S.bars.end() && bc->second.hlc) {
+                        const long long ext = pe > 0 ? bc->second.loT : bc->second.hiT;
+                        std::vector<turn::Nx> nx; for (int j = ic + 1; j < (int)count && (int)nx.size() < 10; ++j) { const long long kj = (long long)times[j]; if (kj > S.lastClosedKey) break;
+                            const std::map<long long, BarVal>::const_iterator bj = S.bars.find(kj); if (bj == S.bars.end() || !bj->second.hlc) break;
+                            turn::Nx q; q.hi = bj->second.hiT; q.lo = bj->second.loT; q.when = prefixText(std::string(), kj, false, 0); nx.push_back(q); }
+                        std::vector<std::vector<long long> > hc; for (int j = std::max(0, ic - 40); j < ic; ++j) { const std::map<long long, BarVal>::const_iterator bj = S.bars.find((long long)times[j]);
+                            if (bj == S.bars.end() || !bj->second.hlc) { hc.clear(); continue; } hc.push_back(std::vector<long long>{ bj->second.hiT, bj->second.loT, bj->second.clT }); }
+                        ct.rows.push_back(std::make_pair(std::string("Price"), turn::agreeText(pe, hold, ext, nx, turn::atrTicks(hc), S.tick))); } }
                 S.readVerdict = ct.quiet ? 0 : ct.win; S.readHead = ct.title; S.readWhy.clear(); for (const auto& rw : ct.rows) S.readWhy += rw.first + ": " + rw.second + " "; S.readWatch.clear();
                 if (wAv >= 150 && rows >= 1) {
                     int y = T + 1, used = 0; setFont(f9b);
@@ -1132,6 +1147,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.8 - two bars a candle: Absorption (left) and Initiative (right), each up at the candle's high or down at its low. Absorption = the attackers' heaviest price in that end quarter vs the 20 candles before (buyers at the high green, sellers at the low red, from 2.0 when the candle closed away from that end). Initiative = the counter side's heaviest price there (sellers at the high red, buyers at the low green, from 1.5 when bigger than the attackers there and closed away). Read: the candle under the mouse.");
-    p->setVersion("1.8.0");
+    p->setVersion("1.9.0");
     return p;
 }

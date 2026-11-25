@@ -59,7 +59,7 @@ int main() {
       C(colB == vrr::C_UP && colA == vrr::C_GREY && colC == vrr::C_GREY, "drawn: the 6:45 bar green, the 6:21 and 6:48 bars grey (unmarked, under 50)");
       C(n31 && n41 && n69, "drawn: the numbers 31, 69 and 41 stay over their bars");
       const std::string st = vrr::statusText(E, "NQ", "NQZ6", 180);
-      C(st.find("VERSION,1.12.0") == 0 && st.find("WY,1.8.0 Bk / Sw from the price chart's marks file,") != std::string::npos && st.find("CX,1.10.0 Cx from the price chart's marks file," + std::to_string(E.wyCx()) + " Cx read") != std::string::npos, "status: version, the WY line as before, the new CX line");
+      C(st.find("VERSION,1.13.0") == 0 && st.find("WY,1.8.0 Bk / Sw from the price chart's marks file,") != std::string::npos && st.find("CX,1.10.0 Cx from the price chart's marks file," + std::to_string(E.wyCx()) + " Cx read") != std::string::npos, "status: version, the WY line as before, the new CX line");
       C(st.find(",P " + std::to_string(shown) + ",") != std::string::npos, "status: the P count = the Cx shown");
       // the label appears when the badge does: without the 6:45 line the candle is only 'biggest in 50+' (green, no letters)
       const vrr::Engine N = load("nq_1123.csv", dropLine(wyNQ, std::to_string(E.T[(size_t)b]) + "|Cx|"), vrr::VOL);
@@ -100,6 +100,6 @@ int main() {
           if (!p.fill && p.text == "38") ++n38; }
       C(rc == 0 && n20 >= 1 && n38 >= 1, "drawn: no Cx in the Range pane, the numbers 20 and 38 stay");
       int vc = 0; for (const vrr::Prim& p : vrr::layout(V, v, nullptr)) if (!p.fill && p.text == "Cx") ++vc; C(vc == 2, "drawn: two Cx in the Volume pane window (12:21, 12:57)"); }
-    C(std::string(vrr::VERSION) == "1.12.0", "version 1.12.0 (the Cx rule of 1.10.0 unchanged; t_vr1110 covers the AR)");
+    C(std::string(vrr::VERSION) == "1.13.0", "version 1.13.0 (the Cx rule of 1.10.0 unchanged; t_vr1110 covers the AR)");
     std::printf("%s %d pass, %d fail\n", bad ? "FAILED" : "ALL PASS", ok, bad); return bad;
 }

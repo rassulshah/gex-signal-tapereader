@@ -16,10 +16,12 @@
 #include <string>
 #include <vector>
 #include "PlainRead.h"     // (2026-11-17 21:17) the plain three-line read - toPlain() at the end
+#include "BigTier.h"      // (1.4.0) Big Lot S20 / S10 / S5 on the biggest orders
 
 namespace vrd {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-24 19:28-19:44 CT "i'll let you determine the display and the read", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) volPlain(): the VOLUME read answers layers 1, 4 and 5 of his volume model only - how much (size), the biggest orders / sweeps, icebergs, and a neutral note - with NO bullish / bearish verdict (the Turn pane calls the winner; the buy / sell pane says who hit whom). The Range read is unchanged
+static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-24 20:00 CT "Go" - layer 4 magnitude) the Volume read's biggest orders carry their Big Lot tier: "buyers 311 (S20)"
+// was static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-24 19:28-19:44 CT "i'll let you determine the display and the read", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) volPlain(): the VOLUME read answers layers 1, 4 and 5 of his volume model only - how much (size), the biggest orders / sweeps, icebergs, and a neutral note - with NO bullish / bearish verdict (the Turn pane calls the winner; the buy / sell pane says who hit whom). The Range read is unchanged
 // was static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
 // was "1.1.1";   // (1.1.1, his 09:32 CT screenshot: "narrowing" was the verdict but the sentence under it was about the 9:21 candle) the sentences behind the verdict come first, the side notes after   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
 static const int NORM_N = 20, NORM_MIN = 5, EXT_N = 10;
@@ -35,7 +37,8 @@ struct Inside { bool ok = false; long long bigBuy = 0, bigSell = 0; int swBuy = 
 struct Ctx { std::vector<Cd> c;            // oldest -> newest; the LAST one is the candle the read is about
              int cntAll = 0, cntSame = 0;  // bars in a row before it with a smaller value: all / its own colour (the pane's own count)
              double atr = 0; int cx = 0;   // Wilder ATR(13) of the candle before; cx: +1 a climax at a pivot LOW on it or the candle before, -1 at a pivot HIGH
-             Inside in; int dec = 2; };
+             Inside in; int dec = 2;
+             std::string mkt; bool rth = true; };   // (1.4.0) the market ("ES" .. "6E") and RTH (the candle starts 8:30 - 14:59 CT) for the Big Lot tier
 struct Row { std::string lab, a, b; int ca = 0, cb = 0; };   // +1 green, -1 red, 0 white, 2 grey
 struct Out { bool ok = false; int verdict = 0; std::string head, why, candle, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; std::vector<std::string> notes; };   // (1.3.0) notes = neutral facts for the Volume read (no side)   // ex (1.1.0) = the explanation sentences   // verdict +1 / -1 / 2 mixed / 0 quiet
 
@@ -231,7 +234,7 @@ inline Out volPlain(const Ctx& x, Out o) {
     o.head = sz; o.why.clear(); o.verdict = (bigAll || bigSame) ? (g ? 1 : -1) : 0;
     std::vector<std::string> L; const Inside& q = x.in;
     if (q.ok) {
-        std::string l = "Biggest orders: buyers " + commas(q.bigBuy) + ", sellers " + commas(q.bigSell);
+        std::string l = "Biggest orders: buyers " + btr::lotsText(q.bigBuy, x.mkt, x.rth) + ", sellers " + btr::lotsText(q.bigSell, x.mkt, x.rth);   // (1.4.0) + the tier
         const int sw = q.swBuy > q.swSell ? q.swBuy : q.swSell;
         if (sw >= (int)SWEEP_LV) { const bool sb = q.swSell > q.swBuy; l += std::string("; one ") + (sb ? "sell" : "buy") + " order swept " + std::to_string(sw) + " prices, " + (sb ? "buyers " : "sellers ") + std::to_string(sb ? q.swBuy : q.swSell); }
         L.push_back(l + ".");
