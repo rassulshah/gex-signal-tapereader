@@ -1,5 +1,5 @@
 /*
- *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.9"  1.9.0  (2026-11-24; 1.8.0 the same evening; 1.3.0 .. 1.7.0 2026-11-23 / 24; 1.0.0 2026-11-22)
+ *  Turn.cpp  --  Investor/RT RTX extension  lsTurn  "Turn v1.10"  1.10.0  (2026-11-24; 1.8.0 / 1.9.0 the same evening; 1.3.0 .. 1.7.0 2026-11-23 / 24; 1.0.0 2026-11-22)
  *
  *  (1.9.0) Rassul 2026-11-24 19:59-20:00 CT "So have the indicators implemented the volume model", "Go": the read's biggest orders carry their Big Lot
  *  tier ("Biggest 41 (S20)", BigTier.h - layer 4, magnitude) and a "Price" line says whether price agreed over the next 10 closed candles: went 1 ATR
@@ -120,7 +120,7 @@
 #include <sys/stat.h>
 #include <vector>
 
-#define TURN_VERSION "1.9.0"   // = turn::VERSION = the setVersion literal
+#define TURN_VERSION "1.10.0"   // = turn::VERSION = the setVersion literal
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (1.0.1) WindowFromPoint (PaneCursor.h: GetCursorPos)
 #endif
@@ -372,7 +372,7 @@ struct State {
     pc::Tracker cur; int hov = -1, hovY = 0, axisY = 0; long long mouseMoves = 0;
     int readVerdict = 0, readLines = 0; std::string readHead, readWhy, readWatch;   // (1.4.0) the Absorption read right of the last candle, as last drawn (the status file)
     int stripKind = 0, labMode = 0, labOffered = 0, labDrawn = 0;      // what the last draw showed (the status file): strip 0 none / 1 a sweep / 2 a level candle / (1.1.0) 3 a plain candle
-    int iniCandles = 0, iniOn = 0;                                     // (1.8.0) candles the last draw gave an Initiative bar / a coloured one
+    int iniCandles = 0, iniOn = 0; int qTags = 0;   /* (1.10.0) question tags drawn by the last read */                                     // (1.8.0) candles the last draw gave an Initiative bar / a coloured one
     int effCandles = 0;                                                // (1.1.0) candles the last draw gave an Effort bar; (1.2.0) every such candle
     // (1.2.0) what the pane shows besides Effort: lsFlexLevels\TurnPane\display.txt (no file = Effort only), re-read when its stamp changes
     turn::Show show; long long showSig = -2; std::string showPath; bool showChanged = false;
@@ -732,7 +732,9 @@ private:
             long long vol = -1; for (long i = count - 2; i >= 0 && i >= count - 40; --i) if ((long long)times[(int)i] == x.key) { vol = (long long)vols[(int)i]; break; }
             long long pct = -1; if (vol <= 0 || !covered(x, vol, pct)) continue;
             S.teq[x.key] = turn::exqOf(x); S.teqDirty = true;
-            if (S.crLoaded) for (int dd : { 1, -1 }) { S.crC[std::make_pair(x.key, dd)] = turn::absCalc(S.live, x.key, dd); S.niC[std::make_pair(x.key, dd)] = turn::iniCalc(S.live, x.key, dd, S.spb); S.crDirty = true; } }   // (1.8.0) + the Initiative numbers   // (1.7.0) the compact read's numbers, both ends
+            if (S.crLoaded) for (int dd : { 1, -1 }) { S.crC[std::make_pair(x.key, dd)] = turn::absCalc(S.live, x.key, dd); S.niC[std::make_pair(x.key, dd)] = turn::iniCalc(S.live, x.key, dd, S.spb); S.crDirty = true; }
+            while (S.crC.size() > 2 * turn::CR_KEEP) { S.crC.erase(S.crC.begin()); }
+            while (S.niC.size() > 2 * turn::CR_KEEP) { S.niC.erase(S.niC.begin()); } }   // (1.10.0, the review) bounded in memory too (900 candles x 2 ends)   // (1.8.0) + the Initiative numbers   // (1.7.0) the compact read's numbers, both ends
         if (S.teqDirty && S.teqLoaded) { if (publishFile(S.teqPath, turn::teqFileText(S.teq, S.market, S.spb))) { ++S.teqWrites; S.teqDirty = false; } else ++S.teqFails; }
         // (1.5.0) the candle after each Abs: its attackers and book, decided once it closed
         for (const turn::AbsLine& a : S.abs) {
@@ -865,7 +867,7 @@ private:
         const int L = pane.left, R = pane.right, T = pane.top, B = pane.bottom;
         S.cur.pane.l = L; S.cur.pane.t = T; S.cur.pane.r = R; S.cur.pane.b = B;   // (1.0.1) where the pane is: is the mouse inside, has it left
         S.readVerdict = 0; S.readLines = 0; S.readHead.clear(); S.readWhy.clear(); S.readWatch.clear();
-        S.stripKind = 0; S.labMode = 0; S.labOffered = 0; S.labDrawn = 0; S.effCandles = 0; S.iniCandles = 0; S.iniOn = 0; labW_.clear();
+        S.stripKind = 0; S.labMode = 0; S.labOffered = 0; S.labDrawn = 0; S.effCandles = 0; S.iniCandles = 0; S.iniOn = 0; S.qTags = 0; labW_.clear();
         if (B - T < 40 || R - L < 40) return;
         FONT f10; f10.id = HELVETICA; f10.size = 10; f10.style = PLAIN; FONT f10b = f10; f10b.style = BOLD;
         FONT f9b = f10b; f9b.size = 9; FONT f9 = f10; f9.size = 9;                                   // (1.0.1) the ratios on the bars
@@ -892,29 +894,26 @@ private:
         // (1.3.0) Absorption of chart bar i at its top / bottom, from the bars calc read (no bar is read here): the heaviest price against
         // its average over the 20 candles before. A candle whose earlier candles are not read yet (or are older than the kept window)
         // gives none, so a number never changes once shown.
-        const auto absAt = [&](int i, bool top) -> turn::Abs {
-            turn::Abs a; if (i < 0 || i >= (int)count) return a;
-            const std::map<long long, BarVal>::const_iterator bi = S.bars.find((long long)times[i]); if (bi == S.bars.end() || bi->second.b.levels < 4) return a;
-            std::vector<long long> prior; prior.reserve(turn::ABS_AVG);
-            for (int j = i - 1; j >= 0 && j >= i - turn::ABS_BACK && (int)prior.size() < turn::ABS_AVG; --j) {
-                const std::map<long long, BarVal>::const_iterator bj = S.bars.find((long long)times[j]); if (bj == S.bars.end()) return a;
-                if (bj->second.b.levels < 4) continue;
-                prior.push_back(top ? bj->second.b.topMax : bj->second.b.botMax); }
-            a.x1000 = turn::absX1000(top ? bi->second.b.topMax : bi->second.b.botMax, prior); a.away = top ? bi->second.awayUp : bi->second.awayDn; return a; };
-        // (1.8.0) Initiative of chart bar i at its top (sellers) / bottom (buyers): the counter side's heaviest price against its 20-candle average,
-        // with the attackers' heaviest price there and their own number (the read's Against line)
-        const auto iniAt = [&](int i, bool top) -> turn::Ini {
-            turn::Ini a; if (i < 0 || i >= (int)count) return a;
-            const std::map<long long, BarVal>::const_iterator bi = S.bars.find((long long)times[i]); if (bi == S.bars.end() || bi->second.b.levels < 4) return a;
-            std::vector<long long> prior; prior.reserve(turn::ABS_AVG);
-            for (int j = i - 1; j >= 0 && j >= i - turn::ABS_BACK && (int)prior.size() < turn::ABS_AVG; --j) {
-                const std::map<long long, BarVal>::const_iterator bj = S.bars.find((long long)times[j]); if (bj == S.bars.end()) return a;
-                if (bj->second.b.levels < 4) continue;
-                prior.push_back(top ? bj->second.b.topIni : bj->second.b.botIni); }
-            const turn::Bars& b = bi->second.b;
-            a.x1000 = turn::absX1000(top ? b.topIni : b.botIni, prior); a.away = top ? bi->second.awayUp : bi->second.awayDn;
-            a.lots = top ? b.topIni : b.botIni; a.att = top ? b.topMax : b.botMax; a.tick = top ? b.topIniTick : b.botIniTick;
-            a.attX1000 = absAt(i, top).x1000; return a; };
+        // (1.10.0, the review of 20:55 CT) ONE walk per candle side gives both Absorption and Initiative, and the bars are looked up once per
+        // draw (bv: the visible candles and the ABS_BACK before them) - was 8 walks of map finds per candle per repaint
+        const int bvLo = std::max(0, v0 - turn::ABS_BACK); std::vector<const BarVal*> bv((size_t)std::max(0, v1 - bvLo + 1), nullptr);
+        for (int j = bvLo; j <= v1; ++j) { const std::map<long long, BarVal>::const_iterator it = S.bars.find((long long)times[j]); if (it != S.bars.end()) bv[(size_t)(j - bvLo)] = &it->second; }
+        const auto barAt = [&](int j) -> const BarVal* { if (j < 0 || j >= (int)count) return nullptr; if (j >= bvLo && j <= v1) return bv[(size_t)(j - bvLo)];
+            const std::map<long long, BarVal>::const_iterator it = S.bars.find((long long)times[j]); return it == S.bars.end() ? nullptr : &it->second; };
+        const auto sideAt = [&](int i, bool top, turn::Abs& a, turn::Ini& n) {
+            a = turn::Abs(); n = turn::Ini(); const BarVal* bi = barAt(i); if (!bi || bi->b.levels < 4) return;
+            long long pa[turn::ABS_AVG], pn[turn::ABS_AVG]; int k = 0;
+            for (int j = i - 1; j >= 0 && j >= i - turn::ABS_BACK && k < turn::ABS_AVG; --j) {
+                const BarVal* bj = barAt(j); if (!bj) return;                  // a candle not read yet: no number (it never changes once shown)
+                if (bj->b.levels < 4) continue;
+                pa[k] = top ? bj->b.topMax : bj->b.botMax; pn[k] = top ? bj->b.topIni : bj->b.botIni; ++k; }
+            const std::vector<long long> va(pa, pa + k), vn(pn, pn + k);
+            const turn::Bars& b = bi->b;
+            a.x1000 = turn::absX1000(top ? b.topMax : b.botMax, va); a.away = top ? bi->awayUp : bi->awayDn;
+            n.x1000 = turn::absX1000(top ? b.topIni : b.botIni, vn); n.away = a.away;
+            n.lots = top ? b.topIni : b.botIni; n.att = top ? b.topMax : b.botMax; n.tick = top ? b.topIniTick : b.botIniTick; n.attX1000 = a.x1000; };
+        const auto absAt = [&](int i, bool top) -> turn::Abs { turn::Abs a; turn::Ini n; sideAt(i, top, a, n); return a; };
+        const auto iniAt = [&](int i, bool top) -> turn::Ini { turn::Abs a; turn::Ini n; sideAt(i, top, a, n); return n; };
         const auto indexOf = [&](long long key) -> int { int lo2 = 0, hi2 = (int)count - 1; while (lo2 <= hi2) { const int m = lo2 + (hi2 - lo2) / 2; const long long t = (long long)times[m]; if (t == key) return m; if (t < key) lo2 = m + 1; else hi2 = m - 1; } return -1; };
         // (1.4.0) THE ABSORPTION READ, right of the last candle (the other panes' read format: time + verdict in colour, why, Watch). As of
         // the last closed candle in view; from the bars calc read and the named levels only; nothing is recorded (a read, not a mark).
@@ -956,20 +955,26 @@ private:
                             const std::map<long long, BarVal>::const_iterator bj = S.bars.find(kj); if (bj == S.bars.end() || !bj->second.hlc) break;
                             turn::Nx q; q.hi = bj->second.hiT; q.lo = bj->second.loT; q.when = prefixText(std::string(), kj, false, 0); nx.push_back(q); }
                         std::vector<std::vector<long long> > hc; for (int j = std::max(0, ic - 40); j < ic; ++j) { const std::map<long long, BarVal>::const_iterator bj = S.bars.find((long long)times[j]);
-                            if (bj == S.bars.end() || !bj->second.hlc) { hc.clear(); continue; } hc.push_back(std::vector<long long>{ bj->second.hiT, bj->second.loT, bj->second.clT }); }
+                            if (bj == S.bars.end() || !bj->second.hlc) { hc.clear(); continue; } hc.push_back(std::vector<long long>{ bj->second.hiT, bj->second.loT, bj->second.clT }); }   // 40 at most, only for the one candle the read is about
                         ct.rows.push_back(std::make_pair(std::string("Price"), turn::agreeText(pe, hold, ext, nx, turn::atrTicks(hc), S.tick))); } }
                 S.readVerdict = ct.quiet ? 0 : ct.win; S.readHead = ct.title; S.readWhy.clear(); for (const auto& rw : ct.rows) S.readWhy += rw.first + ": " + rw.second + " "; S.readWatch.clear();
                 if (wAv >= 150 && rows >= 1) {
+                    // (1.10.0) a grey column of volume-model questions left of the read, each written once where its lines start; dropped when the
+                    // read would get narrower than 150 px
+                    setFont(f9); const int qWf = std::max(tw(turn::Q3), std::max(tw(turn::Q5), tw(turn::Q6))) + 8, qWs = std::max(tw(turn::shortQ(turn::Q3)), tw(turn::shortQ(turn::Q6))) + 8;
+                    const bool qFull = wAv - qWf >= 220, qOn = qFull || wAv - qWs >= 150; const int qW = qFull ? qWf : qWs;   // the full questions when there is room, else the short ones, else none
+                    const int xR = qOn ? x0 + qW : x0, wR = qOn ? wAv - qW : wAv; std::string lastQ;
+                    const auto tag = [&](const char* q, int yy) { if (!qOn || lastQ == q) return; lastQ = q; setFont(f9); text(qFull ? q : turn::shortQ(q), x0, yy, xR - 4, yy + rh, C_MUTED, false); ++S.qTags; };
                     int y = T + 1, used = 0; setFont(f9b);
-                    const std::vector<std::string> hl = turn::wrapRead(ct.title, wAv, 2, tw);
-                    for (size_t q = 0; q < hl.size() && used < rows; ++q, ++used, y += rh) text(hl[q], x0, y, R - 2, y + rh, ct.quiet ? C_MUTED : ct.win > 0 ? C_GREEN : C_RED, false);
+                    const std::vector<std::string> hl = turn::wrapRead(ct.title, wR, 2, tw);
+                    for (size_t q = 0; q < hl.size() && used < rows; ++q, ++used, y += rh) { if (q == 0) tag(turn::Q3, y); setFont(f9b); text(hl[q], xR, y, R - 2, y + rh, ct.quiet ? C_MUTED : ct.win > 0 ? C_GREEN : C_RED, false); }
                     for (const auto& rw : ct.rows) {
                         if (used >= rows) break;
-                        const std::vector<std::string> wl = turn::wrapRead(rw.first + ": " + rw.second, wAv, std::max(1, std::min(2, rows - used)), tw);
+                        const std::vector<std::string> wl = turn::wrapRead(rw.first + ": " + rw.second, wR, std::max(1, std::min(2, rows - used)), tw);
                         for (size_t q = 0; q < wl.size() && used < rows; ++q, ++used, y += rh) {
-                            if (q == 0) { setFont(f9b); const std::string lab = rw.first + ":"; text(lab, x0, y, x0 + tw(lab) + 2, y + rh, C_TEXT, false);
-                                const std::string rest = wl[q].size() > lab.size() + 1 ? wl[q].substr(lab.size() + 1) : std::string(); const int lw = tw(lab + " "); setFont(f9); text(rest, x0 + lw, y, R - 2, y + rh, C_TEXT, false); }
-                            else { setFont(f9); text(wl[q], x0, y, R - 2, y + rh, C_TEXT, false); } }
+                            if (q == 0) { tag(turn::questionOf(rw.first), y); setFont(f9b); const std::string lab = rw.first + ":"; text(lab, xR, y, xR + tw(lab) + 2, y + rh, C_TEXT, false);
+                                const std::string rest = wl[q].size() > lab.size() + 1 ? wl[q].substr(lab.size() + 1) : std::string(); const int lw = tw(lab + " "); setFont(f9); text(rest, xR + lw, y, R - 2, y + rh, C_TEXT, false); }
+                            else { setFont(f9); text(wl[q], xR, y, R - 2, y + rh, C_TEXT, false); } }
                     }
                     S.readLines = used;
                 }
@@ -1069,14 +1074,15 @@ private:
             const std::map<long long, BarVal>::const_iterator bi = S.bars.find(key);
             if (!isSw && ci == S.rec.cands.end() && bi == S.bars.end()) continue;
             PNT p; p.set(i, 0.0f, kBarCenter); const int x = p.h; if (x < L || x > R) continue;
-            turn::EffPair e; e.up = turn::absBar(absAt(i, true), W.effFrom10); e.dn = turn::absBar(absAt(i, false), W.effFrom10);   // (1.3.0) Absorption at the candle's high / low
+            turn::Abs aU, aD; turn::Ini nU, nD; sideAt(i, true, aU, nU); sideAt(i, false, aD, nD);   // (1.10.0) one walk a side
+            turn::EffPair e; e.up = turn::absBar(aU, W.effFrom10); e.dn = turn::absBar(aD, W.effFrom10);   // (1.3.0) Absorption at the candle's high / low
             if (isSw) {
                 const turn::Sw& w = S.sweeps[si->second]; const turn::Read sr = readFor(S, w);
                 if (sr.src != '-') {                                    // a sweep candle with its read: the push on its side, the turn on the other
                     turn::BarSet bs = turn::barsOf(sr); bs.eff = w.dir < 0 ? e.up : e.dn;   // (1.3.0) the Absorption at the end the sweep pushed into
                     if (!W.stop) bs.stop = turn::Bar1();
                     if (!W.exh) bs.exh = turn::Bar1();
-                    if (!W.ans) bs.ans = turn::Bar1(); else bs.ans = turn::iniBar(iniAt(i, w.dir < 0));   // (1.8.0) the new Initiative at the end it pushed into (the old Answer 0-3 retired)
+                    if (!W.ans) bs.ans = turn::Bar1(); else bs.ans = turn::iniBar(w.dir < 0 ? nU : nD);   // (1.8.0) the new Initiative at the end it pushed into (the old Answer 0-3 retired)
                     wideDrawn += drawSide(owner++, x, w.dir, bs, axis, half, bw, wd, of, L + 1, R - 1, boxes, cands, texts, false);
                     if (!W.ans) { turn::BarSet o; o.eff = w.dir < 0 ? e.dn : e.up;      // the Answer is off: its column holds the other side's Effort
                         if (o.eff.show) wideDrawn += drawSide(owner++, x, -w.dir, o, axis, half, bw, wd, of, L + 1, R - 1, boxes, cands, texts, false); }
@@ -1088,9 +1094,10 @@ private:
                 if (c.hiL) stU = turn::ratioBar(c.hiX1000, 50);
                 if (c.loL) stD = turn::ratioBar(c.loX1000, 50); }
             // (1.8.0) TWO BARS A CANDLE: Absorption at its stronger end (left), Initiative at its stronger end (right)
-            const turn::Abs aU = absAt(i, true), aD = absAt(i, false); const turn::Ini nU = iniAt(i, true), nD = iniAt(i, false);
-            const bool abUp = aU.x1000 >= 0 && aU.x1000 >= aD.x1000, inUp = nU.x1000 >= 0 && nU.x1000 > nD.x1000;   // ties: Absorption at the top, Initiative at the bottom
-            const turn::Bar1 ab = abUp ? e.up : e.dn, in = turn::iniBar(inUp ? nU : nD);
+            // (1.10.0, the review) the end that COUNTS wins (the read names it too), then the bigger number; ties: Absorption at the top, Initiative at the bottom
+            const bool abUp = e.up.on != e.dn.on ? e.up.on : (aU.x1000 >= 0 && aU.x1000 >= aD.x1000);
+            const bool inUp = turn::iniOn(nU) != turn::iniOn(nD) ? turn::iniOn(nU) : (nU.x1000 >= 0 && nU.x1000 > nD.x1000);
+            const turn::Bar1 ab = abUp ? e.up : e.dn, in = W.ans ? turn::iniBar(inUp ? nU : nD) : turn::Bar1();   // (1.10.0) the display switch hides Initiative everywhere
             if (e.up.show || e.dn.show) ++S.effCandles;
             if (in.show) ++S.iniCandles;
             if (in.on) ++S.iniOn;
@@ -1122,7 +1129,7 @@ private:
         if (!S.lastRead.empty()) o << "LAST|T|" << S.lastRead << "\n";
         o << "DISPLAY|" << TURN_VERSION << "|strip on the pane top: " << (S.stripKind == 1 ? "a sweep" : S.stripKind == 2 ? "a candle at a level" : S.stripKind == 3 ? "a candle" : "none")
           << "|ratios " << (S.labMode == 2 ? "on every bar (wide candles)" : S.labMode == 1 ? "one per candle side" : "none") << " " << S.labDrawn << " of " << S.labOffered
-          << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "|effort candles " << S.effCandles << "|initiative candles " << S.iniCandles << " coloured " << S.iniOn << "\n";
+          << "|mouse " << (S.hov >= 0 ? "on a candle of this pane" : "not in this pane") << "|mouse moves " << S.mouseMoves << "|effort candles " << S.effCandles << "|initiative candles " << S.iniCandles << " coloured " << S.iniOn << "|question tags " << S.qTags << "\n";
         o << "TEQ|" << S.teq.size() << " candles with their Ex? (turnexq file)|writes " << S.teqWrites << " fails " << S.teqFails << "\n";   // (1.6.0)
         o << "ABS|" << S.abs.size() << " Abs lines in the wy file|" << S.tab.size() << " decided (P / Ex?)|writes " << S.tabWrites << " fails " << S.tabFails << "|read shows an Abs " << S.absShown << "|" << S.absWhy << "\n";   // (1.5.0)
         o << "READ|" << (S.readVerdict == 1 ? "bullish" : S.readVerdict == -1 ? "bearish" : S.readVerdict == 2 ? "range" : "quiet") << "|" << S.readHead << "|" << S.readWhy << "|" << S.readWatch << "|lines drawn " << S.readLines << "\n";   // (1.4.0) the Absorption read right of the last candle
@@ -1147,6 +1154,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself, IRT's volume at price; (1.0.1) the mouse picks the candle the strip is about
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Turn v1.8 - two bars a candle: Absorption (left) and Initiative (right), each up at the candle's high or down at its low. Absorption = the attackers' heaviest price in that end quarter vs the 20 candles before (buyers at the high green, sellers at the low red, from 2.0 when the candle closed away from that end). Initiative = the counter side's heaviest price there (sellers at the high red, buyers at the low green, from 1.5 when bigger than the attackers there and closed away). Read: the candle under the mouse.");
-    p->setVersion("1.9.0");
+    p->setVersion("1.10.0");
     return p;
 }

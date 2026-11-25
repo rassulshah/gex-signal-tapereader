@@ -34,5 +34,18 @@ int main() {
       vrd::Out p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.ex[0] == "Biggest orders: buyers 45 (S10), sellers 31.", "GC RTH: 45 = S10, 31 below S20");
       x.rth = false; q.bigSell = 39; x.in = q; p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.ex[0].find("buyers 45 (S20), sellers 39 (S20)") != std::string::npos, "GC overnight: 45 and 39 = S20");
       x.mkt.clear(); p = vrd::volPlain(x, vrd::volumeRead(x)); C(p.ex[0].find("(S") == std::string::npos, "no market: no tier"); }
-    C(std::string(vrr::VERSION) == "1.13.0" && std::string(vrd::VERSION) == "1.4.0", "versions");
+    // (1.5.0) the question of each line: head 1, orders 4, icebergs 5, a note 1
+    { vrd::Out p = at("09:30", 6, 99); C(p.headQ == vrd::Q1 && p.exQ.size() == p.ex.size() && p.exQ[0] == vrd::Q4 && p.exQ[1] == vrd::Q5, "questions per line"); }
+    // the layout: the question column left of the read, the sentences right of it, nothing outside the pane
+    { vrr::Engine E; E.mode = vrr::VOL; E.tick = 0.1; E.spb = 180; E.mkt = "GC";
+      for (size_t i = 0; i < Cd.size(); ++i) { vrr::Bar b; b.t = 3878000000LL + (long long)i * 180; b.o = Cd[i].o; b.h = Cd[i].h; b.l = Cd[i].l; b.c = Cd[i].c; b.v = Cd[i].vol; E.addBar(b, 1795129200LL + (long long)i * 180); }
+      E.inside[E.T.back()] = I.back();
+      auto tw = [](const std::string& s) { return (int)s.size() * 6; };
+      for (int width : { 900, 520, 330, 200 }) { vrr::View v; v.l = 0; v.t = 0; v.r = 400 + width; v.b = 110; v.bw = 8; v.first = 0; v.last = (int)Cd.size(); v.X = [](int j) { return 20.0 + j * 6.0; }; v.textW = tw; v.readX = 400;
+        const std::vector<vrr::Prim> Pm = vrr::layout(E, v, nullptr, -1); int tags = 0, shortTags = 0; bool inside = true;
+        for (const vrr::Prim& p : Pm) { if (p.fill) continue; if (p.text == vrd::Q1 || p.text == vrd::Q4 || p.text == vrd::Q5) ++tags; if (p.text == "1 How much?") ++shortTags; if (p.x1 > v.r || p.y1 > v.b) inside = false; }
+        if (width >= 520) C(tags >= 2, "wide: the question column is drawn");
+        if (width == 200) C(tags == 0, "very narrow: no question column");
+        C(inside, "everything inside the pane"); (void)shortTags; } }
+    C(std::string(vrr::VERSION) == "1.14.0" && std::string(vrd::VERSION) == "1.5.0", "versions");
     std::printf("%s %d pass, %d fail\n", bad ? "FAILED" : "ALL PASS", ok, bad); return bad ? 1 : 0; }

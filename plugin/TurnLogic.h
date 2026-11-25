@@ -70,7 +70,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-24 19:59-20:00 CT "So have the indicators implemented the volume model", "Go"): layer 4 MAGNITUDE - the biggest market order carries its Big Lot tier ("Biggest 41 (S20)", BigTier.h); layer 6 PRICE AGREEMENT - one "Price" line under the read: went 1 ATR the turn's way (agreed) or traded through the extreme (failed), first of the next 10 closed candles, else held / waiting
+static const char* const VERSION = "1.10.0";   // (1.10.0, Rassul 2026-11-24 20:46 CT "add the question each answers to the read , so i know what question the read is answering in relation to the volume model", 20:54 "go"): the read's lines start with their volume-model question in grey, once per question (questionOf)
+// was static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-24 19:59-20:00 CT "So have the indicators implemented the volume model", "Go"): layer 4 MAGNITUDE - the biggest market order carries its Big Lot tier ("Biggest 41 (S20)", BigTier.h); layer 6 PRICE AGREEMENT - one "Price" line under the read: went 1 ATR the turn's way (agreed) or traded through the extreme (failed), first of the next 10 closed candles, else held / waiting
 // was static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-24 17:52 CT "the absorbtion indicator can be updated to have two bars per candle , 1 for absorbtion and 1 for initiative", 18:01 "i want more detail for the intiative buyers", 18:53 "build" on turn-initiative-mockup.html v3): INITIATIVE = the counter side's heaviest single price in the end quarter (buys at the low, sells at the high) / its 20-candle mean, on when >= 1.5, bigger than the attackers' heaviest price there and the candle closed outside that quarter. Each candle: left bar = Absorption, right bar = Initiative, each at its stronger end. The read: Initiative / How (burst, sweep, biggest order) / Against. Research 2026-11-24 (new 10-candle lows / highs, 7 markets): initiative only 66% went 1 ATR first (n 711, halves 66 / 67) vs 57% ordinary, 61% absorption only; burst at the market's 90th percentile of the prior hour's pace 83% vs 67% (n 30, "?"), swept 4+ prices 76% vs 67% (n 55, "?")
 // was static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-24 17:28 CT "i think absorbtion read should be in the absorption indicator but it should be more compact without the result and next", 17:30 "lets go with this for now" / "build" on turn-read-mockup.html): THE COMPACT READ - for the candle under the mouse (else the last closed one): who won at the end that was pushed (Passive defense / Aggressor), then Attack and Absorbed / Not absorbed only; an Abs names its level in the heading. Research VERDICT 2026-11-24: 12,406 candles 1.5x+, passive defense held 40% (both halves 40 / 40) vs aggressor 15% (16 / 13); aggressor ran on 1 ATR 42% vs 26%, all 7 markets
 // was static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): RevRead\\turnexq-<MKT>-<spb>.txt = the sellers' / buyers' Ex? (last minute <= 0.5x the first 2 minutes' pace) of EVERY closed candle this pane saw whole - the E of the Tst badge's line 3 (lsRevReadMarks 0.28.0); nothing drawn changed
@@ -1109,6 +1110,17 @@ inline bool parseAbsRec(const std::string& txt, const std::string& mkt, int spb,
 // passive defense 40% (both halves) vs aggressor 15%; price ran 1 ATR on past it 26% vs 42%. Refills did NOT change it (40% vs 41%):
 // they describe, they do not grade. Under 1.5 at both ends = one quiet line.
 static const long long CR_FROM1000 = 1500;
+// (1.10.0) the volume-model question each read line answers (Rassul's 6 layers, /topics/volume-model): the heading and Initiative / Attack / Against
+// answer 3, How / Absorbed / Not absorbed 5 (with 4, the order sizes, inside them), Price 6
+static const char* const Q1 = "1 How much?"; static const char* const Q2 = "2 Who hit whom?"; static const char* const Q3 = "3 Who won at the end?";
+static const char* const Q4 = "4 How big?"; static const char* const Q5 = "5 How?"; static const char* const Q6 = "6 Did price agree?";
+// short forms for a narrow read (right of the last candle there may be only ~250 px)
+inline const char* shortQ(const char* q) { const std::string x = q; return x == Q1 ? "1 How much?" : x == Q2 ? "2 Who hit?" : x == Q3 ? "3 Who won?" : x == Q4 ? "4 How big?" : x == Q5 ? "5 How?" : x == Q6 ? "6 Agreed?" : q; }
+inline const char* questionOf(const std::string& rowLabel) {
+    if (rowLabel == "How" || rowLabel == "Absorbed" || rowLabel == "Not absorbed") return Q5;
+    if (rowLabel == "Price") return Q6;
+    return Q3;
+}
 struct CText { std::string title; int win = 0; std::vector<std::pair<std::string, std::string> > rows; bool quiet = false; };
 inline CText compactText(int dir, long long x1000, bool passive, const AbsCalc& c, const std::string& when, const std::string& lv, long long lvPx, double tick, const std::string& mkt = std::string(), bool rth = true) {
     CText o; const bool bull = dir > 0;   // dir +1 = sellers pushed into the bottom, -1 = buyers into the top
@@ -1201,7 +1213,8 @@ inline CText iniText(int end, const Ini& in, const IniCalc& c, const std::string
 // (1.9.0) LAYER 6 - PRICE AGREEMENT, the read's "Price" line. end +1 = the candle's low, -1 its high; hold = the read says that end should HOLD (Initiative,
 // passive defense) - false = the aggressor got through (price should go ON). ext = that extreme (ticks); nx = the closed candles after it, oldest first
 // (up to 10); atr = Wilder ATR(13) in ticks before the candle (0 = not known). The first of: agreed = 1 ATR the expected way; failed = (hold) traded more
-// than 1 tick through the extreme / (go on) 1 ATR the other way. Research 2026-11-24: initiative lows went 1 ATR first 66%, ordinary 57% (10 candles).
+// than 1 tick through the extreme / (go on) 1 ATR the other way; a candle that does both counts as FAILED for a hold (the order inside the candle
+// is not known - the conservative call). Research 2026-11-24: initiative lows went 1 ATR first 66%, ordinary 57% (10 candles).
 struct Nx { long long hi = 0, lo = 0; std::string when; };
 inline std::string agreeText(int end, bool hold, long long ext, const std::vector<Nx>& nx, long long atr, double tick) {
     const int sg = end > 0 ? 1 : -1;   // the way price should go from a hold at the low: up

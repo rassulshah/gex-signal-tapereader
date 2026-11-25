@@ -111,7 +111,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.29.0"   // (0.29.0, Rassul 2026-11-24 19:31-19:44 CT "should this be updated to buy and sell volume instead", "i would also hide the book flow", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) the pane: Book Flow hidden, the delta-change bars replaced by BUY / SELL VOLUME bars (both up from zero, "biggest in N" from 10), the read = who hit whom (BsRead.h); the signal strip and every mark unchanged
+#define RVS_VERSION "0.30.0"   // (0.30.0, Rassul 2026-11-24 20:46-20:54 CT "add the question each answers to the read", "make the update for magnitude also so everything is covered", "go"): the buy / sell bars' DARK part = lots from big orders (S20+, OrderFlowFeed 1.18.0 Rec.bigC); the read's big-order line (BsRead 1.1.0) and a grey column with each line's volume-model question
+// was #define RVS_VERSION "0.29.0"   // (0.29.0, Rassul 2026-11-24 19:31-19:44 CT "should this be updated to buy and sell volume instead", "i would also hide the book flow", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) the pane: Book Flow hidden, the delta-change bars replaced by BUY / SELL VOLUME bars (both up from zero, "biggest in N" from 10), the read = who hit whom (BsRead.h); the signal strip and every mark unchanged
 // was #define RVS_VERSION "0.28.1"   // (0.28.1, Rassul 2026-11-24 16:01 CT "bullish breaks are of highs and bearish breaks are of lows") LevelMarks 1.20.0: a Bk is drawn only through a level on its own side (a high for a bullish Bk, a low for a bearish one; Open / POC either way)
 // was #define RVS_VERSION "0.28.0"   // (0.28.0, Rassul 2026-11-24 12:21 CT "use the third line which currently has the percentage .. show mockup", 12:51 "2. do the test", "3. yes"; tst-line3-mockup.html) LevelMarks 1.19.0 / WyMarks 2.8.0 / WyRead 1.11.0 / RevReadLogic 0.17.0 / lsTurn 1.6.0: the Tst badge's 3rd line = A+E / E / A! / blank (absorption and exhaustion at the Tst pivot) instead of the retrace %, decided once and kept in RevRead\\tstl3-<MKT>-<spb>.txt; the Abs badge's P line always shown once known
 // was #define RVS_VERSION "0.27.0"   // (0.27.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15) LevelMarks 1.18.0 / WyMarks 2.7.0 / RevReadLogic 0.16.0: the Abs badge - effort without result at the first test of a Bk level (Abs / Low 21% or Top 21% / P16 from lsTurn), "Abs/Ex?" when lsTurn saw the attackers' last minute fade, and the next candle's "Ex" (attackers 0.5x or less, closed further away); written "stamp|Abs|..." / "stamp|Ex|dir" in wy-<MKT>-<spb>.txt
@@ -126,7 +127,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.29.0");
+    p->setVersion("0.30.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -291,6 +292,7 @@ public:
     virtual int parmsTitle(char* pStr, int size) { return off::copyTitle(pStr, size, rvs::PaneLogic::title(), RVS_VERSION) ? RTX_OK : RTX_FAIL; }
     struct Ext : off::PaneExt {
         std::unique_ptr<rvs::Engine> eng; std::string mkt, session, path, note, symbol; int spb = 0; double tick = 0;
+        long long bigBars = 0, qTags = 0;   // (0.30.0) bars drawn with a big-order part / question tags drawn (the status)
         size_t written = 0; long long writeFails = 0, events = 0, skipped = 0, sessions = 0, reconnects = -1, marksLoaded = 0;
         long long stamp = -1; int ctSec = 0; long long localSec = 0; int rthO = 510, rthC = 900;
         rvh::PocStore ps; long long fedCandle = 0; bool aligned = true;
@@ -564,6 +566,7 @@ public:
         return w;
     }
     void render(S_& S, Ext& e) {
+        e.bigBars = 0; e.qTags = 0;   // (0.30.0, the review) counts of THIS draw
         RCT pane; pane.getPaneRect(false);
         const long count = getBarCount(); if (count < 2) return;
         RTARRAYI times(barDateTime); if (times.count < count) return;
@@ -878,12 +881,12 @@ public:
                         setTextColor(m.dir > 0 ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(xx), rvh::coord(yy), rvh::coord(xx + w + 1), rvh::coord(yy + WY_ROW)); r.drawText(t.c_str(), false, false); xx += w; } } }
             const int dTop = bfBottom + 3, dBot = (int)pane.bottom - 2, dH = dBot - dTop - 14;   // (0.21.5) the BOTTOM half: the title row, then the change bars   // (0.15.2) the top half under the title row; 14 px kept for the labels; (0.17.0) under the Wyckoff strip
             struct DB { int x; long long dl, chg; bool hasChg; double lab; long long sess; }; std::vector<DB> D;
-            for (int i = v0; i <= v1; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; const rvs::Poc* q = pocAt(i - 1); DB d; PNT pt; pt.set(i, 0.0f, kBarCenter); d.x = (int)pt.h; d.dl = p->cdlt; d.hasChg = q != nullptr; d.chg = q ? p->cdlt - q->cdlt : 0; d.lab = 0;
+            for (int i = v0; RV_DRAW_BOOKFLOW && i <= v1; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; const rvs::Poc* q = pocAt(i - 1); DB d;   /* (0.30.0, the review) only while the delta-change bars are drawn */ PNT pt; pt.set(i, 0.0f, kBarCenter); d.x = (int)pt.h; d.dl = p->cdlt; d.hasChg = q != nullptr; d.chg = q ? p->cdlt - q->cdlt : 0; d.lab = 0;
                 if (q) { std::vector<long long> h; for (int k = i - 1; k >= 1 && (int)h.size() < 20 && i - k <= 40; --k) { const rvs::Poc* a = pocAt(k); const rvs::Poc* b2 = pocAt(k - 1); if (a && b2) h.push_back(a->cdlt - b2->cdlt); }
                     if (h.size() >= 10) d.lab = cbr::changeLabel(d.chg, cbr::medAbs(h)); }
                 d.sess = sessKey(i); D.push_back(d); }
             // (0.15.2, Rassul 17:58 CT "the delta is not drawing on the new bar") the FORMING candle is drawn live: its delta so far from IRT's volume at price
-            if (v1 >= (int)count - 1 && count >= 2) { RTARRAYP vap(barVolumeProfile); std::vector<rvs::VRow> rows; double pv = 0;
+            if (RV_DRAW_BOOKFLOW && v1 >= (int)count - 1 && count >= 2) { RTARRAYP vap(barVolumeProfile); std::vector<rvs::VRow> rows; double pv = 0;   /* (0.30.0) as above */
                 if (rvh::vapRows(vap, (int)count - 1, S.tick, rows, pv) > 0) { long long dl = 0; for (const rvs::VRow& r : rows) dl += r.dlt; const rvs::Poc* q = pocAt((int)count - 2);
                     DB d; PNT pt; pt.set((int)count - 1, 0.0f, kBarCenter); d.x = (int)pt.h; d.dl = dl; d.hasChg = q != nullptr; d.chg = q ? dl - q->cdlt : 0; d.lab = 0; d.sess = sessKey((int)count - 1); D.push_back(d); } }
             // (0.15.2) each SESSION is scaled by itself (the evening's bars were too small to see next to the day session's), on the session's 95th
@@ -897,14 +900,23 @@ public:
                 bool any = false; for (int i = v0; i <= v1 && i <= (int)count - 2 && !any; ++i) if (pocAt(i)) any = true;
                 const int bTop = wyTop + WY_ROW + 14, bBot = (int)pane.bottom - 2, bH = bBot - bTop;
                 if (bH > 8 && any) {
+                    std::vector<long long> skv((size_t)(v1 - v0 + 1), 0); for (int i = v0; i <= v1; ++i) skv[(size_t)(i - v0)] = sessKey(i);   // (0.30.0, the review) the session of each candle once per draw
                     std::map<long long, long long> mxB; { std::map<long long, std::vector<long long> > all;
-                        for (int i = v0; i <= v1 && i <= (int)count - 2; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; std::vector<long long>& v = all[sessKey(i)]; v.push_back(p->buy); v.push_back(p->sell); }
+                        for (int i = v0; i <= v1 && i <= (int)count - 2; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; std::vector<long long>& v = all[skv[(size_t)(i - v0)]]; v.push_back(p->buy); v.push_back(p->sell); }
                         for (auto& kv : all) { std::vector<long long>& v = kv.second; std::sort(v.begin(), v.end()); const long long p95 = v.empty() ? 0 : v[(size_t)std::min(v.size() - 1, (size_t)(0.95 * (double)v.size()))]; mxB[kv.first] = std::max(1LL, p95 * 115 / 100); } }
                     const int wb = std::max(1, (int)std::lround(bw * 0.36)); setFont(fb);
-                    for (int i = v0; i <= v1 && i <= (int)count - 2; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; PNT pt; pt.set(i, 0.0f, kBarCenter); const int x = (int)pt.h; const double m2 = (double)mxB[sessKey(i)];
+                    for (int i = v0; i <= v1 && i <= (int)count - 2; ++i) { const rvs::Poc* p = pocAt(i); if (!p) continue; PNT pt; pt.set(i, 0.0f, kBarCenter); const int x = (int)pt.h; const double m2 = (double)mxB[skv[(size_t)(i - v0)]];
                         const int hB = p->buy > 0 ? std::min(bH, std::max(1, (int)std::llround((double)p->buy * bH / m2))) : 0, hS = p->sell > 0 ? std::min(bH, std::max(1, (int)std::llround((double)p->sell * bH / m2))) : 0;
                         if (hB > 0) off::fillFlat(this, x - wb, bBot - hB, x, bBot, rvh::C_GREEN);
                         if (hS > 0) off::fillFlat(this, x + 1, bBot - hS, x + 1 + wb, bBot, rvh::C_RED);
+                        {   // (0.30.0) the DARK part from the bottom = the share of the side's market lots that came from big orders (S20+), from the order feed
+                            const auto ri = S.ser.bars.find((long long)times[i]);
+                            if (ri != S.ser.bars.end() && ri->second.ok && ri->second.r.bigOk) { const off::Rec& rr = ri->second.r;
+                                const long long ab = rr.aggrC[off::ASK], as = rr.aggrC[off::BID];
+                                const int dB = ab > 0 && hB > 0 ? (int)std::min((long long)hB, (long long)hB * rr.bigC[off::ASK] / ab) : 0, dS = as > 0 && hS > 0 ? (int)std::min((long long)hS, (long long)hS * rr.bigC[off::BID] / as) : 0;
+                                if (dB > 0) off::fillFlat(this, x - wb, bBot - dB, x, bBot, rvh::C_BAR_GREEN);
+                                if (dS > 0) off::fillFlat(this, x + 1, bBot - dS, x + 1 + wb, bBot, rvh::C_BAR_RED);
+                                if (dB > 0 || dS > 0) ++e.bigBars; } }
                         const int nB = p->bbv >= 10 ? p->bbv : 0, nS = p->bsv >= 10 ? p->bsv : 0;
                         if (nB) { const std::string t = nB >= 99 ? std::string("99+") : std::to_string(nB); const int w2 = (int)getTextWidth(t.c_str(), -1); const int cx = x - wb / 2 - (nS ? w2 / 2 : 0); const int yy = std::max(bTop - 13, bBot - hB - 13);
                             setTextColor(rvh::C_GREEN); RCT r; r.set(rvh::coord(cx - w2 / 2), rvh::coord(yy), rvh::coord(cx - w2 / 2 + w2 + 1), rvh::coord(yy + 12)); r.drawText(t.c_str(), false, false); }
@@ -1058,7 +1070,7 @@ public:
         if ((cb.bookOk || cb.deltaOk || !RV_DRAW_BOOKFLOW) && cbBar >= 0 && v1 >= (int)count - 1) {   // (0.29.0) with Book Flow hidden: the buy / sell read   // (0.15.0, Rassul 15:31 CT "1 effective read") THE ONE READ: Book Flow (passive) + delta (aggressive)
             const std::string mk = rvh::marketOf(getRootSymbol() ? getRootSymbol() : "", getSymbol() ? getSymbol() : ""); cb.mkt = mk;
             std::string when; { struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)times[cbBar], &t)) when = off::clock12(t.tm_hour, t.tm_min); } cb.when = when;
-            cbr::Out fo;
+            cbr::Out fo; std::string foHeadQ; std::vector<std::string> foExQ;   // (0.30.0) the volume-model question of the head / each sentence (buy / sell read)
             if (RV_DRAW_BOOKFLOW) fo = cbr::toPlain(cb, cbr::read(cb));
             else {   // (0.29.0) THE BUY / SELL READ (BsRead.h): who hit whom on the candle under the mouse (else the last closed one), from IRT's volume at price
                 auto pk = [&](int i) -> const rvs::Poc* { if (i < 0 || i >= (int)count) return nullptr; const auto it = e.ps.poc.find((long long)times[i]); return it != e.ps.poc.end() && it->second.ok ? &it->second : nullptr; };
@@ -1067,12 +1079,16 @@ public:
                     if (const rvs::Poc* q0 = pk(cbBar - 1)) { bi.prevOk = true; bi.prevDelta = q0->buy - q0->sell; }
                     for (int k = cbBar - 1; k >= 0 && (int)bi.pb.size() < bsr::NORM_N && cbBar - k <= 40; --k) { const rvs::Poc* a = pk(k); if (!a) continue; bi.pb.push_back(a->buy); bi.ps.push_back(a->sell);
                         if (const rvs::Poc* b2 = pk(k - 1)) bi.pswing.push_back(std::llabs((a->buy - a->sell) - (b2->buy - b2->sell))); } }
-                const bsr::Out bo = bsr::read(bi); fo.verdict = bo.verdict; fo.head = bo.ok ? bo.head : std::string("No volume at price for this candle"); fo.ex = bo.ex; storySent.clear(); }   // (0.16.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no table
+                {   // (0.30.0) the big orders' share, from the order feed's record of this candle
+                    const auto ri = S.ser.bars.find((long long)times[cbBar]);
+                    if (ri != S.ser.bars.end() && ri->second.ok) { const off::Rec& rr = ri->second.r; bi.bigOk = rr.bigOk; bi.bigBuy = rr.bigC[off::ASK]; bi.bigSell = rr.bigC[off::BID];
+                        bi.allBuy = rr.aggrC[off::ASK]; bi.allSell = rr.aggrC[off::BID]; bi.thr = rr.thrAggr; } }
+                const bsr::Out bo = bsr::read(bi); foHeadQ = bo.headQ; foExQ = bo.exQ; fo.verdict = bo.verdict; fo.head = bo.ok ? bo.head : std::string("No volume at price for this candle"); fo.ex = bo.ex; storySent.clear(); }   // (0.16.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no table
             {   // (0.17.0) a lettered candle reads its Wyckoff step: the candle under the mouse, or (no mouse) the newest letter of the last 3 candles
                 int wb = -1; const int hbW = S.hov.hover.bar;
                 if (hbW >= 0 && hbW < (int)count - 1) { if (e.wy.reads.count((long long)times[hbW])) wb = hbW; }
                 else for (int k = (int)count - 2; k >= 0 && k >= (int)count - 4; --k) if (e.wy.reads.count((long long)times[k])) { wb = k; break; }
-                if (wb >= 0 && !RV_DRAW_BOOKFLOW) { if (wb == cbBar) { const wyr::Read& wr = e.wy.reads.at((long long)times[wb]); if (!wr.head.empty()) fo.ex.push_back("Strip: " + wr.head); } }   // (0.29.0) the strip letter's step as one more line of the same candle
+                if (wb >= 0 && !RV_DRAW_BOOKFLOW) { if (wb == cbBar) { const wyr::Read& wr = e.wy.reads.at((long long)times[wb]); if (!wr.head.empty()) { fo.ex.push_back("Strip: " + wr.head); if (!foExQ.empty()) foExQ.push_back(std::string()); } } }   // (0.29.0) the strip letter's step as one more line of the same candle
                 else if (wb >= 0) { const wyr::Read& wr = e.wy.reads.at((long long)times[wb]); fo = cbr::Out(); fo.head = wr.head; fo.verdict = wr.dir > 0 ? 1 : wr.dir < 0 ? -1 : 0;
                     for (const std::string& l : wr.lines) if (!l.empty()) fo.ex.push_back(l);
                     struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)times[wb], &t)) when = off::clock12(t.tm_hour, t.tm_min); storySent.clear(); } }
@@ -1087,17 +1103,30 @@ public:
             if (cl.leftW > 0 && fit >= 1) {
                 if (blockR > 0) { setPen(rvh::C_GRAY, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = rvh::coord(xT - 13); a.v = rvh::coord(y0 + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = rvh::coord(xT - 13); b.v = rvh::coord(std::min((int)pane.bottom - 3, y0 + fit * rowH)); b.drawLineTo(); }
                 const COLOR vc = fo.verdict == 1 ? rvh::C_GREEN : fo.verdict == -1 ? rvh::C_RED : fo.verdict == 2 ? rvh::C_WHITE : rvh::C_GRAY;
+                // (0.30.0) the volume-model question column (the buy / sell read): full questions when the read keeps 220 px, short ones when 150, else none
+                const bool hasQ = !foHeadQ.empty() && foExQ.size() == fo.ex.size();
+                int qW = 0; bool qFull = false;
+                auto shortQ = [](const std::string& q) { return q == "2 Who hit whom?" ? std::string("2 Who hit?") : q; };
+                if (hasQ) { int wf = tw(foHeadQ), ws = tw(shortQ(foHeadQ)); for (const std::string& q : foExQ) { if (q.empty()) continue; wf = std::max(wf, tw(q)); ws = std::max(ws, tw(shortQ(q))); }
+                    if (cl.leftW - (wf + 8) >= 220) { qW = wf + 8; qFull = true; } else if (cl.leftW - (ws + 8) >= 150) qW = ws + 8; }
+                const int xQ = xT, xR = xT + qW, lw = cl.leftW - qW; std::string lastQ;
+                auto tagQ = [&](const std::string& q, int yy) { if (!qW || q.empty() || q == lastQ) return; lastQ = q; put(qFull ? q : shortQ(q), xQ, yy, rvh::C_DIM, xR - 2); ++e.qTags; };
                 const std::string lead = when.empty() ? fo.head : when + " " + fo.head;
-                const std::vector<std::string> HL = spt::headLines(lead, fo.why, cl.leftW, std::max(1, std::min(2, fit - 1)), tw); const int nh = (int)HL.size();
+                const std::vector<std::string> HL = spt::headLines(lead, fo.why, lw, std::max(1, std::min(2, fit - 1)), tw); const int nh = (int)HL.size();
                 for (int i = 0; i < nh; ++i) { const int yy = y0 + i * rowH; const std::string& h = HL[(size_t)i];
-                    if (i == 0 && h.compare(0, lead.size(), lead) == 0) { int xx = xT;
+                    if (i == 0) tagQ(foHeadQ, yy);
+                    if (i == 0 && h.compare(0, lead.size(), lead) == 0) { int xx = xR;
                         if (!when.empty()) { put(when, xx, yy, rvh::C_GRAY, lim + 1); xx += tw(when + " "); }
                         put(fo.head, xx, yy, vc, lim + 1); xx += tw(fo.head + " ");
                         if (h.size() > lead.size() + 1) put(h.substr(lead.size() + 1), xx, yy, rvh::C_WHITE, lim + 1); }
-                    else put(h, xT, yy, rvh::C_WHITE, lim + 1); }
+                    else put(h, xR, yy, rvh::C_WHITE, lim + 1); }
                 std::vector<std::string> SS = fo.ex; if (!storySent.empty() && storySent.compare(0, 6, "Story ") != 0) SS.push_back(storySent);   // (0.16.0) the Rev checks stay; the long climax story sentence goes   // the story / Rev checks last
-                const std::vector<std::string> EX = spt::wrap(SS, cl.leftW, fit - nh, tw);
-                for (size_t i = 0; i < EX.size(); ++i) put(EX[i], xT, y0 + (int)(i + (size_t)nh) * rowH, rvh::C_WHITE, lim + 1);
+                std::vector<std::string> EX;
+                if (!hasQ) { EX = spt::wrap(SS, lw, fit - nh, tw); for (size_t i = 0; i < EX.size(); ++i) put(EX[i], xR, y0 + (int)(i + (size_t)nh) * rowH, rvh::C_WHITE, lim + 1); }
+                else for (size_t k = 0; k < SS.size(); ++k) {   // sentence by sentence: each question on the first line of its sentence
+                    const int left = fit - nh - (int)EX.size(); if (left <= 0) break;
+                    const std::vector<std::string> W = spt::wrap(std::vector<std::string>(1, SS[k]), lw, left, tw); if (W.empty()) break;
+                    for (size_t i = 0; i < W.size(); ++i) { const int yy = y0 + (int)(EX.size() + (size_t)nh) * rowH; if (i == 0 && k < foExQ.size()) tagQ(foExQ[k], yy); put(W[i], xR, yy, rvh::C_WHITE, lim + 1); EX.push_back(W[i]); } }
                 if (cl.dataOn && fit >= 2) {
                     const int xb = xT + cl.leftW + spt::GAP, c1 = xb + wl + 12, c2 = c1 + wa + 14;
                     const int nRows = std::min(fit, (int)fo.rows.size());
@@ -1109,6 +1138,7 @@ public:
                 }
             }
             read += " || read " + when + ": " + fo.head + " " + fo.why;
+            read += " || big-order bars " + std::to_string(e.bigBars) + " | question tags " + std::to_string(e.qTags);   // (0.30.0) counts of the last draw (the status)
         }
         if (!accRead.empty()) read = accRead + " || " + read;
         e.lastRead = read; ++e.drawn;

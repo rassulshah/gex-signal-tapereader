@@ -20,7 +20,8 @@
 
 namespace vrd {
 
-static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-24 20:00 CT "Go" - layer 4 magnitude) the Volume read's biggest orders carry their Big Lot tier: "buyers 311 (S20)"
+static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 20:46 "add the question each answers to the read", 20:54 "go") Out.headQ / exQ = the volume-model question of the head and each sentence (Volume read only)
+// was static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-24 20:00 CT "Go" - layer 4 magnitude) the Volume read's biggest orders carry their Big Lot tier: "buyers 311 (S20)"
 // was static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-24 19:28-19:44 CT "i'll let you determine the display and the read", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) volPlain(): the VOLUME read answers layers 1, 4 and 5 of his volume model only - how much (size), the biggest orders / sweeps, icebergs, and a neutral note - with NO bullish / bearish verdict (the Turn pane calls the winner; the buy / sell pane says who hit whom). The Range read is unchanged
 // was static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
 // was "1.1.1";   // (1.1.1, his 09:32 CT screenshot: "narrowing" was the verdict but the sentence under it was about the 9:21 candle) the sentences behind the verdict come first, the side notes after   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
@@ -40,7 +41,12 @@ struct Ctx { std::vector<Cd> c;            // oldest -> newest; the LAST one is 
              Inside in; int dec = 2;
              std::string mkt; bool rth = true; };   // (1.4.0) the market ("ES" .. "6E") and RTH (the candle starts 8:30 - 14:59 CT) for the Big Lot tier
 struct Row { std::string lab, a, b; int ca = 0, cb = 0; };   // +1 green, -1 red, 0 white, 2 grey
-struct Out { bool ok = false; int verdict = 0; std::string head, why, candle, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; std::vector<std::string> notes; };   // (1.3.0) notes = neutral facts for the Volume read (no side)   // ex (1.1.0) = the explanation sentences   // verdict +1 / -1 / 2 mixed / 0 quiet
+struct Out { bool ok = false; int verdict = 0; std::string head, why, candle, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; std::vector<std::string> notes;
+             std::string headQ; std::vector<std::string> exQ; };   // (1.5.0) the volume-model question per line (empty = none drawn)
+// (1.5.0) his volume model's questions (/topics/volume-model) and their short forms for a narrow read
+static const char* const Q1 = "1 How much?"; static const char* const Q2 = "2 Who hit whom?"; static const char* const Q3 = "3 Who won at the end?";
+static const char* const Q4 = "4 How big?"; static const char* const Q5 = "5 How?"; static const char* const Q6 = "6 Did price agree?";
+inline std::string shortQ(const std::string& q) { return q == Q2 ? "2 Who hit?" : q == Q3 ? "3 Who won?" : q == Q6 ? "6 Agreed?" : q; }   // (1.3.0) notes = neutral facts for the Volume read (no side)   // ex (1.1.0) = the explanation sentences   // verdict +1 / -1 / 2 mixed / 0 quiet
 
 inline std::string commas(long long v) { std::string s = std::to_string(v < 0 ? -v : v); for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ","); return v < 0 ? "-" + s : s; }
 inline std::string xx(double v) { char b[24]; std::snprintf(b, sizeof b, v > 0 && v < 0.095 ? "%.2fx" : "%.1fx", (std::min)(v, 99.9)); return b; }   // (1.1.1) 0.01x, not 0.0x
@@ -237,11 +243,11 @@ inline Out volPlain(const Ctx& x, Out o) {
         std::string l = "Biggest orders: buyers " + btr::lotsText(q.bigBuy, x.mkt, x.rth) + ", sellers " + btr::lotsText(q.bigSell, x.mkt, x.rth);   // (1.4.0) + the tier
         const int sw = q.swBuy > q.swSell ? q.swBuy : q.swSell;
         if (sw >= (int)SWEEP_LV) { const bool sb = q.swSell > q.swBuy; l += std::string("; one ") + (sb ? "sell" : "buy") + " order swept " + std::to_string(sw) + " prices, " + (sb ? "buyers " : "sellers ") + std::to_string(sb ? q.swBuy : q.swSell); }
-        L.push_back(l + ".");
-        if (q.hidBuy > 0 || q.hidSell > 0) L.push_back("Icebergs: bids refilled " + commas(q.hidBuy) + " lots, offers " + commas(q.hidSell) + ".");
-    } else L.push_back("No order detail for this candle.");
-    if (!o.notes.empty()) L.push_back(o.notes[0]);
-    o.ex = L; o.rows.clear(); o.b1.clear(); o.b2.clear(); return o;
+        L.push_back(l + "."); o.exQ.push_back(Q4);
+        if (q.hidBuy > 0 || q.hidSell > 0) { L.push_back("Icebergs: bids refilled " + commas(q.hidBuy) + " lots, offers " + commas(q.hidSell) + "."); o.exQ.push_back(Q5); }
+    } else { L.push_back("No order detail for this candle."); o.exQ.push_back(Q4); }
+    if (!o.notes.empty()) { L.push_back(o.notes[0]); o.exQ.push_back(Q1); }
+    o.headQ = Q1; o.ex = L; o.rows.clear(); o.b1.clear(); o.b2.clear(); return o;
 }
 inline Out toPlain(Out o, bool range) { if (!o.ok) return o; const plr::Plain p = plain(o, range); o.head = p.head; o.why.clear(); o.ex = plr::lines(p); o.rows.clear(); o.b1.clear(); o.b2.clear(); return o; }
 } // namespace vrd

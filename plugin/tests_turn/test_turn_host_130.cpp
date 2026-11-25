@@ -156,7 +156,7 @@ int main() {
           if (a != std::string::npos && b != std::string::npos) { const std::string la = tb.substr(a + 1, tb.find('\n', a + 1) - a - 1), lb = te.substr(b + 1, te.find('\n', b + 1) - b - 1);
             std::cout << "(1.6.0) abs " << la << " / exq " << lb << "\n"; CHECK(la.substr(la.size() - 1) == lb.substr(lb.find('|') + 1, 1)); } }
         std::map<long long, std::pair<int, int> > tq; CHECK(turn::parseTeqFile(te, "ES", 180, tq) && !tq.empty() && !turn::parseTeqFile(te, "NQ", 180, tq)); }
-    CHECK(st.find("VERSION|1.9.0") != std::string::npos && std::string(TURN_VERSION) == "1.9.0" && std::string(turn::VERSION) == "1.9.0");
+    CHECK(st.find("VERSION|1.10.0") != std::string::npos && std::string(TURN_VERSION) == "1.10.0" && std::string(turn::VERSION) == "1.10.0");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----
@@ -197,8 +197,9 @@ int main() {
     std::vector<std::pair<double, int> > hs; std::vector<long> iniIdx;
     for (size_t i = 0; i + 1 < NB; ++i) { const long long key = (long long)es.H.bars[i].time; const int cx = es.H.barX0 + (int)i * es.H.barW;
         if (key == K851 || key == K903) continue;                          // sweep candles keep their own layout
-        const bool abUp = up[i].known && up[i].x1000 >= (dn[i].known ? dn[i].x1000 : -1); const Exp& A = abUp ? up[i] : dn[i];
-        const bool inUp = iu[i].known && iu[i].x1000 > (idn[i].known ? idn[i].x1000 : -1); const Exp& I = inUp ? iu[i] : idn[i];
+        // (1.10.0) the end that counts (coloured) wins, then the bigger number
+        const bool abUp = (up[i].known && up[i].on) != (dn[i].known && dn[i].on) ? (up[i].known && up[i].on) : (up[i].known && up[i].x1000 >= (dn[i].known ? dn[i].x1000 : -1)); const Exp& A = abUp ? up[i] : dn[i];
+        const bool inUp = (iu[i].known && iu[i].on) != (idn[i].known && idn[i].on) ? (iu[i].known && iu[i].on) : (iu[i].known && iu[i].x1000 > (idn[i].known ? idn[i].x1000 : -1)); const Exp& I = inUp ? iu[i] : idn[i];
         const mock::Draw* ba = boxAtW(cx - 21, abUp); const mock::Draw* bi = boxAtW(cx + 1, inUp);
         if (!A.known) { CHECK(boxAtW(cx - 21, true) == nullptr || boxAtW(cx - 21, false) == nullptr); ++none; }
         else { ++known; CHECK(ba != nullptr); if (ba) { CHECK(ba->color == (A.on ? (abUp ? trh::C_GREEN : trh::C_RED) : trh::C_AXIS)); CHECK(labelOf(*ba, abUp) == A.label || labelOf(*ba, abUp).empty());
@@ -233,7 +234,10 @@ int main() {
         for (long q : iniIdx) { mouseAt(x, es.H, q, es.H.barX0 + (int)q * es.H.barW, 250); cycle(x, es.H); cycle(x, es.H);
             const std::string r1 = lineOf(get(P("TurnPane\\status-ES-180.txt")), "READ|"); std::cout << "(1.8.0) hover Initiative candle: " << r1 << "\n";
             CHECK(r1.find("Initiative - ") != std::string::npos && r1.find("Initiative: ") != std::string::npos && r1.find("How: ") != std::string::npos && r1.find("Against: ") != std::string::npos);
-            CHECK(r1.find(" won the ") != std::string::npos); CHECK(r1.find("Price: ") != std::string::npos); ++seen; noOverlap(es.H); }   // (1.9.0) the Price line
+            CHECK(r1.find(" won the ") != std::string::npos); CHECK(r1.find("Price: ") != std::string::npos);
+            { int q3 = 0, q5 = 0, q6 = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "text") { if (d.text == "3 Who won at the end?" || d.text == "3 Who won?") ++q3; if (d.text == "5 How?") ++q5; if (d.text == "6 Did price agree?" || d.text == "6 Agreed?") ++q6; }
+              std::cout << "(1.10.0) question tags drawn: 3 x" << q3 << " 5 x" << q5 << " 6 x" << q6 << "\n"; CHECK(q3 >= 1 && q5 >= 1 && q6 >= 1); }   // (1.10.0) 3 Who won / 5 How / 6 Did price agree
+            ++seen; noOverlap(es.H); }   // (1.9.0) the Price line
         CHECK(seen >= 1); }
     turn_test_window = nullptr; cycle(x, es.H); cycle(x, es.H); CHECK(stripText(es.H) == s0 && barsOnly(es.H) == bars0);
     // ---- the chart removed and added again, no order events: the same bars and strip, the record untouched (no repaint) ----

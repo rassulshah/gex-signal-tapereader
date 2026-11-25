@@ -19,13 +19,16 @@
 
 namespace bsr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-24 20:46-20:54 "add the question each answers to the read", "make the update for magnitude also", "go"): line 4 = the big orders' share of the buying / selling (S20+ = the feed's large threshold in force); headQ / exQ = each line's volume-model question
+// was static const char* const VERSION = "1.0.0";
 static const double SWING_X = 1.33, EVEN = 1.10; static const int NORM_N = 20, NORM_MIN = 10, BIG_N = 10;
 
 struct In { bool ok = false; long long buy = 0, sell = 0; std::vector<long long> pb, ps;   // pb / ps = buys / sells of the candles before, newest first
             bool prevOk = false; long long prevDelta = 0; std::vector<long long> pswing;  // the |delta swing| of the candles before, newest first
-            int nB = 0, nS = 0; };                                                         // biggest-in counts (the bar labels)
-struct Out { bool ok = false; int verdict = 0; std::string head; std::vector<std::string> ex; double buyX = -1, sellX = -1, swingX = -1; long long delta = 0, swing = 0; };
+            int nB = 0, nS = 0;                                                            // biggest-in counts (the bar labels)
+            bool bigOk = false; long long bigBuy = 0, bigSell = 0, allBuy = 0, allSell = 0, thr = 0; };   // (1.1.0) from the order feed: big-order lots / all aggressor lots per side, the S20 lot size
+static const char* const Q2 = "2 Who hit whom?"; static const char* const Q4 = "4 How big?";
+struct Out { bool ok = false; int verdict = 0; std::string head; std::vector<std::string> ex; std::string headQ = Q2; std::vector<std::string> exQ; double buyX = -1, sellX = -1, swingX = -1; long long delta = 0, swing = 0; };
 
 inline std::string commas(long long v) { std::string s = std::to_string(v < 0 ? -v : v); for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ","); return v < 0 ? "-" + s : s; }
 inline std::string sgn(long long v) { return (v > 0 ? "+" : v < 0 ? "-" : "") + commas(v < 0 ? -v : v); }
@@ -51,13 +54,22 @@ inline Out read(const In& x) {
     if (o.buyX >= 0 && o.sellX >= 0) l2 = b >= s ? "Buyers " + xs(o.buyX) + " normal, sellers " + xs(o.sellX) : "Sellers " + xs(o.sellX) + " normal, buyers " + xs(o.buyX);
     else l2 = "Normal not known yet";
     l2 += " - delta " + sgn(o.delta) + ".";
-    o.ex.push_back(l2);
+    o.ex.push_back(l2); o.exQ.push_back(Q2);
     if (x.prevOk) {
         o.swing = o.delta - x.prevDelta; const double ma = meanOf(x.pswing);
         if (ma > 0) { o.swingX = (double)std::llabs(o.swing) / ma;
             if (o.swingX >= SWING_X) o.ex.push_back("Delta swung " + sgn(o.swing) + " from the candle before (" + xs(o.swingX) + ") ?");
-            else o.ex.push_back("Delta: no big swing from the candle before (" + xs(o.swingX) + ")."); }
+            else o.ex.push_back("Delta: no big swing from the candle before (" + xs(o.swingX) + ").");
+            o.exQ.push_back(Q2); }
     }
+    // (1.1.0) LAYER 4 - how much of each side came from big orders (S20+): descriptive (research 2026-11-24: a big order on the turning side at a new
+    // 10-candle extreme 63% vs 58% went 1 ATR first, n 231 - not a signal, so no "?" claim)
+    if (!x.bigOk) o.ex.push_back("Big orders: no order feed for this candle.");
+    else { const std::string lab = "Big orders (" + commas(x.thr) + "+ lots): ";   // the feed's large threshold in force (the S20 tier when the Large Lot pool is on)
+        auto pc = [](long long a, long long b) { return b > 0 ? (int)((a * 100 + b / 2) / b) : 0; };
+        if (x.bigBuy <= 0 && x.bigSell <= 0) o.ex.push_back(lab + "none - all small orders.");
+        else o.ex.push_back(lab + (x.bigBuy > 0 ? std::to_string(pc(x.bigBuy, x.allBuy)) + "% of the buying" : std::string("no big buying")) + ", " + (x.bigSell > 0 ? std::to_string(pc(x.bigSell, x.allSell)) + "% of the selling." : std::string("no big selling."))); }
+    o.exQ.push_back(Q4);
     return o;
 }
 } // namespace bsr
