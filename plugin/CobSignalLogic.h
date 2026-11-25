@@ -42,6 +42,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <cstdlib>
 #include <vector>
 #include "MarketKey.h"
 #include "KeyLevelsLogic.h"
@@ -50,7 +51,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.11.1";   // (1.11.1, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2: the 3-hour R1 / R2 lines and names red, S1 / S2 green - was one orange)   // was "1.11.0"   // (1.11.0, the Cob tag and Cob Rev strength line from 10 up (Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20))   // was "1.10.0"   // (1.10.0, Rassul 2026-11-19 15:56-16:58 CT, price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Cob, Lvp and Rev drawn as BADGES (green / red fill, black text) at the same places; the Cob badge carries its ZZO count and, from 20 up, the Cob candle's strength (his BVMax / BRMax, V / R); the Rev badge its strength; only the 38.2% entry line is drawn (Stop / BE / 1.272 / 1.618 / 2.0 gone - "only keep the 38.2"); a Rev label is posted to SignalBoard K with flag 7 so lsRevReadMarks does not draw a 2nd Rev on that candle. The Cob Rev rule is unchanged (the 16:21 test: current rule 89% reached the Cob high / +0.03R on 103 Revs vs the PB Rev candle rule 87% / +0.00R)
+static const char* const VERSION = "1.12.0";   // (1.12.0, Rassul 2026-11-25 15:43-15:44 CT "get rid of tracking that type of cob", "cob must have at least 10" (GC 11-25 8:18 AM CoB, ZZO 0, was logged)) a CoB under ZZO 10 is no longer TRACKED: its COB / ZZO / LVP / REV lines are never written to the record (a CoB is written once its ZZO count reaches 10; one still counting waits); the status counts and LAST lines list tracked CoBs only
+// was static const char* const VERSION = "1.11.1";   // (1.11.1, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2: the 3-hour R1 / R2 lines and names red, S1 / S2 green - was one orange)   // was "1.11.0"   // (1.11.0, the Cob tag and Cob Rev strength line from 10 up (Rassul 2026-11-19 18:19 CT "switch to 10": the strength line shows from 10 up, was 20))   // was "1.10.0"   // (1.10.0, Rassul 2026-11-19 15:56-16:58 CT, price-pane-cleanup-mockup.html, "1. ok 2. ok 3. ok"): Cob, Lvp and Rev drawn as BADGES (green / red fill, black text) at the same places; the Cob badge carries its ZZO count and, from 20 up, the Cob candle's strength (his BVMax / BRMax, V / R); the Rev badge its strength; only the 38.2% entry line is drawn (Stop / BE / 1.272 / 1.618 / 2.0 gone - "only keep the 38.2"); a Rev label is posted to SignalBoard K with flag 7 so lsRevReadMarks does not draw a 2nd Rev on that candle. The Cob Rev rule is unchanged (the 16:21 test: current rule 89% reached the Cob high / +0.03R on 103 Revs vs the PB Rev candle rule 87% / +0.00R)
 // was VERSION = "1.9.0";   // (1.9.0, 2026-11-16 Rassul 19:06-19:07 CT "i had replaced cob key levels with 3 hr levels, i am reconsidering so that we can use both", "eigher": the sweep = a 3-hour S1 / S2 / R1 / R2 OR a named key level (ONL, PDL, PFL, LonLO, PWL, AsiaLO, PHL and the highs; RTH only, as 1.6.x); the record names both)   // was "1.8.3";   // (1.8.3, 2026-11-16: host only - the accumulation boxes of lsRevRead 0.9.0 are drawn; no rule change)   // was "1.8.2";   // (1.8.2, 2026-11-16: the 3-hour R1 / R2 / S1 / S2 are drawn as ONE line each across the chart at where they stand now - no past steps)   // was "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
@@ -553,6 +555,22 @@ struct Engine {
     }
 };
 
+// ---- (1.12.0) only CoBs with ZZO 10+ are tracked: the CoB a record line belongs to (COB / ZZO: field 1; LVP / REV: field 3, the CoB bar end)
+inline long long lineCob(const std::string& l) {
+    std::vector<std::string> f; std::string x; for (char c : l) { if (c == ',') { f.push_back(x); x.clear(); } else x += c; } f.push_back(x);
+    const size_t k = (l.rfind("LVP,", 0) == 0 || l.rfind("REV,", 0) == 0) ? 3 : 1;
+    if (f.size() <= k) return 0;
+    char* e = nullptr; const long long v = std::strtoll(f[k].c_str(), &e, 10);
+    return (e && *e == 0 && e != f[k].c_str()) ? v : 0; }
+// split the queued lines: pass = their CoB reached ZZO 10 (write them), keep = its count is still open (wait), the rest (ZZO under 10, or a CoB
+// no longer on the loaded bars) are dropped
+inline void gate(const std::vector<std::string>& in, const std::vector<Mark>& marks, std::vector<std::string>& pass, std::vector<std::string>& keep) {
+    std::map<long long, int> st; for (const Mark& m : marks) st[m.t] = !m.zDone ? -1 : (m.zOk ? 1 : 0);
+    for (const std::string& l : in) { const auto it = st.find(lineCob(l)); if (it == st.end()) continue;
+        if (it->second == 1) { if (l.rfind("ZZO,", 0) == 0 && l.find(",NO,") != std::string::npos) continue; pass.push_back(l); }
+        else if (it->second == -1) keep.push_back(l); }
+}
+
 // ---- the drawing (SDK-free): the label under a bull CoB bar's low / over a bear's high, bull green / bear red, never over another label
 struct View { int l = 0, t = 0, r = 800, b = 600, first = 0, last = 0; std::function<double(int)> X; std::function<double(double)> Y; std::function<int(const std::string&)> textW; };
 struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool line = false; bool tiny = false; bool badge = false; std::string text2; int flag = 0; };   // (1.10.0) badge = a filled tag (black text), text2 = its 2nd line (small), flag 7 = a Rev (SignalBoard K)   // (1.5.0) line = a horizontal line x0..x1 at y0; tiny = the Fib labels' smaller font
@@ -780,11 +798,12 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
     std::string o = std::string("VERSION,") + VERSION + "\nMARKET," + E.mkt + "\nSYMBOL," + sym + "\nBAR_SECONDS," + std::to_string(spb) +
                      "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) + "\nBARS," + std::to_string(E.B.size()) + "\nLEGS," + std::to_string(E.legs.size()) +
                      "\nRULES,completed 3-bar ZigZag wave; sweep of the 3-hour S1/S2 (bull) or R1/R2 (bear) OR of a named key level (RTH; 1.9.0); dratio >= 1.9 (20 waves); >= 3 bars; room 0.1 ADR; from the 5:00 PM session start to 11:00 AM CT; drawn with ZZO count >= 10\n";
-    o += "RECORD," + rec + "\nCOBS," + std::to_string(E.marks.size()) + "\n";
+    {   int tracked = 0; for (const Mark& m : E.marks) if (m.zDone && m.zOk) ++tracked;   // (1.12.0) COBS = the tracked CoBs (ZZO 10+)
+        o += "RECORD," + rec + "\nCOBS," + std::to_string(tracked) + "\n"; }
     {   int ok = 0, no = 0, wait = 0; for (const Mark& m : E.marks) { if (!m.zDone) ++wait; else if (m.zOk) ++ok; else ++no; }   // (1.4.0)
         o += "ZZO_FILTER,1.4.0 drawn only when the CoB's ZZO Combo wave count reaches " + std::to_string(ZZO_COB_MIN) + ",passed " + std::to_string(ok) + ",failed " + std::to_string(no) + ",waiting " + std::to_string(wait) + "\n"; }
-    const size_t n = E.marks.size();
-    for (size_t k = n > 8 ? n - 8 : 0; k < n; ++k) o += "LAST," + E.recLine(E.marks[k]) + "\n";
+    {   std::vector<size_t> tk; for (size_t k = 0; k < E.marks.size(); ++k) if (E.marks[k].zDone && E.marks[k].zOk) tk.push_back(k);   // (1.12.0) tracked CoBs only
+        for (size_t q = tk.size() > 8 ? tk.size() - 8 : 0; q < tk.size(); ++q) o += "LAST," + E.recLine(E.marks[tk[q]]) + "\n"; }
     // (1.3.0) LVP
     o += "LVP_RULES,3-bar High/Low ZigZag (zzd COMBO_REV_BARS " + std::to_string(LVP_REV_BARS) + "); CoB wave = the wave its way holding the CoB leg's extreme; first " +
          std::to_string(LVP_MAX_PB) + " pullback waves inside the CoB wave's range; LVP = pullback volume <= CoB wave volume / " + std::to_string(LVP_DIV) + "; decided when the pullback wave is confirmed\n";
