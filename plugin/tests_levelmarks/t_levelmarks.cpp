@@ -186,7 +186,7 @@ int main(int argc, char** argv) {
         C(one('S', 20, 0, st) == 0, "(1.6.0) a Sw with BVMax 19 is no longer a Sw (got " + st + ")");
         C(one('S', 10, 19, st) == 0, "(1.6.0) a Sw with BRMax 18 is no longer a Sw (got " + st + ")");
         C(one('S', 21, 0, st) == 1 && st == "V20", "(1.6.0) a Sw with BVMax 20 stays, V20 (got " + st + ")");
-        C(one('S', 5, 26, st) == 1 && st == "R25", "(1.6.0) a Sw with BRMax 25 stays, R25 (got " + st + ")");
+        { const int k = one('S', 5, 26, st); C(k == 0, "(1.24.0) a Sw with BVMax 4 and BRMax 25 is no longer a Sw - range alone does not qualify (got " + st + ")"); }
         C(one('B', 16, 0, st) == 1 && st == "V15", "(1.6.0) a Bk with max 15 keeps its V15 line (got " + st + ")");
         C(one('B', 3, 0, st) == 1 && st.empty(), "(1.6.0) a weak Bk is never removed");
     }

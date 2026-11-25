@@ -13,7 +13,7 @@ static wyr::Bar bar(int i, long long o, long long h, long long l, long long c, l
 static std::vector<wyr::Bar> flat(int n) { std::vector<wyr::Bar> B; for (int i = 0; i < n; ++i) B.push_back(i % 2 ? bar(i, 99, 101, 98, 100) : bar(i, 100, 101, 98, 99)); return B; }
 static std::string one(const std::map<long long, lvm::Mark>& M, long long t) { const auto it = M.find(t); return it == M.end() ? std::string("-") : std::string(lvm::codeText(it->second.code)) + " " + it->second.lv + " " + std::to_string(it->second.dir); }
 int main() {
-    C(std::string(lvm::VERSION) == "1.23.0", "LevelMarks 1.17.0");
+    C(std::string(lvm::VERSION) == "1.24.0", "LevelMarks 1.17.0");
     C(lvm::pri("4hH", 0) == 65 && lvm::pri("4hL", 0) == 65 && lvm::pri("HpH", 0) == 70 && lvm::pri("HpL", 0) == 70, "4h after the pre-open hour, pivots last");
     C(lvm::pri("4hH", 0) > lvm::pri("PHH", 0) && lvm::pri("HpL", 0) > lvm::pri("x", 2), "ranked after every older level");
     C(!lvm::swMajor("HpH", 0) && !lvm::swMajor("4hL", 0), "never a Sw level");
