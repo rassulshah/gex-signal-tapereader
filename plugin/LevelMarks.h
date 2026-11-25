@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.24.2";   // (1.24.2, Rassul 2026-11-25 16:10 CT "thats a problem .. lets just use BVMax 20+") the Sw strength is BVMax again (the larger of BV and the same-colour count), as 1.24.0; BV alone (1.24.1) removed most sweeps (ES / NQ 11-25 had BV 4 / 3)
+static const char* const VERSION = "1.25.0";   // (1.25.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) a Sw (VOB / VOT) = a high-volume rejection of an attempted break: the sweep candle's own BVMax must be 99+ (SW_MIN 99, was 20), and BOTH sides count again - any major level, either direction (1.23.0's highs-for-bearish / lows-for-bullish rule is off: SW_BOTH_SIDES; NQ 11-25 9:03 AM bearish at LonLO is a VOT again)
+// was static const char* const VERSION = "1.24.2";   // (1.24.2, Rassul 2026-11-25 16:10 CT "thats a problem .. lets just use BVMax 20+") the Sw strength is BVMax again (the larger of BV and the same-colour count), as 1.24.0; BV alone (1.24.1) removed most sweeps (ES / NQ 11-25 had BV 4 / 3)
 // was static const char* const VERSION = "1.24.1";   // (1.24.1, Rassul 2026-11-25 16:04 CT "the vob / vot strength requires BV 20+") the Sw strength = BV, the count over ALL candles before it (1.24.0 used BVMax = the larger of BV and the same-colour count BVG / BVR); the label shows that BV ("V24")
 // was static const char* const VERSION = "1.24.0";   // (1.24.0, Rassul 2026-11-25 13:56 CT "tighten strength to reuire the bigest volume in at least 20 bars", 13:59 "there is one at 12:09 but now it would not work becasue it doesnt have BV of at least 20", 14:00 "go"): a Sw needs ITS OWN candle's BVMax >= 20 (volume only - a big range alone no longer makes a Sw: HG 11-25 12:09 LonHI R91 drops); the Sw's strength line shows the volume count ("V24")
 // was static const char* const VERSION = "1.23.0";   // (1.23.0, Rassul 2026-11-25 13:11 CT "i want to update sweeps so bearish sweeps use highs and bullish sweeps use lows", 13:12 "correct .. go"): a bearish Sw is named only by a HIGH level (ONH LonHI AsiaHI PDH PFH PWH CWH R1 R2), a bullish Sw only by a LOW level (ONL LonLO AsiaLO PDL PFL PWL CWL S1 S2); a sweep candle that crossed no major level of its side is no Sw (it can still be its Bk / Cx). GC 11-25 11:24 AM (bearish, up through AsiaLO) is no longer a Sw
@@ -194,7 +195,9 @@ inline bool swMajor(const std::string& name, int hb) { if (hb != 0) return false
 inline int levelSide(const std::string& name, bool hourHigh, int hb);
 // (1.23.0, Rassul 13:11 CT "bearish sweeps use highs and bullish sweeps use lows") a level may name a Sw of direction dir (+1 bullish / -1 bearish) only
 // when it is a low (bullish) / a high (bearish); a shared name ("ONL/LonLO") counts when any of its names is of that side
+static const bool SW_BOTH_SIDES = true;   // (1.25.0) a rejection of an attempted break counts at any major level, either direction (false = the 1.23.0 rule)
 inline bool swSideOk(const std::string& name, int dir) {
+    if (SW_BOTH_SIDES) return true;
     std::string t; for (size_t k = 0; k <= name.size(); ++k) { const char c = k < name.size() ? name[k] : '/';
         if (c == '/') { if (!t.empty() && levelSide(t, false, 0) == (dir > 0 ? -1 : 1)) return true; t.clear(); } else t += c; }
     return false; }
@@ -528,7 +531,7 @@ inline double rangeTicks(double h, double l, double tick) { const double r = h -
 // (1.5.0, Rassul 2026-11-19 18:29 CT "lets keep it at 10 so the BRmax or BVmax should be at least 10") a Sw only counts when its attempt's
 // BVMax or BRMax (max over the attempt candles, the strength line's measure) is at least SW_MIN; a weaker Sw is removed here
 // (1.6.0, Rassul 2026-11-20 07:50 CT "update the sweep threshold to 20") SW_MIN 10 -> 20; ST_MIN (the strength line) stays 10
-static const int SW_MIN = 20;
+static const int SW_MIN = 99;   // (1.25.0, "we should use 99+ bvmax") BVMax 99+ (the count is capped at 99 = "99+"); was 20
 inline int strengthN(const std::vector<double>& vol, const std::vector<double>& rng, const std::vector<char>& green, int a, int b) {
     int nv = 0, nr = 0; if (a < 0) a = 0;
     for (int k = a; k <= b && k < (int)vol.size(); ++k) { nv = std::max(nv, stCount(vol, green, k)); if (k < (int)rng.size()) nr = std::max(nr, stCount(rng, green, k)); }

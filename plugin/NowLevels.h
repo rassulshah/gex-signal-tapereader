@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.6.0";   // (1.6.0 = lsHodLod 2.46.0, Rassul 2026-11-25 14:28-14:29 CT "i want to relabel sweep  to VOB  (volume off the bottom) and VOT (Volume off the top)", "yes   VOB(T) WATCH    .   for the  voice just use the letters"; mockup vob-vot-mockup.html) a sweep is named VOB (bullish, off a low) / VOT (bearish, off a high) on the line: "VOB: CWL", "VOB(T) WATCH: ...", "TESTING: ONL Bk / VOB"
+static const char* const VERSION = "1.6.1";   // (1.6.1 = lsHodLod 2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH names the nearest untouched major levels above and below again, any kind (1.5.1's highs-above / lows-below filter is off: NL_SIDE_FILTER); TESTING reads "Bk / VOB(T)"
+// was "1.6.0";   // (1.6.0 = lsHodLod 2.46.0, Rassul 2026-11-25 14:28-14:29 CT "i want to relabel sweep  to VOB  (volume off the bottom) and VOT (Volume off the top)", "yes   VOB(T) WATCH    .   for the  voice just use the letters"; mockup vob-vot-mockup.html) a sweep is named VOB (bullish, off a low) / VOT (bearish, off a high) on the line: "VOB: CWL", "VOB(T) WATCH: ...", "TESTING: ONL Bk / VOB"
 // was "1.5.1";   // (1.5.1 = lsHodLod 2.45.1, Rassul 2026-11-25 13:11 CT "bearish sweeps use highs and bullish sweeps use lows", LevelMarks 1.23.0) SWEEP WATCH names only highs above price and only lows below it
 // was "1.5.0";   // (1.5.0 = lsHodLod 2.45.0, Rassul 2026-11-25 11:41 CT "update the level line to look for potential sweep levels", 11:47 "rename to Sweep Watch also . go", mockup watch-sweep-levels-mockup.html) the Next levels are only major levels NOT yet traded through in the current session part (day = since the RTH opening candle, as LevelMarks 1.22.0; overnight = since the session start); an empty side stays empty; the badge reads "SWEEP WATCH: ..."
 // was "1.4.0";   // (1.4.0 = lsHodLod 2.44.0, Rassul 2026-11-23 14:09 CT GC screenshot, the line read "WATCH: PHL .. 2hL" with PFH 3638.1 / ONH 3636.4 right under price: "why isnt the level line catching the most obvious levels"; 14:15 "and for levels, you are also using the same levels as SW right" - yes; "build") the line names MAJOR levels only, the Sw list of LevelMarks 1.14.0 (major(): session ON / London / Asia, PD, PF, weekly, the 3-hour S / R R1 R2 S1 S2 the host hands in as keys): the prior hours' highs / lows (PHH / PHL, 2h, 3h) and VAH / VAL are no longer WATCH / Next levels, and a Bk / Sw mark on a level that is not major gives no BREAK / SWEEP badge, no BkTst state and no Last Bk part (its badge stays on the candle)
@@ -185,6 +186,7 @@ inline int sideOfName(const std::string& s) {
     if (L >= 1 && s[L - 1] == 'H') return 1;
     if (L >= 1 && s[L - 1] == 'L') return -1;
     return 0; }
+static const bool NL_SIDE_FILTER = false;   // (1.6.1) both sides count (LevelMarks 1.25.0): any major level can give a VOB / VOT
 // (1.5.0) RTH open minute per market (CT) = lvm::rthOpenMin (LevelMarks.h; t_hl2450 checks parity); -1 = unknown market (whole session counts)
 inline int rthOpenMin(const std::string& mkt) {
     if (mkt == "ES" || mkt == "NQ" || mkt == "MES" || mkt == "MNQ") return 8 * 60 + 30;
@@ -299,8 +301,8 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
     // (1.5.1) the side a sweep can come from: above price only a HIGH (a bearish Sw), below only a LOW (a bullish Sw)
 
     for (const Key& kk : keys) {
-        if (openMin != -2 && kk.px > live + eps && sideOfName(kk.name) != 1) continue;    // (1.5.1) above: highs only
-        if (openMin != -2 && kk.px < live - eps && sideOfName(kk.name) != -1) continue;   // (1.5.1) below: lows only
+        if (NL_SIDE_FILTER && openMin != -2 && kk.px > live + eps && sideOfName(kk.name) != 1) continue;    // (1.5.1) above: highs only (off since 1.6.1)
+        if (NL_SIDE_FILTER && openMin != -2 && kk.px < live - eps && sideOfName(kk.name) != -1) continue;   // (1.5.1) below: lows only (off since 1.6.1)
         if (kk.px > live + eps && hiP > kk.px + eps) continue;   // (1.5.0) above, already traded through
         if (kk.px < live - eps && loP < kk.px - eps) continue;   // (1.5.0) below, already traded through
         if (o.tst.ok && std::fabs(kk.px - o.tst.px) <= eps) continue;   // the level being tested is already on the line
@@ -382,7 +384,7 @@ inline std::vector<Seg> segments(const Out& o, const Liq& lq = Liq()) {
         const Next& nx = o.bs.dir < 0 ? dn : up;
         if (nx.ok && !has(nx.name)) { sep(2); add("Next", 0, "", C_GREY, false, 2); add("", o.bs.dir, nx.name, C_GOLD, true, 2); named.push_back(nx.name); }
     } else if (!testing && o.bs.state == 3) {   // (1.2.0, 23:02 CT) the forming candle at / through a watched level: gold, no side yet; then the next levels
-        badge("TESTING: " + o.bs.name + (sideOfName(o.bs.name) > 0 ? " Bk / VOT" : sideOfName(o.bs.name) < 0 ? " Bk / VOB" : " Bk / VOB(T)"), 0,   /* (1.6.0) was " Bk / Sw" */ "", C_GOLD, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
+        badge("TESTING: " + o.bs.name + std::string(" Bk / VOB(T)"), 0,   /* (1.6.1) either side can reject the attempt */   /* (1.6.0) was " Bk / Sw" */ "", C_GOLD, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
         const bool d = dn.ok && !has(dn.name), u = up.ok && !has(up.name) && !(d && up.name == dn.name);
         if (d || u) {
             sep(2); add("Next", 0, "", C_GREY, false, 2);

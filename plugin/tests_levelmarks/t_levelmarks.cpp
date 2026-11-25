@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
         lvm::fillStrength(M, T, V, R, G);
         C(!M.count(T[39]), "(1.5.0) Sw with BVMax 8 is removed");
         C(!M.count(T[25]), "(1.5.0) Sw with BRMax 9 is removed");
-        C(M.count(T[35]) && M.at(T[35]).st == "V35", "(1.5.0) Sw with BVMax 35 stays, V35");
+        C(!M.count(T[35]), "(1.25.0) Sw with BVMax 35 is removed - a VOB / VOT needs BVMax 99+");
         C(!M.count(T[36]), "(1.8.0) the attempt's max no longer counts: the Sw candle 36 itself is weak (34..36 holds the V35 candle) -> removed");
         C(M.count(T[24]), "(1.5.0) a weak Bk is never removed by the Sw rule");
     }
@@ -181,11 +181,11 @@ int main(int argc, char** argv) {
             std::map<long long, lvm::Mark> M; lvm::Mark m; m.code = code; m.dir = 1; M[T[59]] = m;
             lvm::fillStrength(M, T, V, R, G); st = M.count(T[59]) ? M.at(T[59]).st : std::string("gone"); return (int)M.size(); };
         std::string st;
-        C(lvm::SW_MIN == 20 && lvm::ST_MIN == 10, "(1.6.0) SW_MIN 20, ST_MIN still 10");
+        C(lvm::SW_MIN == 99 && lvm::ST_MIN == 10, "(1.25.0) SW_MIN 99 (BVMax 99+), ST_MIN still 10");
         C(one('S', 16, 0, st) == 0, "(1.6.0) a Sw with BVMax 15 is no longer a Sw (got " + st + ")");
         C(one('S', 20, 0, st) == 0, "(1.6.0) a Sw with BVMax 19 is no longer a Sw (got " + st + ")");
         C(one('S', 10, 19, st) == 0, "(1.6.0) a Sw with BRMax 18 is no longer a Sw (got " + st + ")");
-        C(one('S', 21, 0, st) == 1 && st == "V20", "(1.6.0) a Sw with BVMax 20 stays, V20 (got " + st + ")");
+        C(one('S', 21, 0, st) == 0, "(1.25.0) a Sw with BVMax 20 is no Sw (needs 99+) (got " + st + ")");
         { const int k = one('S', 5, 26, st); C(k == 0, "(1.24.0) a Sw with BVMax 4 and BRMax 25 is no longer a Sw - range alone does not qualify (got " + st + ")"); }
         C(one('B', 16, 0, st) == 1 && st == "V15", "(1.6.0) a Bk with max 15 keeps its V15 line (got " + st + ")");
         C(one('B', 3, 0, st) == 1 && st.empty(), "(1.6.0) a weak Bk is never removed");
@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
         C(!M.count(T[119]), "(1.8.0) HG shape: weak red Sw after a 99+ green candle is removed (was V99+ from the attempt)");
         V[119] = 40; R[119] = 3; for (int i = 90; i < 118; ++i) G[(size_t)i] = 0; std::map<long long, lvm::Mark> M2; M2[T[119]] = sw; lvm::fillStrength(M2, T, V, R, G);
         // red candle volume 40: bigger than the 1 candle before? no (500) -> all = 0; same colour (red) none before -> counts back to the cap/look
-        C(M2.count(T[119]) && M2.at(T[119]).st.size() > 1 && M2.at(T[119]).st[0] == 'V', "(1.8.0 / 1.24.2) a red Sw candle strong among its own colour stays with its own line - the strength is BVMax");
+        C(!M2.count(T[119]) || M2.at(T[119]).st == "V99+", "(1.25.0) the red candle is a Sw only with BVMax 99+");
         // iKey / I_MIN
         C(lvm::I_MIN == 20, "(1.8.0) I_MIN 20");
         C(lvm::iKey(lvm::pri("ONL", 0)) && lvm::iKey(lvm::pri("PDL", 0)) && lvm::iKey(lvm::pri("PWH", 0)) && lvm::iKey(lvm::pri("VAL", 0)), "(1.8.0) ON / PD / weekly / VA name an I");

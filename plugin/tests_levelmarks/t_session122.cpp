@@ -28,8 +28,8 @@ int main() {
         if (kv.second.code == 'S') std::printf("%s  Sw %s dir %d\n", W[i].c_str(), kv.second.lv.c_str(), kv.second.dir);
         if (W[i] == "11:24" && kv.second.code == 'S' && kv.second.dir == -1) sw = 1; }
     for (size_t i = 0; i < B.size(); ++i) if (W[i] == "07:21") open = lvm::dayStart(B, (int)i, lvm::rthOpenMin("GC")) == (int)i;
-    std::printf("%s: (1.23.0) NO bearish Sw on the 11:24 candle - AsiaLO is a low, a bearish Sw needs a high (1.22.0 marked one)\n", !sw ? "PASS" : "FAIL");
+    std::printf("%s: (1.25.0) the 11:24 candle (bearish at AsiaLO) is a raw Sw again - both sides count; its BVMax (40) is under 99, so fillStrength drops it\n", sw ? "PASS" : "FAIL");
     std::printf("%s: the day session starts at the RTH opening candle (07:21 stamp)\n", open ? "PASS" : "FAIL");
-    int side = 1; for (const auto& kv : M) if (kv.second.code == 'S' && !lvm::swSideOk(kv.second.lv, kv.second.dir)) side = 0;
-    std::printf("%s: (1.23.0) every Sw: bullish named by a low, bearish by a high\n", side ? "PASS" : "FAIL");
-    return (!sw && open && side) ? 0 : 1; }
+    int side = lvm::SW_BOTH_SIDES ? 1 : 0;
+    std::printf("%s: (1.25.0) both sides count (SW_BOTH_SIDES)\n", side ? "PASS" : "FAIL");
+    return (sw && open && side) ? 0 : 1; }

@@ -25,17 +25,17 @@ static std::string at(const std::vector<nowl::Bar>& A, const std::vector<nowl::K
     if (live) { *live = B.back().c; }
     return nowl::plain(nowl::segments(nowl::compute(B, {}, K, B.back().c, tick, openMin))); }
 int main() {
-    C(std::string(nowl::VERSION) == "1.6.0", "NowLevels 1.6.0");
+    C(std::string(nowl::VERSION) == "1.6.1", "NowLevels 1.6.0");
     for (const char* m : { "ES", "NQ", "MES", "MNQ", "CL", "NG", "MCL", "GC", "EU", "6E", "MGC", "HG", "ZB", "" }) C(nowl::rthOpenMin(m) == lvm::rthOpenMin(m), std::string("RTH open = LevelMarks: ") + m);
     const std::vector<nowl::Bar> G = bars("gc1125_bars.csv"), E = bars("es1125_bars.csv"); const std::vector<nowl::Key> GK = keys("gc1125_keys.csv"), EK = keys("es1125_keys.csv");
     C(G.size() > 150 && E.size() > 150 && GK.size() >= 18 && EK.size() >= 18, "fixtures loaded");
     // the Next levels the badge names (at 11:15 / 11:51 the forming GC candle is at a level, so the line shows TESTING with "Next" - the same pick)
     auto out = [&](const std::vector<nowl::Bar>& A, const std::vector<nowl::Key>& K, int hh, int mm, double tick, int om) { std::vector<nowl::Bar> B; for (const nowl::Bar& b : A) { const long long q = ((b.t % 86400) + 86400) % 86400; B.push_back(b); if (q == hh * 3600 + mm * 60) break; } return nowl::compute(B, {}, K, B.back().c, tick, om); };
-    { const nowl::Out o = out(G, GK, 11, 15, 0.1, 440); C(o.up.ok && o.up.name == "LHI" && !o.dn.ok, "GC 11:15: (1.5.1) LonHI above (AsiaLO is a low: no bearish Sw there), nothing untouched below - up " + o.up.name + " dn " + (o.dn.ok ? o.dn.name : "-"));
-      const std::string l = at(G, GK, 11, 15, 0.1, 440); C(has(l, "Next \xE2\x86\x91 LHI") && !has(l, "PWL"), "GC 11:15 line - " + l); }
+    { const nowl::Out o = out(G, GK, 11, 15, 0.1, 440); C(o.up.ok && o.up.name == "ALO" && !o.dn.ok, "GC 11:15: (1.6.1, both sides) AsiaLO above, nothing untouched below - up " + o.up.name + " dn " + (o.dn.ok ? o.dn.name : "-"));
+      const std::string l = at(G, GK, 11, 15, 0.1, 440); C(has(l, "Next \xE2\x86\x91 ALO") && !has(l, "PWL"), "GC 11:15 line - " + l); }
     { const nowl::Out o = out(G, GK, 11, 51, 0.1, 440); C(o.up.ok && o.up.name == "LHI" && !o.dn.ok, "GC 11:51: LonHI above (AsiaLO had its sweep) - up " + o.up.name + " dn " + (o.dn.ok ? o.dn.name : "-")); }
-    { const nowl::Out o = out(E, EK, 11, 51, 0.25, 510); C(o.up.ok && o.up.name == "LHI" && o.dn.ok && o.dn.name == "PWL", "ES 11:51: (1.5.1) PWL below, LonHI above (PFL is a low) - up " + o.up.name + " dn " + o.dn.name);
-      const std::string l = at(E, EK, 11, 51, 0.25, 510); C(has(l, "VOB(T) WATCH: PWL \xE2\x86\x93 \xC2\xB7 LHI \xE2\x86\x91 \xC2\xB7 Bk / VOB(T)"), "ES 11:51 badge - " + l); }
+    { const nowl::Out o = out(E, EK, 11, 51, 0.25, 510); C(o.up.ok && o.up.name == "PFL" && o.dn.ok && o.dn.name == "PWL", "ES 11:51: (1.6.1, both sides) PWL below, PFL above - up " + o.up.name + " dn " + o.dn.name);
+      const std::string l = at(E, EK, 11, 51, 0.25, 510); C(has(l, "VOB(T) WATCH: PWL \xE2\x86\x93 \xC2\xB7 PFL \xE2\x86\x91 \xC2\xB7 Bk / VOB(T)"), "ES 11:51 badge - " + l); }
     // old callers (no open minute) keep the 1.4.0 choice
     { const nowl::Out o = out(G, GK, 11, 15, 0.1, -2); C(o.up.ok && o.up.name == "PWL", "GC 11:15 without the filter = the old pick (PWL above) - " + o.up.name); }
     // overnight: the window is the whole session; a level printed by the session itself is not 'traded through' by the candle that made it
@@ -49,8 +49,8 @@ int main() {
         std::vector<nowl::Bar> B(G.begin(), G.begin() + (long)n + 1); const nowl::Out o = nowl::compute(B, {}, GK, B.back().c, 0.1, 440);
         double hi = -1e9, lo = 1e9; for (int k = nowl::partStart(B, (int)B.size() - 2, 440); k <= (int)B.size() - 2; ++k) { hi = std::max(hi, B[(size_t)k].h); lo = std::min(lo, B[(size_t)k].l); }
         if ((o.up.ok && hi > o.up.px + 0.05) || (o.dn.ok && lo < o.dn.px - 0.05)) ++bad;
-        if ((o.up.ok && o.up.name.back() != 'H' && o.up.name.compare(o.up.name.size() - 2, 2, "HI") != 0 && o.up.name[0] != 'R') || (o.dn.ok && o.dn.name.back() != 'L' && o.dn.name.compare(o.dn.name.size() - 2, 2, "LO") != 0 && o.dn.name[0] != 'S')) ++bad; }
-      C(bad == 0 && steps > 80, "GC day part: no named level was already traded through, highs above / lows below only (" + std::to_string(steps) + " closes, " + std::to_string(bad) + " bad)"); }
+        }   // (1.6.1) both sides: no highs-above / lows-below check
+      C(bad == 0 && steps > 80, "GC day part: no named level was already traded through (" + std::to_string(steps) + " closes, " + std::to_string(bad) + " bad)"); }
     // (1.6.0) the VOB / VOT names on the line and in the voice
     { std::vector<nowl::Bar> B; for (const nowl::Bar& b : E) { B.push_back(b); const long long q = ((b.t % 86400) + 86400) % 86400; if (q == 8 * 3600 + 51 * 60) break; }
       const long long st = B[B.size() - 2].t + nowl::E1904; const double px = 6992.0;
@@ -59,5 +59,5 @@ int main() {
       const std::string l = nowl::plain(nowl::segments(nowl::compute(B2, nowl::parseWy(wyU, 0.25, B2.front().t - 180, B2.back().t), EK, B2.back().c, 0.25, 510)));
       C(has(l, "VOB: CWL") && !has(l, "SWEEP"), "a bullish Sw mark on the closed candle reads VOB: CWL - " + l); }
     C(svx::spoken("ES", "CWL", 1) == "E S, V O B, C W L." && svx::spoken("HG", "LHI", -1) == "H G, V O T, London high." && svx::text("HG", "LHI", -1) == "HG, VOT, LonHI", "voice: " + svx::spoken("ES", "CWL", 1) + " / " + svx::spoken("HG", "LHI", -1));
-    std::printf("t_hl2450 (lsHodLod 2.46.0): %d passed, %d failed\n", ok, f); return f ? 1 : 0;
+    std::printf("t_hl2450 (lsHodLod 2.46.1): %d passed, %d failed\n", ok, f); return f ? 1 : 0;
 }

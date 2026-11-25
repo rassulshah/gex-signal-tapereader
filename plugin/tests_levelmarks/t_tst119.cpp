@@ -50,5 +50,5 @@ int main() {
       std::map<long long, std::string> m; m[100] = "A+E"; m[200] = ""; m[300] = "A!"; const std::string t = wyi::tl3Text(m, "GC", 180, "0.28.0");
       CHECK(t == "TL3|1|GC|180|0.28.0\n100|A+E\n200|-\n300|A!\n");
       std::map<long long, std::string> r; CHECK(wyi::parseTl3(t + "400|ZZ\nx|E\n", "GC", 180, r) && r == m); CHECK(!wyi::parseTl3(t, "HG", 180, r)); CHECK(!wyi::parseTl3(t, "GC", 60, r)); }
-    CHECK(std::string(lvm::VERSION) == "1.24.2" && std::string(wyi::VERSION) == "2.8.0");
+    CHECK(std::string(lvm::VERSION) == "1.25.0" && std::string(wyi::VERSION) == "2.8.0");
     std::printf("t_tst119: %d checks, %d fails\n", checks, fails); return fails ? 1 : 0; }
