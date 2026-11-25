@@ -15,7 +15,7 @@ static std::vector<std::string> sp(const std::string& l) { std::vector<std::stri
 static std::string slurp(const char* p) { std::ifstream in(p, std::ios::binary); std::stringstream s; s << in.rdbuf(); return s.str(); }
 static bool has(const std::string& s, const char* w) { return s.find(w) != std::string::npos; }
 int main() {
-    C(std::string(nowl::VERSION) == "1.4.0" && std::string(hl::HL_VERSION) == "2.44.0" && std::string(hlset::PLUGIN_VERSION) == "2.44.0", "NowLevels 1.4.0, lsHodLod 2.44.0 = the settings version");
+    C(std::string(nowl::VERSION) == "1.5.0" && std::string(hl::HL_VERSION) == "2.45.0" && std::string(hlset::PLUGIN_VERSION) == "2.45.0", "NowLevels 1.5.0, lsHodLod 2.45.0 = the settings version");
     for (const char* n : { "ONH", "ONL", "LHI", "LLO", "LonHI", "AHI", "AsiaLO", "PDH", "PDL", "PFH", "PFL", "PWH", "PWL", "CWH", "CWL", "R1", "R2", "S1", "S2" }) C(nowl::major(n), std::string("major: ") + n);
     for (const char* n : { "PHH", "PHL", "2hH", "3hL", "1hL", "VAH", "VAL", "PhrH", "PhrL", "DPoc", "Open", "" }) C(!nowl::major(n), std::string("not major: ") + n);
     const double tick = 0.1; const long long D = 3878236800LL - nowl::E1904, s0 = D - 7 * 3600 + 180;
@@ -36,8 +36,8 @@ int main() {
       for (const nowl::Key& q : k) { if (q.name == "R1" && std::fabs(q.px - 3691.0) < 1e-6) r1 = true; if (q.name == "S1" && std::fabs(q.px - 3599.9) < 1e-6) s1 = true; if (q.name == "S2" && std::fabs(q.px - 3502.9) < 1e-6) s2 = true; }
       C(r1 && s1 && s2, "the 3h keys at 2:15 PM: R1 3691.0, S1 3599.9, S2 3502.9 (his 180-minute chart)");
       const std::string a = lineAt(A.size(), wyNew, k), b = lineAt(A.size(), wyOld, k);
-      C(a == "[WATCH: PFH \xE2\x86\x93 \xC2\xB7 R1 \xE2\x86\x91 \xC2\xB7 Bk / Sw] \xE2\x94\x82 Last Bk \xE2\x86\x91 ONH", "GC 2:15 PM with 0.24.0's marks: " + a);
-      C(b == "[WATCH: PFH \xE2\x86\x93 \xC2\xB7 R1 \xE2\x86\x91 \xC2\xB7 Bk / Sw] \xE2\x94\x82 Last Bk \xE2\x86\x91 LHI", "the same with the live (0.23.0) marks: the last MAJOR break is LHI 7:27 AM (the 1hL breaks after it are not named): " + b); }
+      C(a == "[SWEEP WATCH: PFH \xE2\x86\x93 \xC2\xB7 R1 \xE2\x86\x91 \xC2\xB7 Bk / Sw] \xE2\x94\x82 Last Bk \xE2\x86\x91 ONH", "GC 2:15 PM with 0.24.0's marks: " + a);
+      C(b == "[SWEEP WATCH: PFH \xE2\x86\x93 \xC2\xB7 R1 \xE2\x86\x91 \xC2\xB7 Bk / Sw] \xE2\x94\x82 Last Bk \xE2\x86\x91 LHI", "the same with the live (0.23.0) marks: the last MAJOR break is LHI 7:27 AM (the 1hL breaks after it are not named): " + b); }
     // every candle close of today: no hour level, VAH / VAL or pre-open hour on the line; a line is always there
     { int bad = 0, empty = 0, steps = 0; hsr::Walk W; hsr::Snap s; size_t fed = 0;
       for (size_t n = 0; n < A.size(); ++n) { if (A[n].t < s0 + 60 * 180) continue; ++steps;
@@ -52,9 +52,9 @@ int main() {
       const std::string bk = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Bk|1|ONH|36364|V99+\n", k), swH = lineAt(n, "WY|1|GC|180|0.23.0\n" + st + "|Sw|1|PhrL|36125|V99+\n", k);
       const std::string swM = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Sw|1|ONL|36125|V99+\n", k), bkH = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Bk|1|1hH|36270|V99+\n", k), bk3 = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Bk|1|R1|36364|V99+\n", k);
       C(has(bk, "BREAK: ONH"), "a Bk ONH mark on the closed candle: BREAK: ONH - " + bk);
-      C(!has(swH, "SWEEP") && has(swH, "WATCH"), "a Sw on PhrL (not major) gives no SWEEP badge - " + swH);
+      C(!has(swH, "SWEEP:") && has(swH, "WATCH"), "a Sw on PhrL (not major) gives no SWEEP badge - " + swH);
       C(has(swM, "SWEEP: ONL"), "a Sw on a session level: SWEEP - " + swM);
       C(!has(bkH, "BREAK") && !has(bkH, "Last Bk") && !has(bkH, "1hH"), "a Bk on an hour level: no BREAK badge, no Last Bk part - " + bkH);
       C(has(bk3, "BREAK: R1"), "a Bk on the 3h R1: BREAK: R1 - " + bk3); }
-    std::printf("t_hl2440 (lsHodLod 2.44.0): %d passed, %d failed\n", ok, f); return f ? 1 : 0;
+    std::printf("t_hl2440 (lsHodLod 2.45.0): %d passed, %d failed\n", ok, f); return f ? 1 : 0;
 }

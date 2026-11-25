@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.4.0";   // (1.4.0 = lsHodLod 2.44.0, Rassul 2026-11-23 14:09 CT GC screenshot, the line read "WATCH: PHL .. 2hL" with PFH 3638.1 / ONH 3636.4 right under price: "why isnt the level line catching the most obvious levels"; 14:15 "and for levels, you are also using the same levels as SW right" - yes; "build") the line names MAJOR levels only, the Sw list of LevelMarks 1.14.0 (major(): session ON / London / Asia, PD, PF, weekly, the 3-hour S / R R1 R2 S1 S2 the host hands in as keys): the prior hours' highs / lows (PHH / PHL, 2h, 3h) and VAH / VAL are no longer WATCH / Next levels, and a Bk / Sw mark on a level that is not major gives no BREAK / SWEEP badge, no BkTst state and no Last Bk part (its badge stays on the candle)
+static const char* const VERSION = "1.5.0";   // (1.5.0 = lsHodLod 2.45.0, Rassul 2026-11-25 11:41 CT "update the level line to look for potential sweep levels", 11:47 "rename to Sweep Watch also . go", mockup watch-sweep-levels-mockup.html) the Next levels are only major levels NOT yet traded through in the current session part (day = since the RTH opening candle, as LevelMarks 1.22.0; overnight = since the session start); an empty side stays empty; the badge reads "SWEEP WATCH: ..."
+// was "1.4.0";   // (1.4.0 = lsHodLod 2.44.0, Rassul 2026-11-23 14:09 CT GC screenshot, the line read "WATCH: PHL .. 2hL" with PFH 3638.1 / ONH 3636.4 right under price: "why isnt the level line catching the most obvious levels"; 14:15 "and for levels, you are also using the same levels as SW right" - yes; "build") the line names MAJOR levels only, the Sw list of LevelMarks 1.14.0 (major(): session ON / London / Asia, PD, PF, weekly, the 3-hour S / R R1 R2 S1 S2 the host hands in as keys): the prior hours' highs / lows (PHH / PHL, 2h, 3h) and VAH / VAL are no longer WATCH / Next levels, and a Bk / Sw mark on a level that is not major gives no BREAK / SWEEP badge, no BkTst state and no Last Bk part (its badge stays on the candle)
 // was "1.3.1";   // (1.3.1 = lsHodLod 2.39.1, Rassul 2026-11-20 09:32 CT "fix the arrows because they are overlapping") every arrow owns a slot ASP + ARW + ASP (4 | 9 px ink incl. the 2-px pen | 4) in the measured width; text items carry their measured box [l, r] and the host draws them centred in it (IRT's left-justified text sits ~4 px right of rect.left and ran into the arrows)
 // was "1.3.0";   // (1.3.0 = lsHodLod 2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) ONE short liquidity phrase for the level the badge names, from lsLimitProfile 2.68.0's DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that PASSED its scoring (shown = 1); "Bids building" / "Offers leaving" / "Bids holding" / "Bids pulled", the label grey, the word in the defender's colour when it helps the defence (bids green, offers red) and the attacker's when it fails; a file older than 2 min or no state = no phrase; on a narrow pane the phrase drops FIRST (before Next / Last Bk)
 // was "1.2.0";   // (1.2.0 = lsHodLod 2.37.2, 23:02 CT) live = gold "TESTING: <level> Bk / Sw"; BREAK / SWEEP only at the close, from the chart's Bk / Sw marks   // was "1.1.0";   // (1.1.0 = lsHodLod 2.37.1, Rassul 2026-11-19 22:42 CT "how can you have a BkTst Rev when you are testing a level?"): TESTING no longer names the Rev (it has not printed yet) - "TESTING: <level> BkTst <arrow>", e.g. "TESTING: PFL BkTst" + down arrow; no "Rev", no middle dot (Level then Signal, as WATCH); WATCH stays "WATCH: <level> BkTst Rev <arrow>"   // was "1.0.0"
@@ -172,7 +173,22 @@ inline bool hasFT(const std::vector<Bar>& B, int k, int dr, int nClosed) {
 inline bool bkOk(const std::vector<Bar>& B, int k) { if (k < 1) return true; const double r0 = B[(size_t)k].h - B[(size_t)k].l, r1 = B[(size_t)k - 1].h - B[(size_t)k - 1].l; return r0 >= r1 && (r0 > r1 || B[(size_t)k].v > B[(size_t)k - 1].v); }
 
 // B = the session's bars INCLUDING the forming one last; marks = this session's Bk / FT; keys = the named key levels; live = last price
-inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, const std::vector<Key>& keysIn, double live, double tick) {
+// (1.5.0) RTH open minute per market (CT) = lvm::rthOpenMin (LevelMarks.h; t_hl2450 checks parity); -1 = unknown market (whole session counts)
+inline int rthOpenMin(const std::string& mkt) {
+    if (mkt == "ES" || mkt == "NQ" || mkt == "MES" || mkt == "MNQ") return 8 * 60 + 30;
+    if (mkt == "CL" || mkt == "NG" || mkt == "MCL") return 8 * 60;
+    if (mkt == "GC" || mkt == "EU" || mkt == "6E" || mkt == "MGC") return 7 * 60 + 20;
+    if (mkt == "HG") return 7 * 60 + 10;
+    return -1; }
+// (1.5.0) the first closed candle of the current session part: in the day session (candle END after the RTH open and at / before 5 PM CT) the RTH
+// opening candle (same rule as lvm::dayStart), else 0 (the session's first candle; B holds the current session only)
+inline int partStart(const std::vector<Bar>& B, int f, int openMin) {
+    if (openMin < 0 || f < 0 || f >= (int)B.size()) return 0;
+    auto inDay = [&](int k) { long long q = B[(size_t)k].t % 86400; if (q < 0) q += 86400; const long long m = q / 60; return m > openMin && m <= 17 * 60 && q > (long long)openMin * 60; };
+    if (!inDay(f)) return 0;
+    int k = f; while (k > 0 && inDay(k - 1) && B[(size_t)k].t - B[(size_t)k - 1].t < 6 * 3600) --k;
+    return k; }
+inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, const std::vector<Key>& keysIn, double live, double tick, int openMin = -2) {
     Out o; o.live = live; if (B.size() < 3 || !std::isfinite(live) || !(tick > 0)) return o; o.ok = true;
     const int n = (int)B.size();
     auto idxOf = [&](long long t) { for (int i = n - 2; i >= 0; i--) if (B[(size_t)i].t == t) return i; return -1; };   // closed candles only
@@ -265,7 +281,12 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
         if (pickU) { o.bs.state = 3; o.bs.name = wu.name; o.bs.px = wu.px; }
         else if (ad) { o.bs.state = 3; o.bs.name = wd.name; o.bs.px = wd.px; }
     }
+    // (1.5.0) sweep candidates: a level a closed candle of the current session part already traded through is skipped (openMin -2 = old callers: no filter)
+    double hiP = -INFINITY, loP = INFINITY;
+    if (openMin != -2) for (int k = partStart(B, n - 2, openMin); k <= n - 2; k++) { hiP = std::max(hiP, B[(size_t)k].h); loP = std::min(loP, B[(size_t)k].l); }
     for (const Key& kk : keys) {
+        if (kk.px > live + eps && hiP > kk.px + eps) continue;   // (1.5.0) above, already traded through
+        if (kk.px < live - eps && loP < kk.px - eps) continue;   // (1.5.0) below, already traded through
         if (o.tst.ok && std::fabs(kk.px - o.tst.px) <= eps) continue;   // the level being tested is already on the line
         if (o.bs.state && std::fabs(kk.px - o.bs.px) <= eps) continue;   // the level broken / swept now is already on the line
         if (kk.px > live + eps) { if (!o.up.ok || kk.px < o.up.px - eps || (std::fabs(kk.px - o.up.px) <= eps && pri(kk.name) < pri(o.up.name))) { o.up.ok = true; o.up.name = kk.name; o.up.px = kk.px; } }
@@ -366,8 +387,9 @@ inline std::vector<Seg> segments(const Out& o, const Liq& lq = Liq()) {
     } else if (dn.ok || up.ok) {   // 2. else the gold WATCH badge with the next levels and their arrows (18:50): "WATCH: Bk / Sw at ↓ PDL · ↑ ONL"
         // (19:03 "for watch it should be in this format : Watch Level Signal") "WATCH: PDL Bk / Sw ↓ · ONL Bk / Sw ↑" - below first, then above
         // (19:06 "update to WATCH: PDL ↓ · ONL↑ · Bk / Sw") the levels with their arrows, then the signal once at the end
-        if (dn.ok) { badge("WATCH: " + dn.name, -1, "", C_GOLD, 2); named.push_back(dn.name); }
-        if (up.ok) { badge((dn.ok ? dot + " " : std::string("WATCH: ")) + up.name, 1, "", C_GOLD, 2); named.push_back(up.name); }
+        // (1.5.0, 11:47 "rename to Sweep Watch") was "WATCH: "
+        if (dn.ok) { badge("SWEEP WATCH: " + dn.name, -1, "", C_GOLD, 2); named.push_back(dn.name); }
+        if (up.ok) { badge((dn.ok ? dot + " " : std::string("SWEEP WATCH: ")) + up.name, 1, "", C_GOLD, 2); named.push_back(up.name); }
         badge(dot + " Bk / Sw", 0, "", C_GOLD, 2);
         { std::vector<std::string> lvs; if (dn.ok) lvs.push_back(dn.name); if (up.ok) lvs.push_back(up.name); phrase(lvs); }
     }
