@@ -5,7 +5,7 @@
 #include <cstdio>
 static int f = 0, ok = 0; static void C(bool c, const std::string& m) { if (c) ++ok; else { ++f; std::printf("FAIL %s\n", m.c_str()); } }
 int main() {
-    C(std::string(lvm::VERSION) == "1.24.1", "version 1.24.0");
+    C(std::string(lvm::VERSION) == "1.24.2", "version 1.24.0");
     const int n = 40; std::vector<long long> T; std::vector<double> V, R; std::vector<char> G;
     for (int i = 0; i < n; ++i) { T.push_back(1000 + 180LL * i); V.push_back(100); R.push_back(10); G.push_back(i % 2); }
     V[25] = 500;                 // candle 25: the biggest volume in 25 candles (V25), ordinary range
@@ -31,6 +31,6 @@ int main() {
         std::map<long long, lvm::Mark> A; lvm::Mark m; m.code = 'S'; m.dir = 1; m.lv = "ALO"; A[T2[64]] = m; A[T2[66]] = m;
         C(lvm::bvCount(V2, 64) == 4 && lvm::stCount(V2, G2, 64) >= 20, "candle 64: BV 4 but BVMax 20+");
         lvm::fillStrength(A, T2, V2, R2, G2);
-        C(!A.count(T2[64]), "BV under 20 (BVMax 20+): no Sw");
-        C(A.count(T2[66]) && A[T2[66]].st == "V" + std::to_string(lvm::bvCount(V2, 66)) && lvm::bvCount(V2, 66) >= 20, "BV 20+: Sw, labelled with its BV - " + (A.count(T2[66]) ? A[T2[66]].st : std::string("gone"))); }
+        C(A.count(T2[64]) && A[T2[64]].st == "V" + std::to_string(lvm::stCount(V2, G2, 64)), "(1.24.2) BVMax 20+ (BV 4): the Sw stays, labelled with its BVMax");
+        C(A.count(T2[66]) && A[T2[66]].st == "V" + std::to_string(lvm::stCount(V2, G2, 66)), "BVMax 20+: Sw, labelled with its BVMax - " + (A.count(T2[66]) ? A[T2[66]].st : std::string("gone"))); }
     std::printf("t_strength124: %d passed, %d failed\n", ok, f); return f ? 1 : 0; }

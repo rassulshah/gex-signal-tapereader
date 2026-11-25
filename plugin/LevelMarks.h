@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.24.1";   // (1.24.1, Rassul 2026-11-25 16:04 CT "the vob / vot strength requires BV 20+") the Sw strength = BV, the count over ALL candles before it (1.24.0 used BVMax = the larger of BV and the same-colour count BVG / BVR); the label shows that BV ("V24")
+static const char* const VERSION = "1.24.2";   // (1.24.2, Rassul 2026-11-25 16:10 CT "thats a problem .. lets just use BVMax 20+") the Sw strength is BVMax again (the larger of BV and the same-colour count), as 1.24.0; BV alone (1.24.1) removed most sweeps (ES / NQ 11-25 had BV 4 / 3)
+// was static const char* const VERSION = "1.24.1";   // (1.24.1, Rassul 2026-11-25 16:04 CT "the vob / vot strength requires BV 20+") the Sw strength = BV, the count over ALL candles before it (1.24.0 used BVMax = the larger of BV and the same-colour count BVG / BVR); the label shows that BV ("V24")
 // was static const char* const VERSION = "1.24.0";   // (1.24.0, Rassul 2026-11-25 13:56 CT "tighten strength to reuire the bigest volume in at least 20 bars", 13:59 "there is one at 12:09 but now it would not work becasue it doesnt have BV of at least 20", 14:00 "go"): a Sw needs ITS OWN candle's BVMax >= 20 (volume only - a big range alone no longer makes a Sw: HG 11-25 12:09 LonHI R91 drops); the Sw's strength line shows the volume count ("V24")
 // was static const char* const VERSION = "1.23.0";   // (1.23.0, Rassul 2026-11-25 13:11 CT "i want to update sweeps so bearish sweeps use highs and bullish sweeps use lows", 13:12 "correct .. go"): a bearish Sw is named only by a HIGH level (ONH LonHI AsiaHI PDH PFH PWH CWH R1 R2), a bullish Sw only by a LOW level (ONL LonLO AsiaLO PDL PFL PWL CWL S1 S2); a sweep candle that crossed no major level of its side is no Sw (it can still be its Bk / Cx). GC 11-25 11:24 AM (bearish, up through AsiaLO) is no longer a Sw
 // was static const char* const VERSION = "1.22.0";   // (1.22.0, Rassul 2026-11-25 11:39 CT "so lets update the rule to current session" - GC 11:21 AM AsiaLO 3511.3: untouched in the day session, traded only before the open, so no Sw): a Sw's "nobody traded through it" check (and its one attempt) now looks back only to the start of the CURRENT session part - the RTH open candle for a candle in the day session (open .. 5 PM), the session start (5 PM) otherwise; Bk / Cx / AR / Tst / Abs unchanged
@@ -540,7 +541,7 @@ inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long lon
         const int b = at(it->first); if (b < 0) { ++it; continue; } int a = m.t0 > 0 ? at(m.t0) : b; if (a < 0 || a > b) a = b;
         if (m.code == 'S') a = b;   // (1.8.0, Rassul 10:35 CT "the red sweep bar doesnt meet the threshold.. fix") a Sw is judged and labelled by ITS OWN candle, not the attempt's biggest
         if (m.code == 'S') {   // (1.24.0, Rassul 13:56 CT "the bigest volume in at least 20 bars") VOLUME only: the Sw candle's BVMax >= SW_MIN (was BVMax or BRMax)
-            const int nv = bvCount(V, b); if (nv < SW_MIN) { it = M.erase(it); continue; }   // (1.24.1) BV, all candles (was stCount = BVMax)
+            const int nv = stCount(V, G, b); if (nv < SW_MIN) { it = M.erase(it); continue; }   // (1.24.2) BVMax again (1.24.1 used bvCount = BV)
             m.st = std::string("V") + (nv >= ST_CAP ? std::string("99+") : std::to_string(nv)); ++n; ++it; continue; }
         m.st = strength(V, R, G, a, b); if (!m.st.empty()) ++n; ++it; }
     return n;

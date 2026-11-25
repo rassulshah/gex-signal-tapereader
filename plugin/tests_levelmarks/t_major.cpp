@@ -14,7 +14,7 @@ static std::vector<wyr::Bar> flat(int n) { std::vector<wyr::Bar> B; for (int i =
 static wyr::Lvl key(const char* n, long long px) { wyr::Lvl z; z.name = n; z.px = px; return z; }
 static std::string one(const std::map<long long, lvm::Mark>& M, long long t) { const auto it = M.find(t); return it == M.end() ? std::string("-") : std::string(lvm::codeText(it->second.code)) + " " + it->second.lv + " " + std::to_string(it->second.dir); }
 int main() {
-    C(std::string(lvm::VERSION) == "1.24.1", "LevelMarks 1.14.0");
+    C(std::string(lvm::VERSION) == "1.24.2", "LevelMarks 1.14.0");
     // ---- which levels may name a Sw
     for (const char* n : { "ONH", "ONL", "LonHI", "LonLO", "AsiaHI", "AsiaLO", "ONH/LonHI", "PDH", "PDL", "PFH/PDH", "PFH", "PFL", "PWH", "PWL", "CWH", "CWL", "R1", "R2", "S1", "S2", "PFL/PWL" }) C(lvm::swMajor(n, 0), std::string("major: ") + n);
     for (const char* n : { "VAH", "VAL", "PHH", "PHL", "DPoc", "WPoc", "Open", "VWAP", "CR0", "" }) C(!lvm::swMajor(n, 0), std::string("not major: ") + n);
