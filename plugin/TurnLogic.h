@@ -70,7 +70,8 @@
 
 namespace turn {
 
-static const char* const VERSION = "1.10.0";   // (1.10.0, Rassul 2026-11-24 20:46 CT "add the question each answers to the read , so i know what question the read is answering in relation to the volume model", 20:54 "go"): the read's lines start with their volume-model question in grey, once per question (questionOf)
+static const char* const VERSION = "1.11.0";   // (1.11.0, Rassul 2026-11-24 21:23-22:39 CT "i dont want repetitive information in the read ... it should be either an important point, a conclusion or a verdict", "everything else is a go" on reads-conclude-mockup.html v30): the read concludes - turnRead(): title (+ the level in the end quarter), who won, exhaustion, Tactics (urgent / stop run / iceberg); no ratios, no "?", no Price line
+// was static const char* const VERSION = "1.10.0";   // (1.10.0, Rassul 2026-11-24 20:46 CT "add the question each answers to the read , so i know what question the read is answering in relation to the volume model", 20:54 "go"): the read's lines start with their volume-model question in grey, once per question (questionOf)
 // was static const char* const VERSION = "1.9.0";   // (1.9.0, Rassul 2026-11-24 19:59-20:00 CT "So have the indicators implemented the volume model", "Go"): layer 4 MAGNITUDE - the biggest market order carries its Big Lot tier ("Biggest 41 (S20)", BigTier.h); layer 6 PRICE AGREEMENT - one "Price" line under the read: went 1 ATR the turn's way (agreed) or traded through the extreme (failed), first of the next 10 closed candles, else held / waiting
 // was static const char* const VERSION = "1.8.0";   // (1.8.0, Rassul 2026-11-24 17:52 CT "the absorbtion indicator can be updated to have two bars per candle , 1 for absorbtion and 1 for initiative", 18:01 "i want more detail for the intiative buyers", 18:53 "build" on turn-initiative-mockup.html v3): INITIATIVE = the counter side's heaviest single price in the end quarter (buys at the low, sells at the high) / its 20-candle mean, on when >= 1.5, bigger than the attackers' heaviest price there and the candle closed outside that quarter. Each candle: left bar = Absorption, right bar = Initiative, each at its stronger end. The read: Initiative / How (burst, sweep, biggest order) / Against. Research 2026-11-24 (new 10-candle lows / highs, 7 markets): initiative only 66% went 1 ATR first (n 711, halves 66 / 67) vs 57% ordinary, 61% absorption only; burst at the market's 90th percentile of the prior hour's pace 83% vs 67% (n 30, "?"), swept 4+ prices 76% vs 67% (n 55, "?")
 // was static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-24 17:28 CT "i think absorbtion read should be in the absorption indicator but it should be more compact without the result and next", 17:30 "lets go with this for now" / "build" on turn-read-mockup.html): THE COMPACT READ - for the candle under the mouse (else the last closed one): who won at the end that was pushed (Passive defense / Aggressor), then Attack and Absorbed / Not absorbed only; an Abs names its level in the heading. Research VERDICT 2026-11-24: 12,406 candles 1.5x+, passive defense held 40% (both halves 40 / 40) vs aggressor 15% (16 / 13); aggressor ran on 1 ATR 42% vs 26%, all 7 markets
@@ -448,7 +449,7 @@ struct BigPr { long long lots = 0, lo = 0, hi = 0; };
 // (1.8.0) how the counter side took an end quarter: [0] = buyers at the bottom, [1] = sellers at the top. big = the biggest single order (fills grouped
 // by aggressor ID) with a fill in the quarter; sweep = the most ticks one such order spanned; burst = its most lots in one 5-second step in the quarter
 struct IniQ { BigPr big; long long sweep = 0, burst = 0; };
-static const size_t BOOK_CAP = 60000, HIST_P = 400;
+static const size_t BOOK_CAP = 60000, HIST_P = 400, ADDS_CAP = 200000;
 struct Sum {
     long long key = 0, start = 0; bool complete = false, overflow = false, stopOk = false, thin = true;
     std::map<long long, BookCell> book;                                   // (1.5.0) the prices that traded this candle: their book changes
@@ -460,6 +461,11 @@ struct Sum {
     std::map<long long, Cell> cells; long long hiPx = 0, loPx = 0;
     Turn hi, lo; Exh exHi, exLo;
     long long fills = 0, implied = 0, lots = 0;                           // lots = every filled lot read (implied too): the coverage check vs the chart's bar volume
+    // (1.11.0) for the Volume read (TurnPane\vread file): LARGE MARKET ORDERS = aggressor orders (fills grouped by ID) in the top 1% of the order sizes of
+    // the 20 candles before (sellers [0] / buyers [1], -1 = not known); LARGE LIMIT ORDERS = new resting orders in the top 0.1% of the new-order sizes of the
+    // 20 candles before (bids [0] / offers [1]) and how many sat beyond the candle (bids under its low, offers over its high); SLICED = the most lots one
+    // side hit as the same order size (6+ lots) 4+ times within 30 s (size, count); PULLED = lots pulled from the book near price (bids [0] / offers [1])
+    long long lm[2] = { -1, -1 }, lmThr = 0, ll[2] = { -1, -1 }, llBeyond[2] = { 0, 0 }, llThr = 0, slSize[2] = { 0, 0 }, slN[2] = { 0, 0 }, pull[2] = { -1, -1 };
 };
 struct Counters { long long events = 0, fills = 0, implied = 0, late = 0, bad = 0, overflows = 0, shownResets = 0, candles = 0, complete = 0, noAggr = 0, future = 0, stopFills = 0; };
 
@@ -468,7 +474,7 @@ public:
     int spb = 0;
     Counters n;
     std::deque<Sum> sums;                                                 // closed candles, oldest first
-    struct Hist { long long key = 0, big[2] = { -1, -1 }, lots[2] = { -1, -1 }; };   // (1.8.0) lots = the side's lots in the candle (-1 = not known)
+    struct Hist { long long key = 0, big[2] = { -1, -1 }, lots[2] = { -1, -1 }, pull[2] = { -1, -1 }; };   // (1.11.0) + pulled lots (bids, offers)   // (1.8.0) lots = the side's lots in the candle (-1 = not known)
     std::deque<Hist> hist;                                                // (1.5.0) every closed candle's biggest order a side (-1 = not known), oldest first, HIST_P kept
     // a fresh start (new chart / symbol / reconnect): everything open is dropped and the next candle cannot be complete
     void reset(int barSecs) {
@@ -547,7 +553,7 @@ private:
             if (haveRef_ && std::llabs(px - ref_) > NEAR_TICKS) return;
             if (bk_.size() >= BOOK_CAP) bookPrune();
             if (bk_.size() >= BOOK_CAP) return;
-            BO o; o.px = px; o.size = size; o.side = side; bk_[oid] = o;
+            BO o; o.px = px; o.size = size; o.side = side; bk_[oid] = o; if (adds_.size() < ADDS_CAP) { AddRec a; a.px = px; a.size = size; a.side = side; adds_.push_back(a); }   // (1.11.0) the new resting orders of this candle
             dep(px, side) += size; if (BookCell* c = cell(px)) c->add[side] += size; note(px, side); return;
         }
         BO& o = it->second;
@@ -575,6 +581,32 @@ private:
         for (std::map<long long, std::pair<long long, long long> >::iterator it = depth_.begin(); it != depth_.end();) { if (it->second.first <= 0 && it->second.second <= 0) it = depth_.erase(it); else ++it; }
     }
     long long curKey_ = 0, liveSince_ = -1, ref_ = 0, implied_ = 0, lastClosed_ = 0, limitKey_ = 0; bool haveRef_ = false, overflow_ = false;
+    // (1.11.0) the order sizes of the 20 candles before (market orders by aggressor ID, new resting orders) and this candle's new resting orders
+    struct AddRec { long long px = 0, size = 0; int side = 0; };
+    std::vector<AddRec> adds_; std::deque<std::vector<long long> > mktSz_, addSz_;
+    static long long pctOf(const std::deque<std::vector<long long> >& d, double q, size_t minN) {
+        size_t n = 0; for (const std::vector<long long>& v : d) n += v.size(); if (d.size() < 10 || n < minN) { return 0; }
+        std::vector<long long> a; a.reserve(n); for (const std::vector<long long>& v : d) a.insert(a.end(), v.begin(), v.end());
+        size_t k = (size_t)std::floor(q * (double)(n - 1)); if (k >= n) k = n - 1; std::nth_element(a.begin(), a.begin() + (long)k, a.end()); return a[k];
+    }
+    void orderStats(Sum& s) {
+        struct G { long long lots = 0, t0 = 0; int sd = 0; }; std::unordered_map<long long, G> g;
+        for (const Fill& f : fills_) { if (f.ag == 0 || !f.aid) continue; std::unordered_map<long long, G>::iterator gi = g.find(f.aid);
+            if (gi == g.end()) { if (g.size() >= 200000) continue; G x; x.t0 = f.sec; x.sd = f.ag > 0 ? 1 : 0; gi = g.insert(std::make_pair(f.aid, x)).first; } gi->second.lots += f.size; }
+        std::vector<long long> sz; sz.reserve(g.size()); for (const auto& kv : g) sz.push_back(kv.second.lots);
+        const long long thrM = std::max(2LL, pctOf(mktSz_, 0.99, 300)), thrL = std::max(2LL, pctOf(addSz_, 0.999, 2000));
+        if (s.complete && pctOf(mktSz_, 0.99, 300) > 0) { s.lmThr = thrM; s.lm[0] = s.lm[1] = 0; for (const auto& kv : g) if (kv.second.lots >= thrM) ++s.lm[kv.second.sd]; }
+        if (s.complete) for (int sd = 0; sd < 2; ++sd) {   // sliced: the same size 6+ lots, 4+ orders within 30 s
+            std::map<long long, std::vector<long long> > by; for (const auto& kv : g) if (kv.second.sd == sd && kv.second.lots >= 6) { std::vector<long long>& v = by[kv.second.lots]; if (v.size() < 5000) v.push_back(kv.second.t0); }
+            for (auto& kv : by) { std::vector<long long>& t = kv.second; if (t.size() < 4) continue; std::sort(t.begin(), t.end()); long long best = 0; size_t a = 0;
+                for (size_t b = 0; b < t.size(); ++b) { while (t[b] - t[a] > 30) ++a; const long long n = (long long)(b - a + 1); if (n > best) best = n; }
+                if (best >= 4 && kv.first * best > s.slSize[sd] * s.slN[sd]) { s.slSize[sd] = kv.first; s.slN[sd] = best; } } }
+        if (s.complete && pctOf(addSz_, 0.999, 2000) > 0) { s.llThr = thrL; s.ll[0] = s.ll[1] = 0;
+            for (const AddRec& a : adds_) { if (a.size < thrL || a.side < 0 || a.side > 1) continue; ++s.ll[a.side]; if (a.side == 0 ? a.px < s.loPx : a.px > s.hiPx) ++s.llBeyond[a.side]; } }
+        if (sz.size() > 20000) { sz.resize(20000); } mktSz_.push_back(sz); while (mktSz_.size() > 20) mktSz_.pop_front();
+        std::vector<long long> az; az.reserve(std::min(adds_.size(), (size_t)50000)); for (const AddRec& a : adds_) { if (az.size() >= 50000) break; az.push_back(a.size); } addSz_.push_back(az); while (addSz_.size() > 20) addSz_.pop_front();
+        adds_.clear(); if (adds_.capacity() > 262144) std::vector<AddRec>().swap(adds_);
+    }
     void shown(long long oid, long long px) {
         std::unordered_map<long long, long long>::iterator it = ords_.find(oid);
         if (it == ords_.end()) {
@@ -590,7 +622,7 @@ private:
         for (std::unordered_map<long long, long long>::iterator it = ords_.begin(); it != ords_.end();) { if (!haveRef_ || std::llabs(it->second - ref_) > NEAR_TICKS) it = ords_.erase(it); else ++it; }
         if (ords_.size() >= SHOWN_CAP * 9 / 10) { ords_.clear(); ++n.shownResets; }
     }
-    void open(long long key) { curKey_ = key; fills_.clear(); overflow_ = false; implied_ = 0; }
+    void open(long long key) { curKey_ = key; fills_.clear(); overflow_ = false; implied_ = 0; adds_.clear(); }
     void close(long long key) {
         sums.push_back(Sum()); Sum& s = sums.back();
         s.key = key; s.start = key - spb; s.overflow = overflow_; s.fills = (long long)fills_.size(); s.implied = implied_;
@@ -600,9 +632,11 @@ private:
         if (key > lastClosed_) lastClosed_ = key;
         ++n.candles; if (s.complete) ++n.complete;
         summarize(s);
+        { s.pull[0] = s.pull[1] = 0; for (std::map<long long, BookCell>::const_iterator it = curBook_.begin(); it != curBook_.end(); ++it) { s.pull[0] += it->second.pull[0]; s.pull[1] += it->second.pull[1]; } }   // (1.11.0)
+        orderStats(s);   // (1.11.0)
         for (std::map<long long, BookCell>::const_iterator it = curBook_.begin(); it != curBook_.end(); ++it) if (s.cells.count(it->first)) s.book.insert(*it);   // (1.5.0) the traded prices only (as the research store)
         curBook_.clear(); if (depth_.size() > 4096) bookPrune();
-        { Hist h; h.key = key; if (s.complete) { h.big[0] = std::max(0LL, s.bigAny[0]); h.big[1] = std::max(0LL, s.bigAny[1]); h.lots[0] = s.sideLots[0]; h.lots[1] = s.sideLots[1]; } hist.push_back(h); while (hist.size() > HIST_P) hist.pop_front(); }
+        { Hist h; h.key = key; if (s.complete) { h.big[0] = std::max(0LL, s.bigAny[0]); h.big[1] = std::max(0LL, s.bigAny[1]); h.lots[0] = s.sideLots[0]; h.lots[1] = s.sideLots[1]; h.pull[0] = s.pull[0]; h.pull[1] = s.pull[1]; } hist.push_back(h); while (hist.size() > HIST_P) hist.pop_front(); }
         while (sums.size() > SUMS_KEEP) sums.pop_front();
         fills_.clear(); if (fills_.capacity() > 65536) std::vector<Fill>().swap(fills_);
         if (ords_.size() > SHOWN_CAP / 2) prune();
@@ -1115,7 +1149,7 @@ static const long long CR_FROM1000 = 1500;
 static const char* const Q1 = "1 How much?"; static const char* const Q2 = "2 Who hit whom?"; static const char* const Q3 = "3 Who won at the end?";
 static const char* const Q4 = "4 How big?"; static const char* const Q5 = "5 How?"; static const char* const Q6 = "6 Did price agree?";
 // short forms for a narrow read (right of the last candle there may be only ~250 px)
-inline const char* shortQ(const char* q) { const std::string x = q; return x == Q1 ? "1 How much?" : x == Q2 ? "2 Who hit?" : x == Q3 ? "3 Who won?" : x == Q4 ? "4 How big?" : x == Q5 ? "5 How?" : x == Q6 ? "6 Agreed?" : q; }
+inline const char* shortQ(const char* q) { const std::string x = q; return x == Q1 ? "1 How much?" : x == Q2 ? "2 Who hit?" : x == Q3 ? "3 Who won?" : x == Q4 ? "4 How big?" : x == Q5 ? "5 How?" : x == Q6 ? "6 Agreed?" : x == "5 Tactics?" ? "5 Tactics?" : q; }
 inline const char* questionOf(const std::string& rowLabel) {
     if (rowLabel == "How" || rowLabel == "Absorbed" || rowLabel == "Not absorbed") return Q5;
     if (rowLabel == "Price") return Q6;
@@ -1209,6 +1243,83 @@ inline CText iniText(int end, const Ini& in, const IniCalc& c, const std::string
     ag += " - " + who + " won the " + (low ? "low" : "high");
     o.rows.push_back(std::make_pair("Against", ag));
     return o;
+}
+// (1.11.0) THE READ THAT CONCLUDES (Rassul 2026-11-24 21:23 "i dont want repetitive information in the read ... it should be either an important point,
+// a conclusion or a verdict", 22:39 "everything else is a go" on reads-conclude-mockup.html v30): no line repeats a bar or its number, no "?", no odds,
+// no Price line (it moved to the Volume read), no Biggest order (the Volume read's How big). Lines are tagged with their volume-model question.
+//   title  Initiative [at LEVEL] - buyers lifted the offer at the bottom | Passive defense won [at LEVEL] - sellers absorbed at the bottom |
+//          Aggressor won [at LEVEL] - sellers got through the bottom | No absorption or initiative at the ends (grey)
+//   3      who won (Buyers won the low about 5 to 1 / sellers barely there; Bids took the selling - the bottom held at the close) and
+//          EXHAUSTION: the attackers' lots at the 2 extreme prices under 0.15x the candle's average per price -> "Sellers ran out at the low."
+//   5      Tactics: Urgent (one order swept 4+ prices, or a burst over the market's level), Stop run (the attackers' stop lots in the end quarter
+//          1.0x+ the market's typical stop run), Iceberg (the defenders refilled 2+ times, 2x+ the typical stop run in lots)
+static const char* const Q5T = "5 Tactics?";
+static const long long THIN_MAX1000 = 150; static const size_t CR_KEEP_X = 900;
+struct XCalc { bool feed = false; long long thin1000 = -1, stops = 0; };
+// end +1 = the bottom (attackers = sellers), -1 = the top (attackers = buyers)
+inline XCalc xCalc(const Live& Lv, long long key, int end) {
+    XCalc x; const Sum* s = Lv.find(key); if (!s || !s->complete || s->thin || s->overflow || s->cells.empty()) return x;
+    const long long lo = s->loPx, hi = s->hiPx, L = hi - lo + 1, z = L >= 4 ? zoneOf(L) : 0; if (z <= 0) return x;
+    x.feed = true; long long tot = 0, n = 0, ext = 0;
+    for (std::map<long long, Cell>::const_iterator it = s->cells.begin(); it != s->cells.end(); ++it) {
+        const long long v = it->second.buy + it->second.sell; if (v <= 0) continue; tot += v; ++n;
+        if (end > 0) { if (it->first <= lo + 1) ext += it->second.sell; if (it->first < lo + z) x.stops += it->second.stopS; }
+        else { if (it->first >= hi - 1) ext += it->second.buy; if (it->first > hi - z) x.stops += it->second.stopB; } }
+    if (n > 0 && tot > 0) x.thin1000 = x1000(((double)ext / 2.0) / ((double)tot / (double)n));
+    return x;
+}
+// kind 1 = Initiative, 2 = passive defense won, 3 = aggressor won, 0 = no push; end +1 the bottom, -1 the top; lv = a named level in that end quarter ("" = none)
+inline CText turnRead(int kind, int end, const Ini& in, const IniCalc& nc, const AbsCalc& ac, const XCalc& xc, const std::string& lv, double stopTyp, const std::string& mkt) {
+    CText o;
+    if (kind == 0 || end == 0) { o.quiet = true; o.title = "No absorption or initiative at the ends"; return o; }
+    const bool low = end > 0; const std::string at = lv.empty() ? std::string() : " at " + lv;
+    const std::string att = low ? "sellers" : "buyers", Att = low ? "Sellers" : "Buyers", def = low ? "bids" : "offers", Def = low ? "Bids" : "Offers";
+    const std::string place = low ? "the low" : "the high", endw = low ? "bottom" : "top";
+    if (kind == 1) {   // Initiative: the counter side took the end (buyers at the low)
+        const std::string who = low ? "buyers" : "sellers", Who = low ? "Buyers" : "Sellers", other = low ? "sellers" : "buyers";
+        o.win = low ? 1 : -1; o.title = "Initiative" + at + " - " + who + (low ? " lifted the offer at the bottom" : " hit the bid at the top");
+        if (in.att <= 0 || in.lots >= 8 * in.att) o.rows.push_back(std::make_pair(std::string(Q3), Who + " won " + place + " - " + other + " barely there."));
+        else { const long long r = in.lots / in.att; o.rows.push_back(std::make_pair(std::string(Q3), r >= 2 ? Who + " won " + place + " about " + std::to_string(r) + " to 1." : Who + " won " + place + " narrowly.")); }
+    } else if (kind == 2) {
+        o.win = low ? 1 : -1; o.title = "Passive defense won" + at + " - " + att + " absorbed at the " + endw;
+        o.rows.push_back(std::make_pair(std::string(Q3), Def + " took the " + (low ? "selling" : "buying") + " - the " + endw + " held at the close."));
+    } else {
+        o.win = low ? -1 : 1; o.title = "Aggressor won" + at + " - " + att + " got through the " + endw;
+        o.rows.push_back(std::make_pair(std::string(Q3), ac.feed && ac.putBack < 0 ? Def + " pulled " + std::to_string(-ac.putBack) + " lots ahead of them - no defense." : Att + " took the " + def + " and closed in the " + endw + " quarter."));
+    }
+    if (kind != 3 && xc.feed && xc.thin1000 >= 0 && xc.thin1000 < THIN_MAX1000) o.rows.push_back(std::make_pair(std::string(Q3), Att + " ran out at " + place + "."));
+    if (kind == 1 && nc.feed) {
+        const std::string who1 = low ? "buy" : "sell", whoN = low ? "buyers" : "sellers";
+        if (nc.sweep >= SWEEP_MIN) o.rows.push_back(std::make_pair(std::string(Q5T), "Urgent: one " + who1 + " order swept " + std::to_string(nc.sweep) + " prices."));
+        else if (nc.burst1000 >= 0 && nc.burst1000 >= burstLevel10(mkt) * 100) o.rows.push_back(std::make_pair(std::string(Q5T), "Urgent: " + whoN + " fired at " + xText((double)nc.burst1000 / 1000.0) + " their normal pace."));
+    }
+    if (xc.feed && stopTyp > 0 && (double)xc.stops >= stopTyp) {
+        std::string t = "Stops ran " + std::string(low ? "below " : "above ") + (lv.empty() ? place : lv);
+        t += kind == 1 ? std::string(", and ") + (low ? "buyers lifted" : "sellers hit") + " straight back." : kind == 2 ? ", then " + def + " absorbed them." : " and price kept going.";
+        o.rows.push_back(std::make_pair(std::string(Q5T), t)); }
+    if (kind == 2 && ac.feed && ac.iceN >= 2 && stopTyp > 0 && (double)ac.iceLots >= 2.0 * stopTyp)
+        o.rows.push_back(std::make_pair(std::string(Q5T), "Iceberg: " + def + " refilled " + std::to_string(ac.iceN) + " times (" + std::to_string(ac.iceLots) + " lots) at " + place + "."));
+    return o;
+}
+// the named level inside the end quarter of the candle (closest to the extreme), "" = none
+inline std::string levelInZone(const std::vector<Level>& lv, long long lo, long long hi, int end) {
+    if (hi < lo || end == 0) { return std::string(); } const long long z = zoneOf(hi - lo + 1); std::string best; long long bd = -1;
+    for (const Level& l : lv) { if (l.name.empty()) continue; const bool in = end > 0 ? (l.tick >= lo - 1 && l.tick < lo + z) : (l.tick <= hi + 1 && l.tick > hi - z); if (!in) continue;
+        const long long d = end > 0 ? std::llabs(l.tick - lo) : std::llabs(hi - l.tick); if (bd < 0 || d < bd) { bd = d; best = levelName(l.name); } }
+    return best;
+}
+// (1.11.0) the X numbers of each closed candle, both ends, kept with the C / N lines: "X|stamp|end|feed|thin1000|stops"
+inline std::string xrecText(const std::map<std::pair<long long, int>, XCalc>& m) {
+    std::string t; size_t skip = m.size() > CR_KEEP_X ? m.size() - CR_KEEP_X : 0;
+    for (const auto& kv : m) { if (skip) { --skip; continue; } t += "X|" + std::to_string(kv.first.first) + "|" + std::to_string(kv.first.second) + "|" + (kv.second.feed ? "1" : "0") + "|" + std::to_string(kv.second.thin1000) + "|" + std::to_string(kv.second.stops) + "\n"; }
+    return t;
+}
+inline void parseXrec(const std::string& txt, std::map<std::pair<long long, int>, XCalc>& out) {
+    out.clear(); const std::vector<std::string> L = lines(txt, true);
+    for (size_t i = 1; i < L.size(); ++i) { const std::vector<std::string> c = split(L[i], '|'); if (c.size() != 6 || c[0] != "X") continue; long long v[5];
+        bool ok = true; for (int k = 0; k < 5; ++k) if (!toLL(c[k + 1], v[k])) { ok = false; break; }
+        if (!ok || v[0] <= 0 || (v[1] != 1 && v[1] != -1) || v[3] < -1 || v[4] < 0) continue;
+        XCalc x; x.feed = v[2] != 0; x.thin1000 = v[3]; x.stops = v[4]; out[std::make_pair(v[0], (int)v[1])] = x; }
 }
 // (1.9.0) LAYER 6 - PRICE AGREEMENT, the read's "Price" line. end +1 = the candle's low, -1 its high; hold = the read says that end should HOLD (Initiative,
 // passive defense) - false = the aggressor got through (price should go ON). ext = that extreme (ticks); nx = the closed candles after it, oldest first

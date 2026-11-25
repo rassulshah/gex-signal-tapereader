@@ -17,10 +17,12 @@
 #include <vector>
 #include "PlainRead.h"     // (2026-11-17 21:17) the plain three-line read - toPlain() at the end
 #include "BigTier.h"      // (1.4.0) Big Lot S20 / S10 / S5 on the biggest orders
+#include "TurnVRead.h"     // (1.6.0) what lsTurn says about each closed candle (kind, large orders, sliced, pulled)
 
 namespace vrd {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 20:46 "add the question each answers to the read", 20:54 "go") Out.headQ / exQ = the volume-model question of the head and each sentence (Volume read only)
+static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-24 21:23-22:39 CT "i dont want repetitive information in the read ... it should be either an important point, a conclusion or a verdict", "the title is supposed to be the overall call", "everything else is a go" on reads-conclude-mockup.html v30) volPlain(): title = the OVERALL CALL of the three panes (Turn decides the side, buy / sell and volume confirm), effort vs result with price agreement, how many large orders (market + resting), who led over several candles, sliced / pulled; no size words the bar shows, no "?"
+// was static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-24 20:46 "add the question each answers to the read", 20:54 "go") Out.headQ / exQ = the volume-model question of the head and each sentence (Volume read only)
 // was static const char* const VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-24 20:00 CT "Go" - layer 4 magnitude) the Volume read's biggest orders carry their Big Lot tier: "buyers 311 (S20)"
 // was static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-24 19:28-19:44 CT "i'll let you determine the display and the read", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) volPlain(): the VOLUME read answers layers 1, 4 and 5 of his volume model only - how much (size), the biggest orders / sweeps, icebergs, and a neutral note - with NO bullish / bearish verdict (the Turn pane calls the winner; the buy / sell pane says who hit whom). The Range read is unchanged
 // was static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
@@ -39,13 +41,15 @@ struct Ctx { std::vector<Cd> c;            // oldest -> newest; the LAST one is 
              int cntAll = 0, cntSame = 0;  // bars in a row before it with a smaller value: all / its own colour (the pane's own count)
              double atr = 0; int cx = 0;   // Wilder ATR(13) of the candle before; cx: +1 a climax at a pivot LOW on it or the candle before, -1 at a pivot HIGH
              Inside in; int dec = 2;
-             std::string mkt; bool rth = true; };   // (1.4.0) the market ("ES" .. "6E") and RTH (the candle starts 8:30 - 14:59 CT) for the Big Lot tier
+             std::string mkt; bool rth = true;
+             // (1.6.0) the other panes' word on this candle (files) and the candles after it (price agreement)
+             bool tvOk = false; tvr::Row tv; bool bsOk = false; int bsV = 0, bsTrap = 0; std::vector<Cd> nx; double tick = 0; int leadK = 0, leadSide = 0; long long leadA = 0, leadB = 0; bool again = false; };   // (1.4.0) the market ("ES" .. "6E") and RTH (the candle starts 8:30 - 14:59 CT) for the Big Lot tier
 struct Row { std::string lab, a, b; int ca = 0, cb = 0; };   // +1 green, -1 red, 0 white, 2 grey
 struct Out { bool ok = false; int verdict = 0; std::string head, why, candle, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; std::vector<std::string> notes;
              std::string headQ; std::vector<std::string> exQ; };   // (1.5.0) the volume-model question per line (empty = none drawn)
 // (1.5.0) his volume model's questions (/topics/volume-model) and their short forms for a narrow read
 static const char* const Q1 = "1 How much?"; static const char* const Q2 = "2 Who hit whom?"; static const char* const Q3 = "3 Who won at the end?";
-static const char* const Q4 = "4 How big?"; static const char* const Q5 = "5 How?"; static const char* const Q6 = "6 Did price agree?";
+static const char* const Q4 = "4 How big?"; static const char* const Q5 = "5 Tactics?"; static const char* const QV = "Verdict"; static const char* const Q6 = "6 Did price agree?";
 inline std::string shortQ(const std::string& q) { return q == Q2 ? "2 Who hit?" : q == Q3 ? "3 Who won?" : q == Q6 ? "6 Agreed?" : q; }   // (1.3.0) notes = neutral facts for the Volume read (no side)   // ex (1.1.0) = the explanation sentences   // verdict +1 / -1 / 2 mixed / 0 quiet
 
 inline std::string commas(long long v) { std::string s = std::to_string(v < 0 ? -v : v); for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ","); return v < 0 ? "-" + s : s; }
@@ -227,27 +231,94 @@ inline plr::Plain plain(const Out& o, bool range) {
 // (green / red) bar in N candles" from 20), coloured by the candle only when it is the biggest in 20+; line 2 the biggest order each way and the longest
 // sweep (3+ prices); line 3 icebergs traded (bids / offers); line 4 the first neutral note (climax, absorbed volume, a run, drying up)
 static const double HEAVY_X = 1.5, ABOVE_X = 1.2, BELOW_X = 0.8; static const int BIG_IN = 20;
+// (1.6.0) THE VOLUME READ THAT CONCLUDES (reads-conclude-mockup.html v30):
+//   Verdict  the overall call: Turn's side (Initiative / passive defense = the end it held, aggressor = through it), then how many of buy / sell and this
+//            pane's own lean agree: both "Strong bullish - ...", one "Bullish - ...", none "Mixed - ..."; no turn: the trapped side, else this pane's lean,
+//            else "Neutral - ordinary volume" (light: "Neutral - light volume")
+//   1        effort vs result: "Effort matched result - price followed through." / "... - price gave it back." / "Effort without result - but price broke
+//            the low." / "Result without effort." (+ price agreement: 1 ATR the expected way, or more than 1 tick through the held extreme, within 10 candles)
+//   4        "Large buyers outnumbered sellers 6 to 1 - but large offers wait over the high." / "Large orders on both sides - large bids stacked under the low."
+//            and "Large buyers have led for 4 candles (20 to 12)."
+//   5        "A buyer sliced 35 lots into 7-lot pieces." / "Offers pulled before the push."
+static const double MATCH_POS = 0.75, NOEFF_RNG = 0.8, RES_RNG = 1.0, PULL_X = 1.5, PULL_OTHER = 1.2;
+// +1 / -1 = held: price went 1 ATR the expected way first; -2 = failed: traded more than 1 tick through the held extreme first; 0 = not decided (10 candles)
+inline int agreeOf(int dir, double ext, const std::vector<Cd>& nx, double atr, double tick) {
+    if (dir == 0 || !(atr > 0)) { return 0; } const double eps = tick > 0 ? tick * 1.01 : 0;
+    for (size_t k = 0; k < nx.size() && k < 10; ++k) { const Cd& b = nx[k];
+        const double adv = dir > 0 ? ext - b.l : b.h - ext, fav = dir > 0 ? b.h - ext : ext - b.l;
+        if (adv > eps) return -2;
+        if (fav >= atr) return 1; }
+    return 0;
+}
+// who led the large market orders over several candles: rows = this candle, then the ones before (newest first; nullptr = not known, stops the count)
+inline void leadOf(const std::vector<const tvr::Row*>& rows, Ctx& x) {
+    x.leadK = 0; x.leadSide = 0; x.leadA = x.leadB = 0; if (rows.empty() || !rows[0]) return;
+    const tvr::Row& r0 = *rows[0]; if (r0.lm[0] < 0 || r0.lm[1] < 0 || r0.lm[0] == r0.lm[1]) return;
+    const int sd = r0.lm[1] > r0.lm[0] ? 1 : 0; long long A = 0, B = 0; int kk = 0;
+    for (const tvr::Row* r : rows) { if (!r || r->lm[0] < 0 || r->lm[1] < 0) break; const long long a = r->lm[sd], b = r->lm[1 - sd]; if (a < b || a <= 0) break; A += a; B += b; ++kk; }
+    if (kk >= 3 && A > B) { x.leadK = kk; x.leadSide = sd ? 1 : -1; x.leadA = A; x.leadB = B; }
+}
+inline std::string vsText(long long a, long long b) { return std::to_string(a) + " to " + std::to_string(b); }
 inline Out volPlain(const Ctx& x, Out o) {
     if (!o.ok) { return o; }
     const int n = (int)x.c.size();
     if (n < 1) { return o; }
-    const Cd& k = x.c[(size_t)n - 1]; const double vx = volX(x.c, n - 1); const bool g = k.green();
-    std::string sz = vx >= HEAVY_X ? "Heavy" : vx >= ABOVE_X ? "Above normal" : vx > 0 && vx < SMALL_X ? "Light" : vx > 0 && vx < BELOW_X ? "Below normal" : vx > 0 ? "Normal" : "Not rated yet";
-    const bool bigSame = x.cntSame >= BIG_IN && x.cntSame >= x.cntAll, bigAll = x.cntAll >= BIG_IN;
-    if (bigAll) sz += " - the biggest bar in " + cnt(x.cntAll) + " candles";
-    else if (bigSame) sz += std::string(" - the biggest ") + (g ? "green" : "red") + " bar in " + cnt(x.cntSame) + " candles";
-    if (vx > 0) sz += " (" + xx(vx) + ")";
-    o.head = sz; o.why.clear(); o.verdict = (bigAll || bigSame) ? (g ? 1 : -1) : 0;
-    std::vector<std::string> L; const Inside& q = x.in;
-    if (q.ok) {
-        std::string l = "Biggest orders: buyers " + btr::lotsText(q.bigBuy, x.mkt, x.rth) + ", sellers " + btr::lotsText(q.bigSell, x.mkt, x.rth);   // (1.4.0) + the tier
-        const int sw = q.swBuy > q.swSell ? q.swBuy : q.swSell;
-        if (sw >= (int)SWEEP_LV) { const bool sb = q.swSell > q.swBuy; l += std::string("; one ") + (sb ? "sell" : "buy") + " order swept " + std::to_string(sw) + " prices, " + (sb ? "buyers " : "sellers ") + std::to_string(sb ? q.swBuy : q.swSell); }
-        L.push_back(l + "."); o.exQ.push_back(Q4);
-        if (q.hidBuy > 0 || q.hidSell > 0) { L.push_back("Icebergs: bids refilled " + commas(q.hidBuy) + " lots, offers " + commas(q.hidSell) + "."); o.exQ.push_back(Q5); }
-    } else { L.push_back("No order detail for this candle."); o.exQ.push_back(Q4); }
-    if (!o.notes.empty()) { L.push_back(o.notes[0]); o.exQ.push_back(Q1); }
-    o.headQ = Q1; o.ex = L; o.rows.clear(); o.b1.clear(); o.b2.clear(); return o;
+    const Cd& k = x.c[(size_t)n - 1]; const double vx = volX(x.c, n - 1);
+    const bool heavy = vx >= HEAVY_X, light = vx > 0 && vx < SMALL_X; const double rg = k.h - k.l, pos = rg > 0 ? (k.c - k.l) / rg : 0.5, rA = x.atr > 0 ? rg / x.atr : 0;
+    const bool nL = newLow(x.c, n - 1), nH = newHigh(x.c, n - 1);
+    // this pane's own lean (effort vs result)
+    int lean = 0; std::string leanWhy; bool matched = false, failedExt = false;
+    if (heavy && nL && pos >= 0.5 && pos < MATCH_POS) { lean = 1; leanWhy = "heavy selling failed at a new low"; failedExt = true; }
+    else if (heavy && nH && pos <= 0.5 && pos > 1 - MATCH_POS) { lean = -1; leanWhy = "heavy buying failed at a new high"; failedExt = true; }
+    else if (vx >= ABOVE_X && pos >= MATCH_POS) { lean = 1; leanWhy = std::string(heavy ? "heavy" : "above-normal") + " volume closed at the high"; matched = true; }
+    else if (vx >= ABOVE_X && pos <= 1 - MATCH_POS) { lean = -1; leanWhy = std::string(heavy ? "heavy" : "above-normal") + " volume closed at the low"; matched = true; }
+    // the overall call
+    int side = 0; std::string turnWhy; const bool tk = x.tvOk && x.tv.kind >= 0;
+    if (tk && x.tv.kind >= 1 && x.tv.end != 0) { const bool low = x.tv.end > 0;
+        if (x.tv.kind == 1) { side = low ? 1 : -1; turnWhy = std::string(low ? "buyers took the low" : "sellers took the high") + (x.again ? " again" : ""); }
+        else if (x.tv.kind == 2) { side = low ? 1 : -1; turnWhy = std::string(low ? "sellers absorbed at " : "buyers absorbed at ") + (low ? (nL ? "a new low" : "the low") : (nH ? "a new high" : "the high")); }
+        else { side = low ? -1 : 1; turnWhy = low ? "sellers broke the low" : "buyers broke the high"; } }
+    std::string title; int col = 0;
+    if (side) { const int ag = (x.bsOk && x.bsV == side ? 1 : 0) + (lean == side ? 1 : 0); const std::string w = side > 0 ? "ullish" : "earish";
+        if (ag == 2) { title = "Strong b" + w + " - " + turnWhy + (heavy && x.tv.kind == 1 && !x.again ? " on heavy volume" : ""); col = side; }
+        else if (ag == 1) { title = "B" + w + " - " + turnWhy; col = side; }
+        else { title = "Mixed - " + turnWhy + ", the volume and buy / sell disagree"; col = 0; } }
+    else if (x.bsOk && x.bsTrap != 0) { title = std::string("Mixed - ") + (x.bsTrap > 0 ? "buyers" : "sellers") + " trapped, no turn yet"; col = 0; }
+    else if (lean) { title = std::string(lean > 0 ? "Bullish - " : "Bearish - ") + leanWhy; col = lean; }
+    else title = light ? "Neutral - light volume" : vx > 0 ? "Neutral - ordinary volume" : "Not rated yet";
+    o.head = title; o.headQ = QV; o.why.clear(); o.verdict = col;
+    std::vector<std::string> L; std::vector<std::string> Q;
+    // 1 effort vs result, with price agreement
+    if (matched || failedExt) { const int a = agreeOf(lean, lean > 0 ? k.l : k.h, x.nx, x.atr, x.tick);
+        if (matched) L.push_back(std::string("Effort matched result") + (a == 1 ? " - price followed through." : a == -2 ? " - price gave it back." : "."));
+        else L.push_back(std::string("Effort without result") + (a == -2 ? std::string(" - but price broke the ") + (lean > 0 ? "low." : "high.") : a == 1 ? " - price followed through." : "."));
+        Q.push_back(Q1); }
+    else if (heavy && rA > 0 && rA < NOEFF_RNG) { L.push_back("Effort without result."); Q.push_back(Q1); }
+    else if (light && rA >= RES_RNG) { L.push_back("Result without effort."); Q.push_back(Q1); }
+    // 4 how many large orders (market, then where the large resting orders lean)
+    if (x.tvOk) { const tvr::Row& r = x.tv; std::string m;
+        const long long mB = r.lm[1], mS = r.lm[0]; int mSide = 0;
+        if (mB >= 0 && mS >= 0) { const long long hi = std::max(mB, mS), lo = std::min(mB, mS);
+            if (hi >= 2 && hi >= 2 * lo) { mSide = mB > mS ? 1 : -1; m = mSide > 0 ? "Large buyers outnumbered sellers " + vsText(mB, mS) : "Large sellers outnumbered buyers " + vsText(mS, mB); }
+            else if (hi >= 2) m = "Large orders on both sides"; }
+        const long long lB = r.ll[0], lO = r.ll[1]; int lSide = 0;
+        if (lB >= 0 && lO >= 0) { const long long hi = std::max(lB, lO), lo = std::min(lB, lO); if (hi >= 3 && (double)hi >= 1.5 * (double)lo) lSide = lB > lO ? 1 : -1; }
+        if (lSide) { const bool bids = lSide > 0; const long long cntS = bids ? lB : lO, beyond = bids ? r.llB[0] : r.llB[1]; const bool out = beyond * 2 >= cntS;
+            const std::string where = bids ? (out ? "under the low" : "in the candle") : (out ? "over the high" : "in the candle");
+            if (m.empty()) m = (bids ? "Large bids outnumbered large offers " + vsText(lB, lO) : "Large offers outnumbered large bids " + vsText(lO, lB)) + " - " + (bids ? "stacked " : "waiting ") + where;
+            else if (mSide && mSide != lSide) m += std::string(" - but large ") + (bids ? "bids wait " : "offers wait ") + where;
+            else m += std::string(" - large ") + (bids ? "bids stacked " : "offers stacked ") + where; }
+        if (!m.empty()) { const long long bb = std::max(x.in.ok ? x.in.bigBuy : 0, x.in.ok ? x.in.bigSell : 0); const std::string t = bb > 0 ? btr::tier(bb, x.mkt, x.rth) : std::string();
+            if (!t.empty()) { const bool buy = x.in.bigBuy >= x.in.bigSell; m += "; a " + std::to_string(bb) + "-lot " + (buy ? "buyer" : "seller") + " (" + t + ")"; }
+            L.push_back(m + "."); Q.push_back(Q4); }
+        if (x.leadK >= 3 && x.leadSide != 0) { L.push_back(std::string("Large ") + (x.leadSide > 0 ? "buyers" : "sellers") + " have led for " + std::to_string(x.leadK) + " candles (" + vsText(x.leadA, x.leadB) + ")."); Q.push_back(Q4); }
+        // 5 tactics: sliced, pulled
+        const int ss = r.sl[1] * r.slN[1] >= r.sl[0] * r.slN[0] ? 1 : 0;
+        if (r.sl[ss] > 0 && r.slN[ss] >= 4) { L.push_back(std::string("A ") + (ss ? "buyer" : "seller") + " sliced " + std::to_string(r.sl[ss] * r.slN[ss]) + " lots into " + std::to_string(r.sl[ss]) + "-lot pieces."); Q.push_back(Q5); }
+        if (r.kind != 3 && r.pull[0] >= 0 && r.pull[1] >= 0 && r.pullN[0] > 0 && r.pullN[1] > 0) { const double xb = (double)r.pull[0] / (double)r.pullN[0], xo = (double)r.pull[1] / (double)r.pullN[1];
+            if (xo >= PULL_X && xb < PULL_OTHER && k.c > k.o) { L.push_back("Offers pulled before the push."); Q.push_back(Q5); }
+            else if (xb >= PULL_X && xo < PULL_OTHER && k.c < k.o) { L.push_back("Bids pulled before the drop."); Q.push_back(Q5); } } }
+    o.ex = L; o.exQ = Q; o.rows.clear(); o.b1.clear(); o.b2.clear(); return o;
 }
 inline Out toPlain(Out o, bool range) { if (!o.ok) return o; const plr::Plain p = plain(o, range); o.head = p.head; o.why.clear(); o.ex = plr::lines(p); o.rows.clear(); o.b1.clear(); o.b2.clear(); return o; }
 } // namespace vrd

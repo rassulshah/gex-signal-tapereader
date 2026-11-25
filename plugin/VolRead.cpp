@@ -22,6 +22,7 @@
 #undef near
 #endif
 #include "VolRangeLogic.h"
+#include "BsRead.h"            // (1.15.0) lsRevRead's buy / sell verdicts file (parseBsv)
 #include "PaneCursor.h"          // (1.2.0) is the mouse inside THIS pane right now (IRT sends no event when it leaves)
 #include "MarketKey.h"
 #include "HostSlot.h"
@@ -58,7 +59,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.14.0";   // (1.14.0) the volume-model question column in the Volume read   // was "1.13.0";   // (1.13.0) the Big Lot tier on the Volume read's biggest orders   // was "1.12.0";   // (1.12.0) the Volume read: how much / orders / icebergs, no verdict (VolRangeLogic 1.12.0)   // was "1.11.0";   // (1.11.0, Rassul 2026-11-23 09:34 CT "go" on the AR bar) the Range pane shows the price chart's AR (VolRangeLogic 1.11.0)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-23 07:32 CT "go with badge for both", 07:33 "why is cx on the range ?") the Volume pane's Cx = the price chart's Cx (the marks file); no Cx in the Range pane (VolRangeLogic 1.10.0)   // was "1.9.0";   // (1.9.0, Rassul 18:35 CT) the coloured numbers column back next to the read (VolRangeLogic 1.9.0)   // was "1.8.0";   // (1.8.0) Bk / Sw read from the price chart's marks (lsRevRead wy file); Bk / Sw count from 10   // was "1.7.0"   // (1.7.0) Bk / Sw on the price chart's rules (VolRangeLogic 1.7.0)   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.15.0";   // (1.15.0) the Volume read concludes - the overall call, effort vs result, large orders (VolRangeLogic 1.15.0)   // was "1.14.0";   // (1.14.0) the volume-model question column in the Volume read   // was "1.13.0";   // (1.13.0) the Big Lot tier on the Volume read's biggest orders   // was "1.12.0";   // (1.12.0) the Volume read: how much / orders / icebergs, no verdict (VolRangeLogic 1.12.0)   // was "1.11.0";   // (1.11.0, Rassul 2026-11-23 09:34 CT "go" on the AR bar) the Range pane shows the price chart's AR (VolRangeLogic 1.11.0)   // was "1.10.0";   // (1.10.0, Rassul 2026-11-23 07:32 CT "go with badge for both", 07:33 "why is cx on the range ?") the Volume pane's Cx = the price chart's Cx (the marks file); no Cx in the Range pane (VolRangeLogic 1.10.0)   // was "1.9.0";   // (1.9.0, Rassul 18:35 CT) the coloured numbers column back next to the read (VolRangeLogic 1.9.0)   // was "1.8.0";   // (1.8.0) Bk / Sw read from the price chart's marks (lsRevRead wy file); Bk / Sw count from 10   // was "1.7.0"   // (1.7.0) Bk / Sw on the price chart's rules (VolRangeLogic 1.7.0)   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -83,7 +84,7 @@ struct VRState {
     int hov = -1, hovX = -1; pc::Tracker cur;   // (1.5.1) hovX = the mouse x in the pane
                         // (1.2.0) the chart bar under the mouse (-1 = not in this pane) and where the pane sits on the screen
     long long hlMs = -1; std::string hlSig;            // (1.1.0) when the signal files were last looked at / their stamps
-    long long bfMs = -1; std::string bfSig; int bfRows = 0;   // (1.4.0) when lsBookFlow's session record was last looked at / its stamp / candles read
+    long long bfMs = -1; std::string bfSig; int bfRows = 0; std::string tvSig, bsSig;   /* (1.15.0) the vread / bsv files' stamps */   // (1.4.0) when lsBookFlow's session record was last looked at / its stamp / candles read
     long long lvMs = -1; std::string lvSig;            // (1.3.0) the same for the level files and the Cob Reader status
 };
 
@@ -130,12 +131,14 @@ static bool vrSlurp(const std::string& path, size_t cap, std::string& out) {
     const std::streamoff from = sz > (std::streamoff)cap ? sz - (std::streamoff)cap : 0; f.seekg(from); out.resize((size_t)(sz - from)); if (!out.empty()) f.read(&out[0], (std::streamsize)out.size()); out.resize((size_t)f.gcount()); return true;
 }
 static void vrMarks(VRState& S, long long now);
+static void vrOthers(VRState& S);
 // (1.4.0) the Volume pane looks INSIDE the candle: lsBookFlow's session record (lsFlexLevels\BookFlow\<MKT>-<SYM>-<secs>-<yyyymmdd>.csv), the current
 // session and the one before, looked at every 10 s and re-read only when a file changed. No order feed is opened here; a chart without lsBookFlow
 // simply has no "Biggest order" / "Sweep" rows.
 static void vrInside(VRState& S, long long now) {
     if (S.E.mode != vrr::VOL || (S.bfMs >= 0 && now - S.bfMs < 10000)) return;
     S.bfMs = now;
+    vrOthers(S);   // (1.15.0)
     const std::string d = vrFlex(); if (d.empty() || S.E.LT.empty()) return;
     const long long day = vrr::sessionDay(S.E.LT.back());
     std::vector<std::string> files; const std::string keys[2] = { S.mkt, mkey::norm(S.mkt) };
@@ -145,6 +148,29 @@ static void vrInside(VRState& S, long long now) {
     S.bfSig = sig; std::map<long long, vrd::Inside> m; std::string txt; int rows = 0;
     for (const std::string& p : files) { struct stat st; if (stat(p.c_str(), &st) != 0 || st.st_size > 8 * 1024 * 1024) continue; if (vrSlurp(p, 8 * 1024 * 1024, txt)) rows += vrd::parseBookFlow(txt, m); }
     S.E.inside.swap(m); S.bfRows = rows;
+}
+// (1.15.0) the other panes' word on each closed candle for the Volume read's overall call: lsTurn's TurnPane\vread-<MKT>-<spb>.txt and lsRevRead's
+// RevRead\bsv-<MKT>-<spb>.txt, looked at with the BookFlow record (every 10 s) and re-read only when a file changed. Missing files = no word (the
+// title then comes from this pane alone).
+static void vrOthers(VRState& S) {
+    if (S.E.mode != vrr::VOL) return;
+    const std::string d = vrFlex(); if (d.empty() || S.spb <= 0) return;
+    const std::string keys[2] = { S.mkt, mkey::norm(S.mkt) };
+    for (int f = 0; f < 2; ++f) {
+        std::string path, txt; struct stat st; bool got = false;
+        for (int k = 0; k < 2 && !got; ++k) { if (k == 1 && keys[1] == keys[0]) break;
+            path = d + (f == 0 ? VR_SEP "TurnPane" VR_SEP "vread-" : VR_SEP "RevRead" VR_SEP "bsv-") + keys[k] + "-" + std::to_string(S.spb) + ".txt";
+            if (stat(path.c_str(), &st) == 0 && st.st_size <= 2 * 1024 * 1024) got = true; }
+        std::string& sig = f == 0 ? S.tvSig : S.bsSig;
+        if (!got) { if (!sig.empty()) { sig.clear(); if (f == 0) { S.E.tv.clear(); S.E.tvRows = -1; } else { S.E.bsv.clear(); S.E.bsvRows = -1; } } continue; }
+        const std::string sg = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sg == sig) continue;
+        if (!vrSlurp(path, 2 * 1024 * 1024, txt)) continue;
+        bool ok = false;
+        for (int k = 0; k < 2 && !ok; ++k) { if (k == 1 && keys[1] == keys[0]) break;
+            if (f == 0) { std::map<long long, tvr::Row> m; if (tvr::parse(txt, keys[k], S.spb, m)) { S.E.tv.swap(m); S.E.tvRows = (int)S.E.tv.size(); ok = true; } }
+            else { std::map<long long, std::pair<int, int> > m; if (bsr::parseBsv(txt, keys[k], S.spb, m)) { S.E.bsv.swap(m); S.E.bsvRows = (int)S.E.bsv.size(); ok = true; } } }
+        if (ok) sig = sg;   // a torn / wrong file: tried again next time
+    }
 }
 void VolRead::signals(VRState& S, long long now) {
     S.E.hlOn = true;                                     // (1.3.0) both panes
@@ -320,6 +346,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA Volume Read v1.4.0 - (1.4.0: the read right of the last candle - verdict, candle, two behaviour lines and the numbers, for the candle under the mouse; it looks inside the candle through the Book Flow record) its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = the break / sweep candles the price chart marks, Ct = a counter bar bigger than every bar since the Cob origin, Cx = climactic volume, exactly on the candles the price chart marks Cx; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.14.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.15.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

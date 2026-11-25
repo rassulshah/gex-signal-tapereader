@@ -111,7 +111,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.30.0"   // (0.30.0, Rassul 2026-11-24 20:46-20:54 CT "add the question each answers to the read", "make the update for magnitude also so everything is covered", "go"): the buy / sell bars' DARK part = lots from big orders (S20+, OrderFlowFeed 1.18.0 Rec.bigC); the read's big-order line (BsRead 1.1.0) and a grey column with each line's volume-model question
+#define RVS_VERSION "0.31.0"   // (0.31.0, Rassul 2026-11-24 21:23-22:39 CT "i dont want repetitive information in the read", "everything else is a go" on reads-conclude-mockup.html v30): the buy / sell read concludes (BsRead 2.0.0) - who is in control, delta against price (trapped), strong side + delta flip, drying up
+// was "0.30.0"   // (0.30.0, Rassul 2026-11-24 20:46-20:54 CT "add the question each answers to the read", "make the update for magnitude also so everything is covered", "go"): the buy / sell bars' DARK part = lots from big orders (S20+, OrderFlowFeed 1.18.0 Rec.bigC); the read's big-order line (BsRead 1.1.0) and a grey column with each line's volume-model question
 // was #define RVS_VERSION "0.29.0"   // (0.29.0, Rassul 2026-11-24 19:31-19:44 CT "should this be updated to buy and sell volume instead", "i would also hide the book flow", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) the pane: Book Flow hidden, the delta-change bars replaced by BUY / SELL VOLUME bars (both up from zero, "biggest in N" from 10), the read = who hit whom (BsRead.h); the signal strip and every mark unchanged
 // was #define RVS_VERSION "0.28.1"   // (0.28.1, Rassul 2026-11-24 16:01 CT "bullish breaks are of highs and bearish breaks are of lows") LevelMarks 1.20.0: a Bk is drawn only through a level on its own side (a high for a bullish Bk, a low for a bearish one; Open / POC either way)
 // was #define RVS_VERSION "0.28.0"   // (0.28.0, Rassul 2026-11-24 12:21 CT "use the third line which currently has the percentage .. show mockup", 12:51 "2. do the test", "3. yes"; tst-line3-mockup.html) LevelMarks 1.19.0 / WyMarks 2.8.0 / WyRead 1.11.0 / RevReadLogic 0.17.0 / lsTurn 1.6.0: the Tst badge's 3rd line = A+E / E / A! / blank (absorption and exhaustion at the Tst pivot) instead of the retrace %, decided once and kept in RevRead\\tstl3-<MKT>-<spb>.txt; the Abs badge's P line always shown once known
@@ -127,7 +128,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.30.0");
+    p->setVersion("0.31.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -303,6 +304,7 @@ public:
         long long parMs = -100000; long long parSig = -2; int parKeys = 0; int pbBits = 0; long long pbMs = -100000;
         long long drawn = 0; std::string lastRead;
         long long wySig = -1; wyr::Out wy; int wyBars = 0;
+        std::map<long long, std::pair<int, int> > bsv; bool bsvDirty = false; long long bsvMs = -1; std::string bsvKey;   // (0.31.0) the buy / sell verdict + trapped side of each closed candle, for the Volume read's overall call (RevRead\\bsv-<MKT>-<spb>.txt)
         wyr::Out wyMore; std::map<long long, std::vector<wyr::SMk> > wyBC;   // (0.21.0) T / P / X of the session (WyRead 1.8.0 more(); drawn per showMore) and the B / C strip letters (the Bk / Cx candle marks)
         std::pair<long long, int> cxLive = std::make_pair(0LL, 0);   // (0.25.0) the live Cx? of the running leg (LevelMarks liveCx): stamp, side
         std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::vector<lvm::SMark> > lvSeq; std::map<long long, lvm::AbsMk> absMk;   /* (0.27.0) the Abs badges (LevelMarks absMarks) */ std::map<long long, std::pair<int, int> > teq; std::string teqSig; std::map<long long, std::string> tl3; bool tl3Loaded = false, tl3Dirty = false; std::string tl3Path;   /* (0.28.0) lsTurn's Ex? per candle + the Tst line-3 decisions */   /* (0.20.0) FT / Tst / Rev after a Bk */ std::map<long long, std::pair<std::string, long long> > iLv; std::map<long long, std::string> iSt; std::map<long long, int> iSw;   /* (0.21.2) the I's under a Sw (stamp -> dir): written flagged, not drawn */   /* (0.19.2) the I's strength */ std::vector<std::pair<long long, std::string> > lvKey;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
@@ -1074,15 +1076,33 @@ public:
             if (RV_DRAW_BOOKFLOW) fo = cbr::toPlain(cb, cbr::read(cb));
             else {   // (0.29.0) THE BUY / SELL READ (BsRead.h): who hit whom on the candle under the mouse (else the last closed one), from IRT's volume at price
                 auto pk = [&](int i) -> const rvs::Poc* { if (i < 0 || i >= (int)count) return nullptr; const auto it = e.ps.poc.find((long long)times[i]); return it != e.ps.poc.end() && it->second.ok ? &it->second : nullptr; };
-                bsr::In bi; const rvs::Poc* p0 = pk(cbBar);
-                if (p0) { bi.ok = true; bi.buy = p0->buy; bi.sell = p0->sell; bi.nB = p0->bbv; bi.nS = p0->bsv;
+                const auto buildIn = [&](int cbBar) { bsr::In bi; const rvs::Poc* p0 = pk(cbBar);
+                if (p0) { bi.ok = true; bi.buy = p0->buy; bi.sell = p0->sell; bi.nB = p0->bbv; bi.nS = p0->bsv; bi.open = p0->open; bi.close = p0->close; bi.hi = p0->hi; bi.lo = p0->lo;   /* (0.31.0) + the candle and the 40 before for the conclusions */
+                    for (int k = cbBar - 1; k >= 0 && cbBar - k <= 40; --k) { const rvs::Poc* a = pk(k); bsr::Prev q; if (a && a->hi > 0 && a->lo > 0) { q.ok = true; q.hi = a->hi; q.lo = a->lo; q.close = a->close; q.buy = a->buy; q.sell = a->sell; } bi.prev.push_back(q); if (!q.ok) break; }
                     if (const rvs::Poc* q0 = pk(cbBar - 1)) { bi.prevOk = true; bi.prevDelta = q0->buy - q0->sell; }
                     for (int k = cbBar - 1; k >= 0 && (int)bi.pb.size() < bsr::NORM_N && cbBar - k <= 40; --k) { const rvs::Poc* a = pk(k); if (!a) continue; bi.pb.push_back(a->buy); bi.ps.push_back(a->sell);
-                        if (const rvs::Poc* b2 = pk(k - 1)) bi.pswing.push_back(std::llabs((a->buy - a->sell) - (b2->buy - b2->sell))); } }
+                        if (const rvs::Poc* b2 = pk(k - 1)) bi.pswing.push_back(std::llabs((a->buy - a->sell) - (b2->buy - b2->sell))); } } return bi; };
+                bsr::In bi = buildIn(cbBar);
                 {   // (0.30.0) the big orders' share, from the order feed's record of this candle
                     const auto ri = S.ser.bars.find((long long)times[cbBar]);
                     if (ri != S.ser.bars.end() && ri->second.ok) { const off::Rec& rr = ri->second.r; bi.bigOk = rr.bigOk; bi.bigBuy = rr.bigC[off::ASK]; bi.bigSell = rr.bigC[off::BID];
                         bi.allBuy = rr.aggrC[off::ASK]; bi.allSell = rr.aggrC[off::BID]; bi.thr = rr.thrAggr; } }
+                {   // (0.31.0) every closed candle in view gets its verdict once (the Volume read's overall call): +1 / -1 / 0 and the trapped side (+1 buyers, -1 sellers)
+                    const std::string key = mk + "|" + std::to_string((long long)S.spb); if (e.bsvKey != key) { e.bsv.clear(); e.bsvKey = key; e.bsvMs = -1; }
+                    int added = 0; for (int i = (int)count - 2; i >= 0 && i >= (int)count - 200 && added < 400; --i) { const long long t = (long long)times[i]; if (e.bsv.count(t) || !pk(i) || !pk(i - 20)) continue;
+                        const bsr::Out q = bsr::read(buildIn(i)); if (!q.ok) continue; int trap = 0; for (const std::string& x : q.ex) { if (x.find("buyers trapped") != std::string::npos) trap = 1; if (x.find("sellers trapped") != std::string::npos) trap = -1; }
+                        e.bsv[t] = std::make_pair(q.verdict, trap); e.bsvDirty = true; ++added; }
+                    while (e.bsv.size() > 900) e.bsv.erase(e.bsv.begin());
+                    const long long nowB = rvh::PocStore::nowMs();
+                    if (e.bsvDirty && (e.bsvMs < 0 || nowB - e.bsvMs >= 10000 || nowB < e.bsvMs)) { e.bsvMs = nowB; const std::string flex = rvh::flexDir();
+                        if (!flex.empty() && !mk.empty()) { std::string t = "BSV|1|" + mk + "|" + std::to_string((long long)S.spb) + "|" + RVS_VERSION + "\n"; for (const auto& kv : e.bsv) t += std::to_string(kv.first) + "|" + std::to_string(kv.second.first) + "|" + std::to_string(kv.second.second) + "\n";
+                            const std::string path = rvh::recDir(flex) + "\\bsv-" + mk + "-" + std::to_string((long long)S.spb) + ".txt", tmp = path + ".tmp"; bool ok = false; { std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc); if (f) { f << t; f.flush(); ok = f.good(); } }
+#if defined(_WIN32)
+                            if (ok && !::MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) { std::remove(tmp.c_str()); ok = false; }
+#else
+                            if (ok && std::rename(tmp.c_str(), path.c_str()) != 0) { std::remove(tmp.c_str()); ok = false; }
+#endif
+                            if (ok) e.bsvDirty = false; } } }
                 const bsr::Out bo = bsr::read(bi); foHeadQ = bo.headQ; foExQ = bo.exQ; fo.verdict = bo.verdict; fo.head = bo.ok ? bo.head : std::string("No volume at price for this candle"); fo.ex = bo.ex; storySent.clear(); }   // (0.16.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no table
             {   // (0.17.0) a lettered candle reads its Wyckoff step: the candle under the mouse, or (no mouse) the newest letter of the last 3 candles
                 int wb = -1; const int hbW = S.hov.hover.bar;

@@ -194,8 +194,8 @@ REM (2026-11-18 17:11 CT Rassul "go") lsRevReadMarks 0.18.0 - the Reversal Read 
 call :one RevReadMarks lsRevReadMarks RevRead.cpp RevReadLogic.h StepTrendLogic.h SignalBoard.h BannerBoard.h NearLevels.h MarketKey.h HostSlot.h PerfGuard.h RevReadSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h CombRead.h PlainRead.h WyRead.h WyMarks.h LevelMarks.h EventCalLogic.h
 REM (2026-11-15) lsVolRead / lsRangeRead 1.0.0 (Rassul 2026-11-14 21:58 CT "a little reader for the volume and range ... BVG, BVR, BV ... BVMax", 2026-11-15 17:06 "go build"): two panes -
 REM   the bars' volume / range, the Max count over closed bars that are the biggest in 20+ bars, and a read box (Max, BV, BVG, BVR). VolRangeLogic.h; RangeRead.cpp = VolRead.cpp + VR_RANGE. No settings.
-call :one VolRead lsVolRead VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h PerfGuard.h BigTier.h
-call :one RangeRead lsRangeRead VolRead.cpp VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h PerfGuard.h BigTier.h
+call :one VolRead lsVolRead VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h PerfGuard.h BigTier.h TurnVRead.h BsRead.h
+call :one RangeRead lsRangeRead VolRead.cpp VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h PerfGuard.h BigTier.h TurnVRead.h BsRead.h
 REM (2026-11-15) lsHtfSR 1.0.0 (Rassul 20:33 CT "did you build any indicator for s1 s2 r1 and r2 for the hourly", 20:55 "just build them"): the standing 3-hour R1 / R2 / S1 / S2
 REM   as stepped lines on the price pane (HtfSr.h, shared with lsLimitProfile 2.66.0). No settings.
 call :one HtfSR lsHtfSR HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
@@ -211,7 +211,7 @@ call :one MorrisRSI lsMorrisRSI MorrisRsiLogic.h MarketKey.h HostSlot.h Settings
 REM (2026-11-21) lsEffortRewardPane 0.2.0 (Rassul "build it. make sure you do an independed code review and no memory leasks etc... then build"): Effort Reward v0.2 pane - green up / red down per-level effort at the top / bottom 25%% of each candle + the sweep read strip (strict absorption lots, NO / LIGHT / MODERATE / HEAVY, hidden lots, turn pill); params lsFlexLevels\LRA-EffortReward-MKT.csv (nightly lra.effort_reward)
 call :one EffortRewardPane lsEffortRewardPane ErPaneLogic.h MarketKey.h HostSlot.h PerfGuard.h
 REM (2026-11-22) lsTurn 1.0.0 (Rassul "Let's rename the indicator to Turn since it describes the process of a turn", "build"): Turn v1.0 pane - Stop Run / Effort / Exhaustion / Answer at a swept key level and the read strip (STAND ASIDE / WAIT / BEST ODDS ? / UNCLEAR); an upgrade of lsEffortRewardPane (left as it is); params lsFlexLevels\LRA-TurnPane-MKT.csv (nightly lra.turn_pane)
-call :one Turn lsTurn TurnLogic.h MarketKey.h HostSlot.h PerfGuard.h BigTier.h
+call :one Turn lsTurn TurnLogic.h MarketKey.h HostSlot.h PerfGuard.h BigTier.h TurnVRead.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
 REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
 rem (2026-11-01 21:29 CT, Rassul "get rid of the defense lines" - retired) call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h MarkParams.h PerfGuard.h ColumnBoard.h

@@ -147,7 +147,7 @@ int main() {
         CHECK(ab.find("ABS|1 Abs lines in the wy file|1 decided") == 0);
         // (1.7.0) the compact read: the last closed candle (no mouse) - its time, then quiet or who won + Attack + Absorbed / Not absorbed; never Result / Next / Ex
         CHECK(rd.find("READ|") == 0 && rd.find("Result:") == std::string::npos && rd.find("Next:") == std::string::npos && rd.find("Ex:") == std::string::npos);
-        CHECK(rd.find("Quiet - no push into either end") != std::string::npos || (rd.find("Attack: ") != std::string::npos && (rd.find("Absorbed: ") != std::string::npos || rd.find("Not absorbed: ") != std::string::npos)));
+        CHECK(rd.find("No absorption or initiative at the ends") != std::string::npos || ((rd.find("Passive defense won") != std::string::npos || rd.find("Aggressor won") != std::string::npos || rd.find("Initiative") != std::string::npos) && rd.find("Attack: ") == std::string::npos && rd.find(" ?") == std::string::npos));   // (1.11.0) the read concludes
         CHECK(tb.compare(0, 13, "TAB|1|ES|180|") == 0 && tb.find("\n" + std::to_string(KA) + "|1|") != std::string::npos && tb.find("\n" + std::to_string(KA) + "|1|-1|") == std::string::npos);
         // (1.6.0) every candle's Ex?: the turnexq file has the Abs candle, and its sellers' flag = the badge's Ex? (the same rule, the same candle)
         const std::string te = get(P("RevRead\\turnexq-ES-180.txt")); const std::string te1 = lineOf(st, "TEQ|"); std::cout << "(1.6.0) " << te1 << "\n";
@@ -156,7 +156,12 @@ int main() {
           if (a != std::string::npos && b != std::string::npos) { const std::string la = tb.substr(a + 1, tb.find('\n', a + 1) - a - 1), lb = te.substr(b + 1, te.find('\n', b + 1) - b - 1);
             std::cout << "(1.6.0) abs " << la << " / exq " << lb << "\n"; CHECK(la.substr(la.size() - 1) == lb.substr(lb.find('|') + 1, 1)); } }
         std::map<long long, std::pair<int, int> > tq; CHECK(turn::parseTeqFile(te, "ES", 180, tq) && !tq.empty() && !turn::parseTeqFile(te, "NQ", 180, tq)); }
-    CHECK(st.find("VERSION|1.10.0") != std::string::npos && std::string(TURN_VERSION) == "1.10.0" && std::string(turn::VERSION) == "1.10.0");
+    {   // (1.11.0) the Volume read's file: kinds of the closed candles drawn + the order numbers of the candles the feed saw whole
+        const std::string vf = get(P("TurnPane\\vread-ES-180.txt")); std::map<long long, tvr::Row> vm; const bool ok = tvr::parse(vf, "ES", 180, vm);
+        int kinds = 0, nums = 0, lm = 0, ll = 0, sl = 0, pl = 0; for (const auto& kv : vm) { if (kv.second.kind != -9) ++kinds; if (kv.second.lm[0] >= 0) { ++nums; lm += (int)(kv.second.lm[0] + kv.second.lm[1]); } if (kv.second.ll[0] >= 0) ll += (int)(kv.second.ll[0] + kv.second.ll[1]); if (kv.second.slN[0] + kv.second.slN[1] > 0) ++sl; if (kv.second.pullN[0] > 0) ++pl; }
+        std::cout << "(1.11.0) vread: " << vm.size() << " candles, kinds " << kinds << ", with order numbers " << nums << " (large market " << lm << ", large limit " << ll << ", sliced candles " << sl << ", pull normal known " << pl << ")\n";
+        CHECK(ok && kinds >= 10 && lineOf(st, "TOVOL|").find("fails 0") != std::string::npos); CHECK(!tvr::parse(vf, "NQ", 180, vm)); }
+    CHECK(st.find("VERSION|1.11.0") != std::string::npos && std::string(TURN_VERSION) == "1.11.0" && std::string(turn::VERSION) == "1.11.0");
     CHECK(st.find("SHOW|no display file (the defaults)|absorption stop exhaustion initiative read|absorption coloured from 2.0\n") != std::string::npos);
     CHECK(rec0.find("TRN|1|ES|180\n") == 0 && countLines(rec0, "T|") == 2);                                 // the record format is unchanged: the two sweeps, decided once
     // ---- nothing says Effort / Answer; the strip of the last sweep names the four pieces ----
@@ -225,18 +230,18 @@ int main() {
         if (ia >= 0) { mouseAt(x, es.H, ia, es.H.barX0 + (int)ia * es.H.barW, 250); cycle(x, es.H); cycle(x, es.H);
             const std::string r1 = lineOf(get(P("TurnPane\\status-ES-180.txt")), "READ|"); std::cout << "(1.7.0) hover Abs candle: " << r1 << "\n";
             CHECK(r1.find("Result:") == std::string::npos && r1.find("Next:") == std::string::npos);
-            const bool q = r1.find("Quiet - no push") != std::string::npos;
-            CHECK(q || r1.find("Initiative: ") != std::string::npos || (r1.find("Attack: ") != std::string::npos && r1.find("no order feed") == std::string::npos));
-            if (r1.find("sellers absorbed at the bottom") != std::string::npos || r1.find("sellers got through the bottom") != std::string::npos) CHECK(r1.find("(ONL 7105.00)") != std::string::npos); }
+            const bool q = r1.find("No absorption or initiative at the ends") != std::string::npos;
+            CHECK(q || ((r1.find("Initiative") != std::string::npos || r1.find(" won") != std::string::npos) && r1.find("no order feed") == std::string::npos && r1.find("Price: ") == std::string::npos));
+            if (r1.find("sellers absorbed at the bottom") != std::string::npos || r1.find("sellers got through the bottom") != std::string::npos) CHECK(r1.find(" at ONL - ") != std::string::npos); }
     }
     {   // (1.8.0) the mouse on a candle whose Initiative is on: the read is the Initiative read (Initiative / How / Against), its colour the winner's
         int seen = 0;
         for (long q : iniIdx) { mouseAt(x, es.H, q, es.H.barX0 + (int)q * es.H.barW, 250); cycle(x, es.H); cycle(x, es.H);
             const std::string r1 = lineOf(get(P("TurnPane\\status-ES-180.txt")), "READ|"); std::cout << "(1.8.0) hover Initiative candle: " << r1 << "\n";
-            CHECK(r1.find("Initiative - ") != std::string::npos && r1.find("Initiative: ") != std::string::npos && r1.find("How: ") != std::string::npos && r1.find("Against: ") != std::string::npos);
-            CHECK(r1.find(" won the ") != std::string::npos); CHECK(r1.find("Price: ") != std::string::npos);
-            { int q3 = 0, q5 = 0, q6 = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "text") { if (d.text == "3 Who won at the end?" || d.text == "3 Who won?") ++q3; if (d.text == "5 How?") ++q5; if (d.text == "6 Did price agree?" || d.text == "6 Agreed?") ++q6; }
-              std::cout << "(1.10.0) question tags drawn: 3 x" << q3 << " 5 x" << q5 << " 6 x" << q6 << "\n"; CHECK(q3 >= 1 && q5 >= 1 && q6 >= 1); }   // (1.10.0) 3 Who won / 5 How / 6 Did price agree
+            CHECK(r1.find("Initiative") != std::string::npos && r1.find("Initiative: ") == std::string::npos && r1.find("How: ") == std::string::npos && r1.find("Against: ") == std::string::npos && r1.find(" ?") == std::string::npos);
+            CHECK(r1.find(" won the ") != std::string::npos); CHECK(r1.find("Price: ") == std::string::npos && r1.find("Did price agree") == std::string::npos);
+            { int q3 = 0, q5 = 0, q6 = 0; for (const mock::Draw& d : es.H.draws) if (d.type == "text") { if (d.text == "3 Who won at the end?" || d.text == "3 Who won?") ++q3; if (d.text == "5 Tactics?") ++q5; if (d.text == "6 Did price agree?" || d.text == "6 Agreed?") ++q6; }
+              std::cout << "(1.10.0) question tags drawn: 3 x" << q3 << " 5 x" << q5 << " 6 x" << q6 << "\n"; CHECK(q3 >= 1 && q6 == 0); }   // (1.11.0) no Price line; 5 Tactics? only when a tactic shows   // (1.10.0) 3 Who won / 5 How / 6 Did price agree
             ++seen; noOverlap(es.H); }   // (1.9.0) the Price line
         CHECK(seen >= 1); }
     turn_test_window = nullptr; cycle(x, es.H); cycle(x, es.H); CHECK(stripText(es.H) == s0 && barsOnly(es.H) == bars0);

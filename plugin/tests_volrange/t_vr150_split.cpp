@@ -6,7 +6,7 @@ static int P = 0, Fl = 0;
 // (1.6.0, 2026-11-17 21:17 the plain read) the verdict line may start with the candle time ("9:12 PM ", "Now ") and reads "Buyers ..." / "Sellers ..." / "Mixed" / "Quiet"
 static bool isTime(const std::string& t) { return t.size() >= 4 && (t.rfind("Now", 0) == 0 || (t.find("AM") != std::string::npos || t.find("PM") != std::string::npos)) && t.size() <= 10; }
 static bool isHead(std::string t) { const size_t m = t.find("M "); if (t.rfind("Now ", 0) == 0) t = t.substr(4); else if (m != std::string::npos && m <= 6 && (t[m - 1] == 'A' || t[m - 1] == 'P')) t = t.substr(m + 2);
-    return t.rfind("Buyers", 0) == 0 || t.rfind("Sellers", 0) == 0 || t.rfind("Bullish", 0) == 0 || t.rfind("Bearish", 0) == 0 || t.rfind("Mixed", 0) == 0 || t.rfind("Quiet", 0) == 0 || t.rfind("Heavy", 0) == 0 || t.rfind("Above normal", 0) == 0 || t.rfind("Normal", 0) == 0 || t.rfind("Below normal", 0) == 0 || t.rfind("Light", 0) == 0 || t.rfind("Not rated", 0) == 0; }   // (1.12.0) the Volume read heads
+    return t.rfind("Buyers", 0) == 0 || t.rfind("Sellers", 0) == 0 || t.rfind("Bullish", 0) == 0 || t.rfind("Bearish", 0) == 0 || t.rfind("Mixed", 0) == 0 || t.rfind("Quiet", 0) == 0 || t.rfind("Heavy", 0) == 0 || t.rfind("Above normal", 0) == 0 || t.rfind("Normal", 0) == 0 || t.rfind("Below normal", 0) == 0 || t.rfind("Light", 0) == 0 || t.rfind("Not rated", 0) == 0 || t.rfind("Strong", 0) == 0 || t.rfind("Neutral", 0) == 0; }   // (1.15.0) + the overall call heads   // (1.12.0) the Volume read heads
 int main() {
     // the wrap helper
     auto tw = [](const std::string& s) { return (int)s.size() * 6; };
@@ -45,7 +45,7 @@ int main() {
                 if (p.text == (mode ? "Range" : "Volume") && p.x0 > 642) dataX = std::min(dataX, p.x0);
                 if (p.x0 < v.l || p.x1 > v.r || p.y0 < v.t || p.y1 > v.b) inside = false; }
             CHECK(head && !cand && !oldBox && inside, nm << " pick " << pick << ": the verdict line is drawn, no old Candle: line or box, inside the pane");
-            CHECK(sentences >= 1, nm << " pick " << pick << ": at least one sentence under the verdict (" << sentences << ")");
+            CHECK(sentences >= (mode ? 1 : 0), nm << " pick " << pick << ": at least one sentence under the verdict (" << sentences << ")");
             CHECK(leftR <= 642 + spt::LEFT_MAX, nm << " pick " << pick << ": the sentences stay inside the left column (" << leftR << ")");
             { bool num = false; for (const vrr::Prim& p : Pm) if (!p.fill && p.x0 > 642 + 100 && (p.text == "BVMax" || p.text == "BRMax") && p.col == vrr::C_LABEL) num = true;
               CHECK(dataX == (1 << 30) && num, nm << " pick " << pick << ": (1.9.0) the coloured numbers column right of the read, no old numbers table (" << dataX << ")"); }

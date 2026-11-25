@@ -48,5 +48,5 @@ int main() {
     Strip s1 = stripOf(rd, false, true, "", Abs(), ABS_FROM10, &i); CHECK(s1.flat.find("Heavy Initiative 6.8x") != std::string::npos && s1.flat.find("2/3") == std::string::npos);
     Ini q = i; q.x1000 = 1200; Strip s2 = stripOf(rd, false, false, "", Abs(), ABS_FROM10, &q); CHECK(s2.flat.find("Light Initiative") != std::string::npos);
     Strip s3 = stripOf(rd, false, false, "", Abs(), ABS_FROM10, &j); CHECK(s3.flat.find("No Initiative") != std::string::npos);
-    CHECK(std::string(VERSION) == "1.10.0");
+    CHECK(std::string(VERSION) == "1.11.0");
     std::printf("t_ini180: %d checks, %d fails\n", checks, fails); return fails ? 1 : 0; }
