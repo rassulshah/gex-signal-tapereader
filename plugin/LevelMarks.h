@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.22.0";   // (1.22.0, Rassul 2026-11-25 11:39 CT "so lets update the rule to current session" - GC 11:21 AM AsiaLO 3511.3: untouched in the day session, traded only before the open, so no Sw): a Sw's "nobody traded through it" check (and its one attempt) now looks back only to the start of the CURRENT session part - the RTH open candle for a candle in the day session (open .. 5 PM), the session start (5 PM) otherwise; Bk / Cx / AR / Tst / Abs unchanged
+static const char* const VERSION = "1.23.0";   // (1.23.0, Rassul 2026-11-25 13:11 CT "i want to update sweeps so bearish sweeps use highs and bullish sweeps use lows", 13:12 "correct .. go"): a bearish Sw is named only by a HIGH level (ONH LonHI AsiaHI PDH PFH PWH CWH R1 R2), a bullish Sw only by a LOW level (ONL LonLO AsiaLO PDL PFL PWL CWL S1 S2); a sweep candle that crossed no major level of its side is no Sw (it can still be its Bk / Cx). GC 11-25 11:24 AM (bearish, up through AsiaLO) is no longer a Sw
+// was static const char* const VERSION = "1.22.0";   // (1.22.0, Rassul 2026-11-25 11:39 CT "so lets update the rule to current session" - GC 11:21 AM AsiaLO 3511.3: untouched in the day session, traded only before the open, so no Sw): a Sw's "nobody traded through it" check (and its one attempt) now looks back only to the start of the CURRENT session part - the RTH open candle for a candle in the day session (open .. 5 PM), the session start (5 PM) otherwise; Bk / Cx / AR / Tst / Abs unchanged
 // was static const char* const VERSION = "1.21.0";   // (1.21.0, Rassul 2026-11-25 08:39-08:49 CT "the BK is not being displayed for 3h breaks of highs and lows", "the volume requirement of 5 needs to be changed, volume just needs to be increasing", "or the range needs to be increasing", "for all levels , not just minor or major", "go" - GC 11-25 ~8:27 red candle that closed below the 3-hour low): (a) the last completed 3-HOUR bar's high / low ( 3-hour bars from 5 PM CT as his 180-minute chart) join the Bk levels as 3HrH / 3HrL (Bk only, like 4hH / 4hL - kept; not "3hH": that name is already the high of the clock hour 3 hours back); (b) THE BK CANDLE RULE for every level = its volume OR its range bigger than the candle before (was: range >= the prior AND range or volume up; hour / pivot / 4h levels also needed the biggest volume in 5+ - gone)
 // was static const char* const VERSION = "1.20.0";   // (1.20.0, Rassul 2026-11-24 16:01 CT "the bk here says it is a bullish break of a higher low ? bullish breaks are of highs and bearish breaks are of lows" - GC 13:15 Bk 2hL): a bullish Bk names / counts only a HIGH level (or a two-sided one: Open, POC, VWAP), a bearish Bk only a LOW one (levelSide)
 // was static const char* const VERSION = "1.19.0";   // (1.19.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): tstL3() - the Tst badge's 3rd line A+E / E / A! / blank instead of the retrace % (research TST-REVERSE 2026-11-24, tst.py / tst2.py ported line by line). Everything else unchanged
@@ -187,6 +188,13 @@ struct Blk4 {
 // (1.14.0, "for SW signal it needs to cross a major level like a session or pd pf  weekly or 3h S1 S2 , R1 R2 level") the levels that may NAME a Sw:
 // session (0), prior day (10), prior full session (20), weekly (40), the 3h S / R (45). Not VAH / VAL (30), not the pre-open hour (50), no hour level.
 inline bool swMajor(const std::string& name, int hb) { if (hb != 0) return false; const int p = pri(name, 0); return p == 0 || p == 10 || p == 20 || p == 40 || p == 45; }
+inline int levelSide(const std::string& name, bool hourHigh, int hb);
+// (1.23.0, Rassul 13:11 CT "bearish sweeps use highs and bullish sweeps use lows") a level may name a Sw of direction dir (+1 bullish / -1 bearish) only
+// when it is a low (bullish) / a high (bearish); a shared name ("ONL/LonLO") counts when any of its names is of that side
+inline bool swSideOk(const std::string& name, int dir) {
+    std::string t; for (size_t k = 0; k <= name.size(); ++k) { const char c = k < name.size() ? name[k] : '/';
+        if (c == '/') { if (!t.empty() && levelSide(t, false, 0) == (dir > 0 ? -1 : 1)) return true; t.clear(); } else t += c; }
+    return false; }
 // the levels at candle i: the key / volume levels (from the session start) + the high / low of the 3 full clock hours before i's hour
 inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std::vector<wyr::Lvl>& key, const std::vector<H3>* h3 = nullptr) {
     std::vector<Lv> v; for (const wyr::Lvl& z : key) { if (z.px <= 0 || pri(z.name, 0) < 0) continue;   // MenthorQ / gamma / VWAP never make or label a mark
@@ -337,7 +345,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             if (!have) { Cand c; c.px = z.px; c.name = z.name; c.hb = 0; c.high = d < 0; kv.second.second.push_back(c); } } }
     // (1.14.0) a sweep candle that crossed NO major level is not a Sw any more: it is taken out HERE, before the Bk and Cx steps, so the candle can
     // still be the Bk / Cx it is (GC 2026-11-23 7:57 AM: a sweep of the pre-open hour's low that closed up through LonHI, AsiaHI, ONH and PFH - a Bk)
-    for (auto it = raw.begin(); it != raw.end(); ) { bool mj = false; if (it->second.first == 'S') { for (const Cand& z : it->second.second) if (swMajor(z.name, z.hb)) mj = true; }
+    for (auto it = raw.begin(); it != raw.end(); ) { bool mj = false; if (it->second.first == 'S') { for (const Cand& z : it->second.second) if (swMajor(z.name, z.hb) && swSideOk(z.name, rawDir[it->first])) mj = true; }   // (1.23.0) a major level OF ITS SIDE
         if (it->second.first == 'S' && !mj) { rawDir.erase(it->first); rawA.erase(it->first); it = raw.erase(it); } else ++it; }
     // Bk: closes through a level
     std::set<int> weakBk;   // (1.17.0) a Bk crossed ONLY hourly pivots / 4-hour levels: a Cx may still take its candle
@@ -388,7 +396,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             for (int k = it->second.first + 1; k < i; ++k) if (std::fabs((double)(B[(size_t)k].c - px)) >= atr[(size_t)k] && atr[(size_t)k] > 0) return false;   // went 1+ ATR away and came back
             return true; };
         if (m.code == 'S') {   // (1.9.0) the best level that is not a repeat: a sweep is never dropped because its best level was swept earlier (it names the next one)
-            std::vector<Cand> ord; for (const Cand& z : cs) if (swMajor(z.name, z.hb)) ord.push_back(z);   // (1.14.0) only a MAJOR level names a Sw (was: any level of the list, pri >= 0); none crossed = no Sw
+            std::vector<Cand> ord; for (const Cand& z : cs) if (swMajor(z.name, z.hb) && swSideOk(z.name, m.dir)) ord.push_back(z);   /* (1.23.0) of its side */   // (1.14.0) only a MAJOR level names a Sw (was: any level of the list, pri >= 0); none crossed = no Sw
             std::stable_sort(ord.begin(), ord.end(), [](const Cand& x, const Cand& y) { return pri(x.name, x.hb) < pri(y.name, y.hb); });
             bool got = false; for (const Cand& z : ord) { const std::string lv = shortName(z.name, z.hb, z.high); if (isRepeat(lv, z.px)) continue; m.px = z.px; m.lv = lv; got = true; break; }
             if (!got) continue;

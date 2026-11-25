@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0 = lsHodLod 2.45.0, Rassul 2026-11-25 11:41 CT "update the level line to look for potential sweep levels", 11:47 "rename to Sweep Watch also . go", mockup watch-sweep-levels-mockup.html) the Next levels are only major levels NOT yet traded through in the current session part (day = since the RTH opening candle, as LevelMarks 1.22.0; overnight = since the session start); an empty side stays empty; the badge reads "SWEEP WATCH: ..."
+static const char* const VERSION = "1.5.1";   // (1.5.1 = lsHodLod 2.45.1, Rassul 2026-11-25 13:11 CT "bearish sweeps use highs and bullish sweeps use lows", LevelMarks 1.23.0) SWEEP WATCH names only highs above price and only lows below it
+// was "1.5.0";   // (1.5.0 = lsHodLod 2.45.0, Rassul 2026-11-25 11:41 CT "update the level line to look for potential sweep levels", 11:47 "rename to Sweep Watch also . go", mockup watch-sweep-levels-mockup.html) the Next levels are only major levels NOT yet traded through in the current session part (day = since the RTH opening candle, as LevelMarks 1.22.0; overnight = since the session start); an empty side stays empty; the badge reads "SWEEP WATCH: ..."
 // was "1.4.0";   // (1.4.0 = lsHodLod 2.44.0, Rassul 2026-11-23 14:09 CT GC screenshot, the line read "WATCH: PHL .. 2hL" with PFH 3638.1 / ONH 3636.4 right under price: "why isnt the level line catching the most obvious levels"; 14:15 "and for levels, you are also using the same levels as SW right" - yes; "build") the line names MAJOR levels only, the Sw list of LevelMarks 1.14.0 (major(): session ON / London / Asia, PD, PF, weekly, the 3-hour S / R R1 R2 S1 S2 the host hands in as keys): the prior hours' highs / lows (PHH / PHL, 2h, 3h) and VAH / VAL are no longer WATCH / Next levels, and a Bk / Sw mark on a level that is not major gives no BREAK / SWEEP badge, no BkTst state and no Last Bk part (its badge stays on the candle)
 // was "1.3.1";   // (1.3.1 = lsHodLod 2.39.1, Rassul 2026-11-20 09:32 CT "fix the arrows because they are overlapping") every arrow owns a slot ASP + ARW + ASP (4 | 9 px ink incl. the 2-px pen | 4) in the measured width; text items carry their measured box [l, r] and the host draws them centred in it (IRT's left-justified text sits ~4 px right of rect.left and ran into the arrows)
 // was "1.3.0";   // (1.3.0 = lsHodLod 2.38.0, Rassul 2026-11-20 06:04 CT "ok lets do this", mockup now-box-levels-mockup.html gold PROPOSED 06:02 rows) ONE short liquidity phrase for the level the badge names, from lsLimitProfile 2.68.0's DealerProfile\levelliq-<MKT>-<spb>.txt - only the states that PASSED its scoring (shown = 1); "Bids building" / "Offers leaving" / "Bids holding" / "Bids pulled", the label grey, the word in the defender's colour when it helps the defence (bids green, offers red) and the attacker's when it fails; a file older than 2 min or no state = no phrase; on a narrow pane the phrase drops FIRST (before Next / Last Bk)
@@ -284,7 +285,19 @@ inline Out compute(const std::vector<Bar>& B, const std::vector<Mark>& marksIn, 
     // (1.5.0) sweep candidates: a level a closed candle of the current session part already traded through is skipped (openMin -2 = old callers: no filter)
     double hiP = -INFINITY, loP = INFINITY;
     if (openMin != -2) for (int k = partStart(B, n - 2, openMin); k <= n - 2; k++) { hiP = std::max(hiP, B[(size_t)k].h); loP = std::min(loP, B[(size_t)k].l); }
+    // (1.5.1) the side a sweep can come from: above price only a HIGH (a bearish Sw), below only a LOW (a bullish Sw)
+    auto sideOf = [](const std::string& s) {
+        if (s == "R1" || s == "R2") return 1;
+        if (s == "S1" || s == "S2") return -1;
+        const size_t L = s.size();
+        if (L >= 2 && s.compare(L - 2, 2, "HI") == 0) return 1;
+        if (L >= 2 && s.compare(L - 2, 2, "LO") == 0) return -1;
+        if (L >= 1 && s[L - 1] == 'H') return 1;
+        if (L >= 1 && s[L - 1] == 'L') return -1;
+        return 0; };
     for (const Key& kk : keys) {
+        if (openMin != -2 && kk.px > live + eps && sideOf(kk.name) != 1) continue;    // (1.5.1) above: highs only
+        if (openMin != -2 && kk.px < live - eps && sideOf(kk.name) != -1) continue;   // (1.5.1) below: lows only
         if (kk.px > live + eps && hiP > kk.px + eps) continue;   // (1.5.0) above, already traded through
         if (kk.px < live - eps && loP < kk.px - eps) continue;   // (1.5.0) below, already traded through
         if (o.tst.ok && std::fabs(kk.px - o.tst.px) <= eps) continue;   // the level being tested is already on the line

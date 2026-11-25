@@ -146,6 +146,6 @@ int main() {
         lvm::Mark m; m.code = 'C'; m.dir = -1; s.M[s.B[30].t] = m; const auto A = s.ar();
         C(A.size() == 1 && A.begin()->first == s.B[31].t && A.begin()->second.dir == -1, "mirror: a red candle bigger than the ATR, low below the Cx candle's low = AR of a high");
     }
-    C(lvm::AR_MIN == 10 && lvm::AR_BARS == 3 && std::string(lvm::VERSION) == "1.22.0", "AR_MIN 10, AR_BARS 3, LevelMarks 1.14.0");
+    C(lvm::AR_MIN == 10 && lvm::AR_BARS == 3 && std::string(lvm::VERSION) == "1.23.0", "AR_MIN 10, AR_BARS 3, LevelMarks 1.14.0");
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;
 }
