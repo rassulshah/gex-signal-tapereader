@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
         C(!M.count(T[119]), "(1.8.0) HG shape: weak red Sw after a 99+ green candle is removed (was V99+ from the attempt)");
         V[119] = 40; R[119] = 3; for (int i = 90; i < 118; ++i) G[(size_t)i] = 0; std::map<long long, lvm::Mark> M2; M2[T[119]] = sw; lvm::fillStrength(M2, T, V, R, G);
         // red candle volume 40: bigger than the 1 candle before? no (500) -> all = 0; same colour (red) none before -> counts back to the cap/look
-        C(M2.count(T[119]) && M2.at(T[119]).st.size() > 1 && M2.at(T[119]).st[0] == 'V', "(1.8.0) a strong red Sw candle stays with its own line (got " + (M2.count(T[119]) ? M2.at(T[119]).st : std::string("gone")) + ")");
+        C(!M2.count(T[119]), "(1.24.1) a red Sw candle strong only among its own colour (BV 0 - the green 500 right before it is bigger) is no Sw: the strength is BV (all candles), not BVMax");
         // iKey / I_MIN
         C(lvm::I_MIN == 20, "(1.8.0) I_MIN 20");
         C(lvm::iKey(lvm::pri("ONL", 0)) && lvm::iKey(lvm::pri("PDL", 0)) && lvm::iKey(lvm::pri("PWH", 0)) && lvm::iKey(lvm::pri("VAL", 0)), "(1.8.0) ON / PD / weekly / VA name an I");

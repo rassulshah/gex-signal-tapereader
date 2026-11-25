@@ -3,9 +3,9 @@
 // Build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined t_strength124.cpp -o t && ./t
 #include "../LevelMarks.h"
 #include <cstdio>
-static int f = 0, ok = 0; static void C(bool c, const char* m) { if (c) ++ok; else { ++f; std::printf("FAIL %s\n", m); } }
+static int f = 0, ok = 0; static void C(bool c, const std::string& m) { if (c) ++ok; else { ++f; std::printf("FAIL %s\n", m.c_str()); } }
 int main() {
-    C(std::string(lvm::VERSION) == "1.24.0", "version 1.24.0");
+    C(std::string(lvm::VERSION) == "1.24.1", "version 1.24.0");
     const int n = 40; std::vector<long long> T; std::vector<double> V, R; std::vector<char> G;
     for (int i = 0; i < n; ++i) { T.push_back(1000 + 180LL * i); V.push_back(100); R.push_back(10); G.push_back(i % 2); }
     V[25] = 500;                 // candle 25: the biggest volume in 25 candles (V25), ordinary range
@@ -22,4 +22,15 @@ int main() {
     { lvm::Mark m; m.code = 'S'; m.dir = 1; m.lv = "ALO"; std::map<long long, lvm::Mark> A; A[T[24]] = m; A[T[25]] = m; std::vector<double> V2 = V; V2[24] = 9999; V2[25] = 1;
       lvm::fillStrength(A, T, V2, R, G); C(A.count(T[24]) && !A.count(T[25]), "the candle's OWN volume decides (a big candle before it does not carry over)"); }
     C(M.count(T[31]) && M[T[31]].st.size() > 0 && M[T[31]].st[0] == 'R', "a Bk still shows its range strength");
+    {   // (1.24.1, "the vob / vot strength requires BV 20+") BV (all candles), not BVMax: a candle biggest among its own colour for 30 candles but
+        // with a bigger candle of the other colour 5 back is BV 5 -> no Sw (1.24.0 kept it as BVMax 30)
+        std::vector<long long> T2; std::vector<double> V2, R2; std::vector<char> G2;
+        for (int i = 0; i < 70; ++i) { T2.push_back(5000 + 180LL * i); V2.push_back(100); R2.push_back(10); G2.push_back(i % 2); }
+        V2[64] = 150; V2[59] = 300;   // 59 is the other colour (odd), 5 candles back
+        V2[66] = 400; V2[45] = 500;   // 66: the first bigger candle is 21 back -> BV 20
+        std::map<long long, lvm::Mark> A; lvm::Mark m; m.code = 'S'; m.dir = 1; m.lv = "ALO"; A[T2[64]] = m; A[T2[66]] = m;
+        C(lvm::bvCount(V2, 64) == 4 && lvm::stCount(V2, G2, 64) >= 20, "candle 64: BV 4 but BVMax 20+");
+        lvm::fillStrength(A, T2, V2, R2, G2);
+        C(!A.count(T2[64]), "BV under 20 (BVMax 20+): no Sw");
+        C(A.count(T2[66]) && A[T2[66]].st == "V" + std::to_string(lvm::bvCount(V2, 66)) && lvm::bvCount(V2, 66) >= 20, "BV 20+: Sw, labelled with its BV - " + (A.count(T2[66]) ? A[T2[66]].st : std::string("gone"))); }
     std::printf("t_strength124: %d passed, %d failed\n", ok, f); return f ? 1 : 0; }

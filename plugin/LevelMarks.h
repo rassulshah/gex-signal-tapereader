@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.24.0";   // (1.24.0, Rassul 2026-11-25 13:56 CT "tighten strength to reuire the bigest volume in at least 20 bars", 13:59 "there is one at 12:09 but now it would not work becasue it doesnt have BV of at least 20", 14:00 "go"): a Sw needs ITS OWN candle's BVMax >= 20 (volume only - a big range alone no longer makes a Sw: HG 11-25 12:09 LonHI R91 drops); the Sw's strength line shows the volume count ("V24")
+static const char* const VERSION = "1.24.1";   // (1.24.1, Rassul 2026-11-25 16:04 CT "the vob / vot strength requires BV 20+") the Sw strength = BV, the count over ALL candles before it (1.24.0 used BVMax = the larger of BV and the same-colour count BVG / BVR); the label shows that BV ("V24")
+// was static const char* const VERSION = "1.24.0";   // (1.24.0, Rassul 2026-11-25 13:56 CT "tighten strength to reuire the bigest volume in at least 20 bars", 13:59 "there is one at 12:09 but now it would not work becasue it doesnt have BV of at least 20", 14:00 "go"): a Sw needs ITS OWN candle's BVMax >= 20 (volume only - a big range alone no longer makes a Sw: HG 11-25 12:09 LonHI R91 drops); the Sw's strength line shows the volume count ("V24")
 // was static const char* const VERSION = "1.23.0";   // (1.23.0, Rassul 2026-11-25 13:11 CT "i want to update sweeps so bearish sweeps use highs and bullish sweeps use lows", 13:12 "correct .. go"): a bearish Sw is named only by a HIGH level (ONH LonHI AsiaHI PDH PFH PWH CWH R1 R2), a bullish Sw only by a LOW level (ONL LonLO AsiaLO PDL PFL PWL CWL S1 S2); a sweep candle that crossed no major level of its side is no Sw (it can still be its Bk / Cx). GC 11-25 11:24 AM (bearish, up through AsiaLO) is no longer a Sw
 // was static const char* const VERSION = "1.22.0";   // (1.22.0, Rassul 2026-11-25 11:39 CT "so lets update the rule to current session" - GC 11:21 AM AsiaLO 3511.3: untouched in the day session, traded only before the open, so no Sw): a Sw's "nobody traded through it" check (and its one attempt) now looks back only to the start of the CURRENT session part - the RTH open candle for a candle in the day session (open .. 5 PM), the session start (5 PM) otherwise; Bk / Cx / AR / Tst / Abs unchanged
 // was static const char* const VERSION = "1.21.0";   // (1.21.0, Rassul 2026-11-25 08:39-08:49 CT "the BK is not being displayed for 3h breaks of highs and lows", "the volume requirement of 5 needs to be changed, volume just needs to be increasing", "or the range needs to be increasing", "for all levels , not just minor or major", "go" - GC 11-25 ~8:27 red candle that closed below the 3-hour low): (a) the last completed 3-HOUR bar's high / low ( 3-hour bars from 5 PM CT as his 180-minute chart) join the Bk levels as 3HrH / 3HrL (Bk only, like 4hH / 4hL - kept; not "3hH": that name is already the high of the clock hour 3 hours back); (b) THE BK CANDLE RULE for every level = its volume OR its range bigger than the candle before (was: range >= the prior AND range or volume up; hour / pivot / 4h levels also needed the biggest volume in 5+ - gone)
@@ -501,6 +502,13 @@ inline int stCount(const std::vector<double>& V, const std::vector<char>& G, int
     }
     return std::max(all, same);
 }
+// (1.24.1, Rassul 16:04 CT "the vob / vot strength requires BV 20+") BV = how many candles in a row before i had SMALLER volume, any colour (stops at the
+// first as big or bigger; at most 99, look back at most ST_LOOK) - the volume reader's BV, not BVMax
+inline int bvCount(const std::vector<double>& V, int i) {
+    if (i < 0 || i >= (int)V.size() || !(V[(size_t)i] > 0)) return 0;
+    int n = 0; for (int j = i - 1; j >= std::max(0, i - ST_LOOK) && n < ST_CAP; --j) { if (V[(size_t)j] >= V[(size_t)i]) break; ++n; }
+    return n;
+}
 // the strength over candles a..b (a Sw's attempt; a Bk: a == b): "V<N>" / "R<N>" for the larger count (volume wins a tie), "" under 20
 inline std::string strength(const std::vector<double>& vol, const std::vector<double>& rng, const std::vector<char>& green, int a, int b) {
     int nv = 0, nr = 0; if (a < 0) a = 0;
@@ -532,7 +540,7 @@ inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long lon
         const int b = at(it->first); if (b < 0) { ++it; continue; } int a = m.t0 > 0 ? at(m.t0) : b; if (a < 0 || a > b) a = b;
         if (m.code == 'S') a = b;   // (1.8.0, Rassul 10:35 CT "the red sweep bar doesnt meet the threshold.. fix") a Sw is judged and labelled by ITS OWN candle, not the attempt's biggest
         if (m.code == 'S') {   // (1.24.0, Rassul 13:56 CT "the bigest volume in at least 20 bars") VOLUME only: the Sw candle's BVMax >= SW_MIN (was BVMax or BRMax)
-            const int nv = stCount(V, G, b); if (nv < SW_MIN) { it = M.erase(it); continue; }
+            const int nv = bvCount(V, b); if (nv < SW_MIN) { it = M.erase(it); continue; }   // (1.24.1) BV, all candles (was stCount = BVMax)
             m.st = std::string("V") + (nv >= ST_CAP ? std::string("99+") : std::to_string(nv)); ++n; ++it; continue; }
         m.st = strength(V, R, G, a, b); if (!m.st.empty()) ++n; ++it; }
     return n;
