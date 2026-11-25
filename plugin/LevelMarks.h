@@ -4,8 +4,8 @@
 // it without the price could you put it in", "but on 2nd line", "and abbreviate like Op or LLO or LHI"; 10:31 "you can also mention other levels
 // that it is breaking even the highs like PDH"; 10:34 "to simplify, we can mention only 1 level giving priority first to session levels like
 // overnight, then pd levels, pf, then volume levels"; 10:37 "ok, cut repeats"; 10:40 "go" (mockup level-marks-mockup.html v8).
-//   Bk  a candle CLOSES through a level (the close before was on the other side). Key / volume / weekly levels: any such close; hour levels: the
-//       candle's volume is the biggest in 5+. Not when the same level was crossed on a close in the 10 candles before (chop). dir = the close's way.
+//   Bk  a candle CLOSES through a level (the close before was on the other side); (1.21.0) its volume OR its range bigger than the candle before
+//       (every level). Not when the same level was crossed on a close in the 10 candles before (chop). dir = the close's way.
 //   Sw  one failed ATTEMPT: from the first candle that trades through a level nobody broke since it formed, while the next candles keep trading
 //       through it (3 candles at most); marked on the attempt's deepest candle when a candle at / after it (within 3) closes back on the original
 //       side with no new extreme first; (1.8.0: no volume gate - the Sw candle's own BVMax / BRMax >= 20 instead). dir = up for a swept low.
@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.20.0";   // (1.20.0, Rassul 2026-11-24 16:01 CT "the bk here says it is a bullish break of a higher low ? bullish breaks are of highs and bearish breaks are of lows" - GC 13:15 Bk 2hL): a bullish Bk names / counts only a HIGH level (or a two-sided one: Open, POC, VWAP), a bearish Bk only a LOW one (levelSide)
+static const char* const VERSION = "1.21.0";   // (1.21.0, Rassul 2026-11-25 08:39-08:49 CT "the BK is not being displayed for 3h breaks of highs and lows", "the volume requirement of 5 needs to be changed, volume just needs to be increasing", "or the range needs to be increasing", "for all levels , not just minor or major", "go" - GC 11-25 ~8:27 red candle that closed below the 3-hour low): (a) the last completed 3-HOUR bar's high / low ( 3-hour bars from 5 PM CT as his 180-minute chart) join the Bk levels as 3HrH / 3HrL (Bk only, like 4hH / 4hL - kept; not "3hH": that name is already the high of the clock hour 3 hours back); (b) THE BK CANDLE RULE for every level = its volume OR its range bigger than the candle before (was: range >= the prior AND range or volume up; hour / pivot / 4h levels also needed the biggest volume in 5+ - gone)
+// was static const char* const VERSION = "1.20.0";   // (1.20.0, Rassul 2026-11-24 16:01 CT "the bk here says it is a bullish break of a higher low ? bullish breaks are of highs and bearish breaks are of lows" - GC 13:15 Bk 2hL): a bullish Bk names / counts only a HIGH level (or a two-sided one: Open, POC, VWAP), a bearish Bk only a LOW one (levelSide)
 // was static const char* const VERSION = "1.19.0";   // (1.19.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): tstL3() - the Tst badge's 3rd line A+E / E / A! / blank instead of the retrace % (research TST-REVERSE 2026-11-24, tst.py / tst2.py ported line by line). Everything else unchanged
 // was static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-24 11:12 CT "ok. build this" - the Abs badge, abs-badge-mockup.html v15): absMarks() - effort without result at the FIRST test of a Bk level (research ABS-ORDERBOOK 2026-11-24, ported line by line) with its position line, and the next-candle Ex (ABS-EXHAUSTION part 2). Bk / Sw / Cx / FT / Tst / Rev / AR / I unchanged
 // was static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-24 08:33 CT "go for hourly pivots and 4h high and lows", 08:34 "absorption levels should match bk levels", 09:01 "go for bk with hourly pivots and 4 hour highs and lows"): Bk (and the Tst / FT / Rev that follow it) gains two level groups - the HOURLY PIVOTS (HpH / HpL: his 1-bar High / Low ZigZag on 1-hour bars, R1 R2 / S1 S2 as HtfSr.h walks the 3-hour ones, standing only) and the last completed 4-HOUR bar's high / low (4hH / 4hL, 4-hour bars from 5 PM CT). Both rank after every older level (4h 65, pivots 70) so no earlier mark changes its name, and a Bk made only by them never takes a candle from a Cx, need the hour levels' rule (the Bk candle's volume the biggest in 5+) and never make or name a Sw, Cx or I (Sw stays major-only)
@@ -113,6 +114,7 @@ inline int pri(const std::string& n, int hb) {
     for (const char* x : S4) if (n == x) return 40;
     for (const char* x : S6) if (n == x) return 45;
     for (const char* x : S5) if (n == x) return 50;
+    if (n == "3HrH" || n == "3HrL") return 48;   // (1.21.0) the 3-hour bar high / low: after the 3h S / R (45), BEFORE the clock-hour levels (50 / 60) - the same price names the 3-hour bar (GC 11-25 8:30: 3465.1 = both the 3-hour low and the 7 AM hour low -> "3HrL")
     if (n == "4hH" || n == "4hL") return 65;   // (1.17.0) the 4-hour bar high / low: after every older level (the hour levels 50 / 60 keep their names)
     if (n == "HpH" || n == "HpL") return 70;   // (1.17.0) the hourly pivots: ranked last
     if (n.find('/') != std::string::npos) return priParts(n);   // (1.9.0) a combined name not listed above
@@ -132,9 +134,10 @@ struct Lv { long long px = 0; std::string name; int from = 0; int hb = 0; bool h
 // (1.14.0) the 3-hour S / R standing BEFORE a candle trades (ticks; 0 = none / broken): one per candle of B, from the host's HtfSr walk
 struct H3 { long long r1 = 0, r2 = 0, s1 = 0, s2 = 0; bool has(long long px) const { return px > 0 && (px == r1 || px == r2 || px == s1 || px == s2); }
     // (1.17.0) the hourly pivots (standing) and the last completed 4-hour bar's high / low, before the candle (ticks; 0 = none)
-    long long hr1 = 0, hr2 = 0, hs1 = 0, hs2 = 0, h4h = 0, h4l = 0;
+    long long hr1 = 0, hr2 = 0, hs1 = 0, hs2 = 0, h4h = 0, h4l = 0, h3h = 0, h3l = 0;   // (1.21.0) + the last completed 3-hour bar's high / low
     bool hasHp(long long px) const { return px > 0 && (px == hr1 || px == hr2 || px == hs1 || px == hs2); }
-    bool has4(long long px) const { return px > 0 && (px == h4h || px == h4l); } };
+    bool has4(long long px) const { return px > 0 && (px == h4h || px == h4l); }
+    bool has3(long long px) const { return px > 0 && (px == h3h || px == h3l); } };
 // (1.17.0) THE HOURLY PIVOTS and THE 4-HOUR HIGH / LOW, walked by the host over the chart's candles (any bar size dividing the block):
 //   PivWalk = HtfSr.h's hsr::Walk with the block size as a parameter (1 hour, blocks on the clock hour): his 1-bar High / Low ZigZag, the
 //   forming block counts, R1 = the last confirmed pivot high, R2 = the higher of the last two, S1 / S2 the same for lows, standing = no
@@ -172,9 +175,10 @@ struct PivWalk {
         return o; } };
 struct Blk4 {
     long long k = 0, h = 0, l = 0, ph = 0, pl = 0; bool any = false;   // the forming block and the last completed one
+    long long len = 14400, off = 3600;                                 // (1.21.0) the block: 4 hours from 5 PM (1, 5, 9 ...); 3 hours from 5 PM = len 10800, off 7200 (2, 5, 8 ...)
     // returns the last COMPLETED block's high / low as it stands BEFORE this candle, then takes the candle in
     std::pair<long long, long long> add(long long t, long long perSec, long long hi, long long lo) {
-        const long long kk = PivWalk::fdiv(t - perSec - 3600, 14400);
+        const long long kk = PivWalk::fdiv(t - perSec - off, len);
         if (any && kk != k) { ph = h; pl = l; any = false; }
         const std::pair<long long, long long> before(ph, pl);
         if (!any) { k = kk; h = hi; l = lo; any = true; } else { h = std::max(h, hi); l = std::min(l, lo); }
@@ -215,7 +219,10 @@ inline std::vector<Lv> levelsAt(const std::vector<wyr::Bar>& B, int i, const std
             Lv a; a.px = hp[s2]; a.name = s2 < 2 ? "HpH" : "HpL"; a.from = from; a.high = s2 < 2; a.bkOnly = true; v.push_back(a); }
         const long long f4[2] = { q.h4h, q.h4l };
         for (int s2 = 0; s2 < 2; ++s2) { if (f4[s2] <= 0) continue; int from = i; while (from > 0 && (*h3)[(size_t)from - 1].has4(f4[s2])) --from;
-            Lv a; a.px = f4[s2]; a.name = s2 == 0 ? "4hH" : "4hL"; a.from = from; a.high = s2 == 0; a.bkOnly = true; v.push_back(a); } }
+            Lv a; a.px = f4[s2]; a.name = s2 == 0 ? "4hH" : "4hL"; a.from = from; a.high = s2 == 0; a.bkOnly = true; v.push_back(a); }
+        const long long f3[2] = { q.h3h, q.h3l };   // (1.21.0) the last completed 3-hour bar's high / low
+        for (int s2 = 0; s2 < 2; ++s2) { if (f3[s2] <= 0) continue; int from = i; while (from > 0 && (*h3)[(size_t)from - 1].has3(f3[s2])) --from;
+            Lv a; a.px = f3[s2]; a.name = s2 == 0 ? "3HrH" : "3HrL"; a.from = from; a.high = s2 == 0; a.bkOnly = true; v.push_back(a); } }
     if (B.empty() || i <= 0) return v;
     const long long hp = wyr::hourOf(B[(size_t)i].t), h0 = wyr::hourOf(B[0].t);
     for (long long hh = hp - 1; hh >= hp - 3; --hh) {
@@ -324,15 +331,13 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     // Bk: closes through a level
     std::set<int> weakBk;   // (1.17.0) a Bk crossed ONLY hourly pivots / 4-hour levels: a Cx may still take its candle
     for (int i = 5; i < n; ++i) {
-        const bool big = v[(size_t)i] >= maxV(i - 5, i);
-        { const long long r0 = B[(size_t)i].h - B[(size_t)i].l, r1 = B[(size_t)i - 1].h - B[(size_t)i - 1].l;   // (1.3.0, 16:32 "implement the range rule for breaks also and the either rule") the BO candle rule
-          if (!(r0 >= r1 && (r0 > r1 || v[(size_t)i] > v[(size_t)i - 1]))) continue; }
+        { const long long r0 = B[(size_t)i].h - B[(size_t)i].l, r1 = B[(size_t)i - 1].h - B[(size_t)i - 1].l;   // (1.21.0, Rassul 2026-11-25 08:43-08:45 "volume just needs to be increasing", "or the range needs to be increasing", "for all levels") the break candle: its volume OR its range bigger than the candle before
+          if (!(r0 > r1 || v[(size_t)i] > v[(size_t)i - 1])) continue; }
         std::vector<std::pair<long long, Cand> > crossed;   // distance from the close before -> level
         for (const Lv& z : levelsAt(B, i, key, h3)) {
             const long long pc = B[(size_t)i - 1].c, c = B[(size_t)i].c;
             if (!((pc > z.px && c < z.px) || (pc < z.px && c > z.px))) continue;
             { const int sd = levelSide(z.name, z.high, z.hb); const bool up = c > z.px; if ((up && sd < 0) || (!up && sd > 0)) continue; }   // (1.20.0) a bullish break is of a high, a bearish one of a low
-            if ((z.hb > 0 || z.bkOnly) && !big) continue;   // (1.17.0) the hourly pivots / 4-hour levels: the hour levels' volume rule
             bool chop = false; for (int k = std::max(1, i - 10); k < i; ++k) if ((B[(size_t)k - 1].c > z.px) != (B[(size_t)k].c > z.px)) { chop = true; break; }
             if (chop) continue;
             Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; cd.bkOnly = z.bkOnly; crossed.push_back(std::make_pair(std::llabs(z.px - pc), cd));

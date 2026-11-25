@@ -13,7 +13,7 @@ static wyr::Bar bar(int i, long long o, long long h, long long l, long long c, l
 static std::vector<wyr::Bar> flat(int n) { std::vector<wyr::Bar> B; for (int i = 0; i < n; ++i) B.push_back(i % 2 ? bar(i, 99, 101, 98, 100) : bar(i, 100, 101, 98, 99)); return B; }
 static std::string one(const std::map<long long, lvm::Mark>& M, long long t) { const auto it = M.find(t); return it == M.end() ? std::string("-") : std::string(lvm::codeText(it->second.code)) + " " + it->second.lv + " " + std::to_string(it->second.dir); }
 int main() {
-    C(std::string(lvm::VERSION) == "1.20.0", "LevelMarks 1.17.0");
+    C(std::string(lvm::VERSION) == "1.21.0", "LevelMarks 1.17.0");
     C(lvm::pri("4hH", 0) == 65 && lvm::pri("4hL", 0) == 65 && lvm::pri("HpH", 0) == 70 && lvm::pri("HpL", 0) == 70, "4h after the pre-open hour, pivots last");
     C(lvm::pri("4hH", 0) > lvm::pri("PHH", 0) && lvm::pri("HpL", 0) > lvm::pri("x", 2), "ranked after every older level");
     C(!lvm::swMajor("HpH", 0) && !lvm::swMajor("4hL", 0), "never a Sw level");
@@ -41,8 +41,10 @@ int main() {
     { std::vector<wyr::Bar> B = flat(12); B.push_back(bar(12, 99, 99, 90, 91, 400)); B.push_back(bar(13, 91, 92, 89, 90)); const long long t = B[12].t;
       std::vector<lvm::H3> H(B.size()); for (lvm::H3& q : H) q.hs1 = 95;
       C(one(lvm::run(B, std::vector<wyr::Lvl>(), -1, 0, nullptr, &H), t) == "Bk HpL -1", "close down through the hourly pivot low on big volume: Bk HpL");
-      std::vector<wyr::Bar> B2 = B; B2[12] = bar(12, 99, 99, 90, 91, 60);   // range rule still met (range up), volume not the biggest
-      C(lvm::run(B2, std::vector<wyr::Lvl>(), -1, 0, nullptr, &H).count(t) == 0, "the same break on small volume: no Bk (the hour levels' rule)");
+      std::vector<wyr::Bar> B2 = B; B2[12] = bar(12, 99, 99, 90, 91, 60);   // (1.21.0) range up, volume not the biggest: now a Bk (volume OR range up)
+      C(one(lvm::run(B2, std::vector<wyr::Lvl>(), -1, 0, nullptr, &H), t) == "Bk HpL -1", "(1.21.0) the same break on small volume but a bigger range: Bk HpL");
+      std::vector<wyr::Bar> B3 = B; B3[12] = bar(12, 99, 99, 90, 91, 1); B3[11] = bar(11, 100, 100, 90, 99, 50);   // neither range nor volume up
+      C(lvm::run(B3, std::vector<wyr::Lvl>(), -1, 0, nullptr, &H).count(t) == 0, "(1.21.0) neither volume nor range up: no Bk");
       std::vector<lvm::H3> H4(B.size()); for (lvm::H3& q : H4) { q.hs1 = 95; q.h4l = 95; }
       C(one(lvm::run(B, std::vector<wyr::Lvl>(), -1, 0, nullptr, &H4), t) == "Bk 4hL -1", "pivot and 4h low on one price: the 4h names it (65 < 70)");
       std::vector<lvm::H3> H5(B.size()); for (lvm::H3& q : H5) { q.hs1 = 95; q.s1 = 95; }

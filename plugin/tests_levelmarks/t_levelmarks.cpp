@@ -20,11 +20,11 @@ int main(int argc, char** argv) {
     const auto M = lvm::run(B, K);
     long long t700 = 0; for (const auto& b : B) if (b.when == "7:00") t700 = b.t;   // the LAST 7:00 = 7:00 AM (the session starts 5 PM)
     const std::string got = str(M, t700);
-    const std::string want = "7:09 Sw PFH; 7:33 Bk 1hL; 8:27 Cx AHI; 8:30 Bk PhrH; 8:33 Sw PFH; 8:39 Sw LLO; 8:45 Bk PhrL; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; the BO candle rule drops the small 7:06 / 8:54 breaks
+    const std::string want = "7:09 Sw PFH; 7:33 Bk 1hL; 8:27 Cx AHI; 8:30 Bk PhrH; 8:33 Sw PFH; 8:39 Sw LLO; 8:45 Bk PhrL; 8:54 Bk LLO; 9:12 Bk 1hL; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; (1.21.0) the break candle = volume OR range up: 8:54 Bk LLO and 9:12 Bk 1hL (no biggest-in-5 rule any more) join
     std::printf("ES 11-19 7:00-9:48: %s\n", got.c_str());
     C(got == want, "ES 11-19 = mockup v8 + the 1.3.0 rules (1.10.0: 7:09 / 8:33 Sw of the untouched 1-hour high name PFH, the key level the attempt crossed from below and closed back under) (1.8.0: + 7:09 / 8:33 Sw PHH, no volume gate in run(); the own-candle 20 test is fillStrength)");
     for (const auto& kv : M) if (startOf[kv.first] == "9:39") C(kv.second.dir == 1 && kv.second.px == 29221, "Sw PDL bullish at 7305.25");
-    for (const auto& kv : M) if (startOf[kv.first] == "9:12") C(false, "(1.20.0) no Bk at 9:12 - a bearish close through PDH (a high) is not a break");
+    for (const auto& kv : M) if (startOf[kv.first] == "9:12") C(kv.second.code == 'B' && kv.second.dir == -1 && kv.second.lv == "1hL", "(1.20.0) 9:12 never a Bk of PDH (a high); (1.21.0) it is the bearish Bk of the 1-hour low");
     // no repaint: candle-by-candle replay gives the same marks for every candle already decided 6+ candles earlier
     { int bad = 0; for (size_t n = 40; n <= B.size(); n += 7) { std::vector<wyr::Bar> P(B.begin(), B.begin() + n); const auto Q = lvm::run(P, K);
         for (const auto& kv : Q) { if (kv.first > P[P.size() - 7].t) continue; auto it = M.find(kv.first); if (it == M.end() || it->second.code != kv.second.code || it->second.lv != kv.second.lv) ++bad; } }
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
         C(stOf("7:33", 'B') == "1hL/R99+", "7:33 Bk 1hL R99+ (1.20.0: a bearish Bk names a low) (got " + stOf("7:33", 'B') + ")");
         C(stOf("8:30", 'B') == "PhrH/V99+", "8:30 Bk PhrH V99+ (got " + stOf("8:30", 'B') + ")");
         C(stOf("8:36", 'B') == "none", "(1.3.0) no Bk at the open - Open is not a level (got " + stOf("8:36", 'B') + ")");
-        C(stOf("7:06", 'B') == "none" && stOf("8:54", 'B') == "none", "(1.3.0) the BO candle rule drops the 7:06 / 8:54 small breaks");
+        C(stOf("7:06", 'B') == "none" && stOf("8:54", 'B').compare(0, 3, "LLO") == 0, "(1.21.0) 8:54 Bk LLO (its volume or range up), 7:06 still none (got " + stOf("7:06", 'B') + " / " + stOf("8:54", 'B') + ")");
         C(stOf("8:39", 'S') == "LLO/V99+", "(1.9.0) 8:39 Sw LLO V99+ - LonLO (Asia traded below it before London formed it) outranks PHL (got " + stOf("8:39", 'S') + ")");
         C(stOf("9:30", 'B') == "ONL/V99+", "9:30 Bk ONL V99+ (got " + stOf("9:30", 'B') + ")");
         C(stOf("9:39", 'S') == "PDL/V99+", "9:39 Sw PDL V99+ (got " + stOf("9:39", 'S') + ")");
@@ -257,12 +257,14 @@ int main(int argc, char** argv) {
         const auto S4 = lvm::seq(x, lvm::run(x, k)); anyT = false; bool anyF = false; for (const auto& kv : S4) for (const auto& m : kv.second) { if (m.code == 'T') anyT = true; if (m.code == 'F') anyF = true; }
         C(!anyF && !anyT, "rule: no FT within 3 candles = no Tst");
         // the BO candle rule: a Bk candle smaller than the prior candle is not a Bk
-        std::vector<wyr::Bar> y = v; y[10] = bar(y[10].t, 120, 125, 105, 113, 120); const auto M5 = lvm::run(y, k);
-        C(!M5.count(y[11].t) || M5.at(y[11].t).code != 'B', "rule: Bk needs range >= the prior candle's range");
+        std::vector<wyr::Bar> y = v; y[10] = bar(y[10].t, 120, 125, 105, 113, 9999); const auto M5 = lvm::run(y, k);
+        C(!M5.count(y[11].t) || M5.at(y[11].t).code != 'B', "(1.21.0) rule: a Bk candle needs its volume OR its range bigger than the candle before (here neither)");
+        std::vector<wyr::Bar> y2 = v; y2[10] = bar(y2[10].t, 120, 125, 105, 113, 1); const auto M7 = lvm::run(y2, k);
+        C(!M7.count(y2[11].t) || M7.at(y2[11].t).code == 'B' || M5.count(y2[11].t) == M7.count(y2[11].t), "(1.21.0) rule: a smaller-range candle on more volume may be a Bk");
         // the Sw colour rule: a bullish Sw on a red candle is not a Sw
         auto f2 = [&](int n, long long p) { std::vector<wyr::Bar> z; for (int i = 0; i < n; ++i) z.push_back(bar(T2 + 90000 + (i + 1) * 180, p, p + 2, p - 2, p, 100)); return z; };
         auto z = f2(12, 120); z.push_back(bar(T2 + 90000 + 13 * 180, 120, 120, 104, 114, 300)); for (int i = 0; i < 4; ++i) z.push_back(bar(T2 + 90000 + (14 + i) * 180, 114, 118, 112, 116, 100));
-        const auto M6 = lvm::run(z, k); C(!M6.count(z[12].t) || M6.at(z[12].t).code != 'S', "rule: a bullish Sw must be a green candle");
+        const auto M6b = lvm::run(z, k); C(!M6b.count(z[12].t) || M6b.at(z[12].t).code != 'S', "rule: a bullish Sw must be a green candle");
         C(lvm::pri("DPoc", 0) < 0 && lvm::pri("WPoc", 0) < 0 && lvm::pri("Open", 0) < 0 && lvm::pri("VAL", 0) >= 0, "rule: no POC / Open levels, VAH / VAL kept");
     }
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;

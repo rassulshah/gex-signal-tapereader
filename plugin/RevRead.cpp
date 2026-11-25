@@ -111,7 +111,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.31.0"   // (0.31.0, Rassul 2026-11-24 21:23-22:39 CT "i dont want repetitive information in the read", "everything else is a go" on reads-conclude-mockup.html v30): the buy / sell read concludes (BsRead 2.0.0) - who is in control, delta against price (trapped), strong side + delta flip, drying up
+#define RVS_VERSION "0.32.0"   // (0.32.0, Rassul 2026-11-25 08:39-08:49 CT) LevelMarks 1.21.0: Bk on the last completed 3-hour bar's high / low (3hH / 3hL); the break candle = volume OR range bigger than the candle before, every level
+// was "0.31.0"   // (0.31.0, Rassul 2026-11-24 21:23-22:39 CT "i dont want repetitive information in the read", "everything else is a go" on reads-conclude-mockup.html v30): the buy / sell read concludes (BsRead 2.0.0) - who is in control, delta against price (trapped), strong side + delta flip, drying up
 // was "0.30.0"   // (0.30.0, Rassul 2026-11-24 20:46-20:54 CT "add the question each answers to the read", "make the update for magnitude also so everything is covered", "go"): the buy / sell bars' DARK part = lots from big orders (S20+, OrderFlowFeed 1.18.0 Rec.bigC); the read's big-order line (BsRead 1.1.0) and a grey column with each line's volume-model question
 // was #define RVS_VERSION "0.29.0"   // (0.29.0, Rassul 2026-11-24 19:31-19:44 CT "should this be updated to buy and sell volume instead", "i would also hide the book flow", "i would read the volume, then the buy sell vol, then the absorbtion volume", "Go" on panes-read-mockup.html) the pane: Book Flow hidden, the delta-change bars replaced by BUY / SELL VOLUME bars (both up from zero, "biggest in N" from 10), the read = who hit whom (BsRead.h); the signal strip and every mark unchanged
 // was #define RVS_VERSION "0.28.1"   // (0.28.1, Rassul 2026-11-24 16:01 CT "bullish breaks are of highs and bearish breaks are of lows") LevelMarks 1.20.0: a Bk is drawn only through a level on its own side (a high for a bullish Bk, a low for a bearish one; Open / POC either way)
@@ -128,7 +129,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.31.0");
+    p->setVersion("0.32.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -681,7 +682,7 @@ public:
                     std::vector<lvm::H3> h3All; int h3Now = 0;
                     try { RTARRAY xh(barHigh), xl(barLow), xc(barClose); const int nC = (int)count - 1;
                         if (hsr::periodOk((int)S.spb) && S.tick > 0 && nC > 1 && xh.count >= nC && xl.count >= nC && xc.count >= nC) {
-                            h3All.assign((size_t)nC + 1, lvm::H3()); hsr::Walk hw; hsr::Snap prev; lvm::PivWalk pw; pw.secs = 3600; pw.off = 0; lvm::Blk4 b4; lvm::PivSnap pprev;   /* (0.26.0) + the hourly pivots and the 4-hour high / low (LevelMarks 1.17.0) */
+                            h3All.assign((size_t)nC + 1, lvm::H3()); hsr::Walk hw; hsr::Snap prev; lvm::PivWalk pw; pw.secs = 3600; pw.off = 0; lvm::Blk4 b4; lvm::Blk4 b3; b3.len = 10800; b3.off = 7200; lvm::PivSnap pprev;   /* (0.32.0) + the 3-hour bar (LevelMarks 1.21.0) */   /* (0.26.0) + the hourly pivots and the 4-hour high / low (LevelMarks 1.17.0) */
                             for (int i = 0; i < nC; ++i) { hsr::Bar q; q.t = (long long)times[i]; q.h = std::round((double)xh[i] / S.tick); q.l = std::round((double)xl[i] / S.tick); q.c = std::round((double)xc[i] / S.tick);
                                 if (q.h < q.l) std::swap(q.h, q.l);
                                 const hsr::Snap sn = (q.t > 0 && std::isfinite(q.h) && std::isfinite(q.l) && std::isfinite(q.c)) ? hw.add(q, (int)S.spb) : prev; prev = sn;
@@ -689,7 +690,8 @@ public:
                                 z.r1 = tk(sn.r1ok, sn.r1); z.r2 = tk(sn.r2ok, sn.r2); z.s1 = tk(sn.s1ok, sn.s1); z.s2 = tk(sn.s2ok, sn.s2);
                                 // (0.26.0) the hourly pivots after this candle (= before the next) and the 4-hour high / low before THIS candle
                                 const bool okq = q.t > 0 && std::isfinite(q.h) && std::isfinite(q.l) && std::isfinite(q.c);
-                                if (okq) { const std::pair<long long, long long> f4 = b4.add(q.t, (long long)S.spb, (long long)std::llround(q.h), (long long)std::llround(q.l)); h3All[(size_t)i].h4h = f4.first > 0 ? f4.first : 0; h3All[(size_t)i].h4l = f4.second > 0 ? f4.second : 0; }
+                                if (okq) { const std::pair<long long, long long> f4 = b4.add(q.t, (long long)S.spb, (long long)std::llround(q.h), (long long)std::llround(q.l)); h3All[(size_t)i].h4h = f4.first > 0 ? f4.first : 0; h3All[(size_t)i].h4l = f4.second > 0 ? f4.second : 0;
+                                    const std::pair<long long, long long> f3 = b3.add(q.t, (long long)S.spb, (long long)std::llround(q.h), (long long)std::llround(q.l)); h3All[(size_t)i].h3h = f3.first > 0 ? f3.first : 0; h3All[(size_t)i].h3l = f3.second > 0 ? f3.second : 0; }
                                 const lvm::PivSnap ps = okq ? pw.add(q.t, (long long)S.spb, (long long)std::llround(q.h), (long long)std::llround(q.l), (long long)std::llround(q.c)) : pprev; pprev = ps;
                                 z.hr1 = ps.r1; z.hr2 = ps.r2; z.hs1 = ps.s1; z.hs2 = ps.s2;
                                 h3All[(size_t)i + 1] = z; }
