@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.21.0";   // (1.21.0, Rassul 2026-11-25 08:39-08:49 CT "the BK is not being displayed for 3h breaks of highs and lows", "the volume requirement of 5 needs to be changed, volume just needs to be increasing", "or the range needs to be increasing", "for all levels , not just minor or major", "go" - GC 11-25 ~8:27 red candle that closed below the 3-hour low): (a) the last completed 3-HOUR bar's high / low ( 3-hour bars from 5 PM CT as his 180-minute chart) join the Bk levels as 3HrH / 3HrL (Bk only, like 4hH / 4hL - kept; not "3hH": that name is already the high of the clock hour 3 hours back); (b) THE BK CANDLE RULE for every level = its volume OR its range bigger than the candle before (was: range >= the prior AND range or volume up; hour / pivot / 4h levels also needed the biggest volume in 5+ - gone)
+static const char* const VERSION = "1.22.0";   // (1.22.0, Rassul 2026-11-25 11:39 CT "so lets update the rule to current session" - GC 11:21 AM AsiaLO 3511.3: untouched in the day session, traded only before the open, so no Sw): a Sw's "nobody traded through it" check (and its one attempt) now looks back only to the start of the CURRENT session part - the RTH open candle for a candle in the day session (open .. 5 PM), the session start (5 PM) otherwise; Bk / Cx / AR / Tst / Abs unchanged
+// was static const char* const VERSION = "1.21.0";   // (1.21.0, Rassul 2026-11-25 08:39-08:49 CT "the BK is not being displayed for 3h breaks of highs and lows", "the volume requirement of 5 needs to be changed, volume just needs to be increasing", "or the range needs to be increasing", "for all levels , not just minor or major", "go" - GC 11-25 ~8:27 red candle that closed below the 3-hour low): (a) the last completed 3-HOUR bar's high / low ( 3-hour bars from 5 PM CT as his 180-minute chart) join the Bk levels as 3HrH / 3HrL (Bk only, like 4hH / 4hL - kept; not "3hH": that name is already the high of the clock hour 3 hours back); (b) THE BK CANDLE RULE for every level = its volume OR its range bigger than the candle before (was: range >= the prior AND range or volume up; hour / pivot / 4h levels also needed the biggest volume in 5+ - gone)
 // was static const char* const VERSION = "1.20.0";   // (1.20.0, Rassul 2026-11-24 16:01 CT "the bk here says it is a bullish break of a higher low ? bullish breaks are of highs and bearish breaks are of lows" - GC 13:15 Bk 2hL): a bullish Bk names / counts only a HIGH level (or a two-sided one: Open, POC, VWAP), a bearish Bk only a LOW one (levelSide)
 // was static const char* const VERSION = "1.19.0";   // (1.19.0, Rassul 2026-11-24 12:51 CT "2. do the test" on tst-line3-mockup.html): tstL3() - the Tst badge's 3rd line A+E / E / A! / blank instead of the retrace % (research TST-REVERSE 2026-11-24, tst.py / tst2.py ported line by line). Everything else unchanged
 // was static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-24 11:12 CT "ok. build this" - the Abs badge, abs-badge-mockup.html v15): absMarks() - effort without result at the FIRST test of a Bk level (research ABS-ORDERBOOK 2026-11-24, ported line by line) with its position line, and the next-candle Ex (ABS-EXHAUSTION part 2). Bk / Sw / Cx / FT / Tst / Rev / AR / I unchanged
@@ -272,6 +273,15 @@ inline bool isOpenCandle(long long t, int openMin, long long spb) {
     if (openMin < 0 || spb <= 0) return false;
     long long q = t % 86400; if (q < 0) q += 86400;
     return q == (long long)openMin * 60 + spb; }
+// (1.22.0, Rassul 2026-11-25 11:39 CT "update the rule to current session") the day session part of candle f: the first candle of the run of
+// candles ending after the RTH open (openMin) and at / before 5 PM CT that holds f, i.e. the RTH opening candle of f's day; -1 when f is not in it
+// (overnight / pre-open) or the market has no RTH open. Bar stamps = bar END, CT wall-clock seconds (any epoch that is a whole number of days)
+inline int dayStart(const std::vector<wyr::Bar>& B, int f, int openMin) {
+    if (openMin < 0 || f < 0 || f >= (int)B.size()) return -1;
+    auto inDay = [&](int k) { long long q = B[(size_t)k].t % 86400; if (q < 0) q += 86400; const long long m = q / 60; return m > openMin && m <= 17 * 60 && q > (long long)openMin * 60; };
+    if (!inDay(f)) return -1;
+    int k = f; while (k > 0 && inDay(k - 1) && B[(size_t)k].t - B[(size_t)k - 1].t < 6 * 3600) --k;
+    return k; }
 // (1.12.0) the candle stamped t (bar END) holds a release r when t - spb <= r < t; rel = release times in the bars' own time unit (seconds), sorted
 inline bool newsCandle(long long t, long long spb, const std::vector<long long>* rel) {
     if (!rel || rel->empty() || spb <= 0) return false;
@@ -287,15 +297,16 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     // Sw: one attempt per level
     { std::set<std::pair<long long, std::string> > done;
       for (int f = 5; f < n; ++f) {
+        const int ds = dayStart(B, f, openMin);   // (1.22.0) -1 = overnight part (look back to the level's formation, as before)
         const std::vector<Lv> L = levelsAt(B, f, key, h3);
         for (const Lv& z : L) {
             if (z.bkOnly) continue;   // (1.17.0) Sw: major levels only, never the hourly pivots / 4-hour levels
-            const std::pair<long long, std::string> id(z.px, z.name); if (done.count(id)) continue;
+            const std::pair<long long, std::string> id(z.px, z.name + (ds >= 0 ? "|day" : "")); if (done.count(id)) continue;   // (1.22.0) one attempt per level per session part
             if (B[(size_t)f - 1].c == z.px) continue;   // (1.10.1) the close before sits ON the level: no side, so no sweep from it
             const bool sup = B[(size_t)f - 1].c > z.px;
             auto thr = [&](int k) { return sup ? B[(size_t)k].l < z.px : B[(size_t)k].h > z.px; };
             if (!thr(f)) continue;
-            const int from = std::max(0, z.from);   // (1.9.0) a session level: after the candle that printed it (levelsAt)
+            const int from = std::max(std::max(0, z.from), ds);   // (1.9.0) a session level: after the candle that printed it (levelsAt); (1.22.0) in the day session: from the RTH open candle
             // (1.10.0, "use strict rule") nobody TRADED through it since it formed (a wick counts); the first candle through is its one attempt
             bool before = false; for (int k = from; k < f; ++k) if (thr(k)) { before = true; break; }
             if (before) continue;
