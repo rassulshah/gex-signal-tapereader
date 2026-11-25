@@ -48,6 +48,6 @@ int main() {
         for (const std::string& e : p.ex) { if (e.find('?') != std::string::npos || e.find("Biggest orders") != std::string::npos || e.find("Icebergs") != std::string::npos) clean = false; } C(clean && p.exQ.size() == p.ex.size(), "no repeats, every line has its question"); }
     // agreement rule
     { std::vector<vrd::Cd> nx(2); nx[0].h = 101; nx[0].l = 99.95; nx[1].h = 102; nx[1].l = 100; C(vrd::agreeOf(1, 100, nx, 1.5, 0.1) == 1, "agreed on the 2nd"); nx[0].l = 99.85; C(vrd::agreeOf(1, 100, nx, 1.5, 0.1) == -2, "broke the low first"); C(vrd::agreeOf(1, 100, std::vector<vrd::Cd>(), 1.5, 0.1) == 0, "waiting"); }
-    C(std::string(vrd::VERSION) == "1.6.0" && std::string(vrr::VERSION) == "1.15.0", "versions");
+    C(std::string(vrd::VERSION) == "1.6.0" && std::string(vrr::VERSION) == "1.16.0", "versions");
     std::printf("t_vr1150: %d checks, %d fails\n", ok + bad, bad); return bad ? 1 : 0;
 }

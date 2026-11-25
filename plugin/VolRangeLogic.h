@@ -26,7 +26,8 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-24 21:23-22:39 CT "everything else is a go" on reads-conclude-mockup.html v30) the Volume read concludes: title = the overall call of the three panes (lsTurn vread + lsRevRead bsv files), effort vs result with price agreement, large orders, who led, sliced / pulled (VRRead 1.6.0)
+static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw code over a bar shows as VOB (bullish) / VOT (bearish)
+// was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-24 21:23-22:39 CT "everything else is a go" on reads-conclude-mockup.html v30) the Volume read concludes: title = the overall call of the three panes (lsTurn vread + lsRevRead bsv files), effort vs result with price agreement, large orders, who led, sliced / pulled (VRRead 1.6.0)
 // was static const char* const VERSION = "1.14.0";   // (1.14.0, Rassul 2026-11-24 20:46 / 20:54) the Volume read: a grey column with the volume-model question of each line (VRRead 1.5.0); full questions when the read has room, short ones when narrow, none under 150 px
 // was static const char* const VERSION = "1.13.0";   // (1.13.0, Rassul 2026-11-24 20:00 CT "Go") the Volume read's biggest orders with their Big Lot tier (VRRead 1.4.0, BigTier.h): Engine.mkt, Ctx.mkt / rth
 // was static const char* const VERSION = "1.12.0";   // (1.12.0, Rassul 2026-11-24 19:44 CT "Go" on panes-read-mockup.html) the Volume read = how much / the biggest orders and sweeps / icebergs / a neutral note, no Bullish / Bearish verdict (VRRead 1.3.0 volPlain); bars and the Range read unchanged
@@ -371,7 +372,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
             if (ok) { P.push_back(t); yTop = t.y0; }
         };
         if (i < n && E.S[(size_t)i].mx() >= ((mk.code == MK_BK || mk.code == MK_SW || mk.code == MK_AR) ? SHOW_MIN_LV : SHOW_MIN)) put(fm(E.S[(size_t)i].mx()), C_TXT, false);          // closed bars only: decided once; (1.8.0) a Bk / Sw bar from 10 up
-        if (mk.code >= MK_P) put(mkText(mk.code), col, true);                                          // (1.3.0) the ONE code of a marked bar, in its colour
+        if (mk.code >= MK_P) put(mk.code == MK_SW ? (mk.dir > 0 ? "VOB" : "VOT") : mkText(mk.code), col, true);   /* (1.16.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") was "Sw" */                                          // (1.3.0) the ONE code of a marked bar, in its colour
     }
     bool newRead = false;
     if (v.readX >= 0 && n > 0 && (int)E.Oo.size() == n && (int)E.Vol.size() == n) {

@@ -21,7 +21,8 @@
 
 namespace svx {
 
-static const char* const VERSION = "1.1.2";   // (1.1.2, lsRevRead 0.21.6 / LevelMarks 1.9.0 names, Rassul 14:26 CT): the prior hour = 1hH / 1hL ("one hour high"), the pre-open hour = PhrH / PhrL ("pre-open high"); old PHH / PHL clips still play for old marks   // was "1.1.1";   // (1.1.1, Rassul 2026-11-20 13:36 CT "how come i cant hear signals": the NQ 1:00 PM PHH sweep was dropped as too old - a Sw is stamped on its deepest candle but decided up to 3 candles later and the file can lag, so 5 min was too short; now 15 min)   // was "1.1.0";   // (1.1.0, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") + Cobs: offerCob, clips cob-<MKT>-<up|down>.wav "<market>, cob, <up|down>"; every chart offers every market (lsHodLod 2.41.3)
+static const char* const VERSION = "1.2.0";   // (1.2.0 = lsHodLod 2.46.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)", 14:29 "for the voice just use the letters"): "E S, V O B, C W L." / "H G, V O T, London high." (no up / down: VOB = off the bottom, VOT = off the top); new clip files vob-<MKT>-<LV>.wav / vot-<MKT>-<LV>.wav (the old sw-*.wav stay)
+// was static const char* const VERSION = "1.1.2";   // (1.1.2, lsRevRead 0.21.6 / LevelMarks 1.9.0 names, Rassul 14:26 CT): the prior hour = 1hH / 1hL ("one hour high"), the pre-open hour = PhrH / PhrL ("pre-open high"); old PHH / PHL clips still play for old marks   // was "1.1.1";   // (1.1.1, Rassul 2026-11-20 13:36 CT "how come i cant hear signals": the NQ 1:00 PM PHH sweep was dropped as too old - a Sw is stamped on its deepest candle but decided up to 3 candles later and the file can lag, so 5 min was too short; now 15 min)   // was "1.1.0";   // (1.1.0, Rassul 2026-11-20 12:22 CT "yes cob and all market sweep voice alerts") + Cobs: offerCob, clips cob-<MKT>-<up|down>.wav "<market>, cob, <up|down>"; every chart offers every market (lsHodLod 2.41.3)
 static const long long E1904 = 2082844800LL;
 static const int ST_MIN = 10;          // LevelMarks 1.5.0 SW_MIN: a Sw needs its attempt's BVMax or BRMax >= 10
 static const long long MAX_AGE = 900;   // (1.1.1) was 300: a Sw is decided up to 3 candles (9 min on 3-min) after the candle it is stamped on, plus the file write delay  // s: a mark older than this when first seen is not spoken (feed catching up)
@@ -68,9 +69,9 @@ inline std::string marketSpoken(const std::string& m) { if (m == "EU") return "E
 inline std::string levelShown(const std::string& c) { return c == "LLO" ? "LonLO" : c == "LHI" ? "LonHI" : c == "ALO" ? "AsiaLO" : c == "AHI" ? "AsiaHI" : c; }
 inline std::string marketShown(const std::string& m) { return m == "EU" ? "6E" : m; }
 inline std::string sideWord(int dir) { return dir > 0 ? "up" : "down"; }
-inline std::string text(const std::string& m, const std::string& c, int dir) { return marketShown(m) + ", sweep, " + levelShown(c) + ", " + sideWord(dir); }
-inline std::string spoken(const std::string& m, const std::string& c, int dir) { return marketSpoken(m) + ", sweep, " + levelSpoken(c) + ", " + sideWord(dir) + "."; }
-inline std::string fileName(const std::string& m, const std::string& c, int dir) { return "sw-" + m + "-" + c + "-" + sideWord(dir) + ".wav"; }
+inline std::string text(const std::string& m, const std::string& c, int dir) { return marketShown(m) + (dir > 0 ? ", VOB, " : ", VOT, ") + levelShown(c); }   // (1.2.0) was ", sweep, <level>, <up|down>"
+inline std::string spoken(const std::string& m, const std::string& c, int dir) { return marketSpoken(m) + (dir > 0 ? ", V O B, " : ", V O T, ") + levelSpoken(c) + "."; }   // (1.2.0) the letters
+inline std::string fileName(const std::string& m, const std::string& c, int dir) { return std::string(dir > 0 ? "vob-" : "vot-") + m + "-" + c + ".wav"; }   // (1.2.0) new clips vob-<MKT>-<LV>.wav / vot-<MKT>-<LV>.wav; the old sw-*.wav clips stay in the folder untouched
 // (1.1.0) the Cob clips: one per market x side
 inline std::string cobText(const std::string& m, int dir) { return marketShown(m) + ", Cob, " + sideWord(dir); }
 inline std::string cobSpoken(const std::string& m, int dir) { return marketSpoken(m) + ", cob, " + sideWord(dir) + "."; }

@@ -111,7 +111,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.35.0"   // (0.35.0, Rassul 2026-11-25 13:56-14:00 CT "tighten strength to reuire the bigest volume in at least 20 bars", "go") LevelMarks 1.24.0: a Sw needs its own candle's BVMax >= 20 (volume only)
+#define RVS_VERSION "0.36.0"   // (0.36.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw mark is DRAWN as VOB (bullish, under a low) / VOT (bearish, at a high); the files keep the code "Sw"
+// was RVS_VERSION "0.35.0"   // (0.35.0, Rassul 2026-11-25 13:56-14:00 CT "tighten strength to reuire the bigest volume in at least 20 bars", "go") LevelMarks 1.24.0: a Sw needs its own candle's BVMax >= 20 (volume only)
 // was RVS_VERSION "0.34.0"   // (0.34.0, Rassul 2026-11-25 13:11 CT "bearish sweeps use highs and bullish sweeps use lows") LevelMarks 1.23.0
 // was RVS_VERSION "0.33.0"   // (0.33.0, Rassul 2026-11-25 11:39 CT "so lets update the rule to current session") LevelMarks 1.22.0: in the day session a Sw needs its level untouched only since the RTH open (was: since the level formed) - GC 11:24 AM AsiaLO now a bearish Sw; overnight sweeps unchanged
 // was "0.32.0"   // (0.32.0, Rassul 2026-11-25 08:39-08:49 CT) LevelMarks 1.21.0: Bk on the last completed 3-hour bar's high / low (3hH / 3hL); the break candle = volume OR range bigger than the candle before, every level
@@ -132,7 +133,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.35.0");
+    p->setVersion("0.36.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -1268,7 +1269,7 @@ public:
                 if (it == s.iMarks.end()) continue;
                 for (const wyi::M& m : it->second) {
                     const wyi::TurnAbs* tz = nullptr; if (m.code == 'Q') { const auto tq = s.tabs.find((long long)times[i]); if (tq != s.tabs.end() && tq->second.dir == m.dir) tz = &tq->second; }   // (0.27.0)
-                    const std::string a1 = m.code == 'Q' ? wyi::absLine1(tz) : std::string(wyi::textOf(m.code)), a2 = m.lv, a3 = m.code == 'C' ? std::string() : m.code == 'Q' ? wyi::absLine3(tz) : m.st;   /* (0.27.0) Abs: "Abs" / "Abs/Ex?", position, P */ setFont(f1); int w = (int)getTextWidth(a1.c_str(), -1); if (!a2.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a2.c_str(), -1)); }
+                    const std::string a1 = m.code == 'Q' ? wyi::absLine1(tz) : m.code == 'S' ? std::string(m.dir > 0 ? "VOB" : "VOT") /* (0.36.0) was "Sw" */ : std::string(wyi::textOf(m.code)), a2 = m.lv, a3 = m.code == 'C' ? std::string() : m.code == 'Q' ? wyi::absLine3(tz) : m.st;   /* (0.27.0) Abs: "Abs" / "Abs/Ex?", position, P */ setFont(f1); int w = (int)getTextWidth(a1.c_str(), -1); if (!a2.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a2.c_str(), -1)); }
                     if (!a3.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a3.c_str(), -1)); }   // (0.19.2) the strength: a 3rd line, same font as the level
                     wyi::Want wt; wt.candle = (int)C.size() - 1; wt.side = wyi::sideOf(m); wt.w = w + 2 * wyi::PAD_X; wt.h = wyi::LINE1_H + (a2.empty() ? 0 : wyi::LINE2_H) + (a3.empty() ? 0 : wyi::LINE2_H); W.push_back(wt); WM.push_back(&m); l1.push_back(a1); l2.push_back(a2); l3.push_back(a3); } }
             if (W.empty()) return RTX_OK;

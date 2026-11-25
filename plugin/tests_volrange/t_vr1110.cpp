@@ -49,7 +49,7 @@ int main() {
       int va = 0; for (const vrr::Prim& p : vrr::layout(V, v, nullptr)) if (!p.fill && p.text == "AR") ++va; C(va == 0, "drawn (Volume): no AR");
       C(vrr::statusText(R, "NQ", "NQZ6", 180).find("AR,1.11.0 AR from the price chart's marks file,3 AR read") != std::string::npos, "Range status: 3 AR read");
       C(vrr::statusText(V, "NQ", "NQZ6", 180).find("AR,1.11.0 no AR in the Volume pane (AR = a range bar)") != std::string::npos, "Volume status: no AR in the Volume pane");
-      C(vrr::statusText(R, "NQ", "NQZ6", 180).find("VERSION,1.15.0") == 0 && vrr::statusText(R, "NQ", "NQZ6", 180).find("CX,1.10.0 no Cx in the Range pane") != std::string::npos, "status: version 1.11.0, the CX line as before");
+      C(vrr::statusText(R, "NQ", "NQZ6", 180).find("VERSION,1.16.0") == 0 && vrr::statusText(R, "NQ", "NQZ6", 180).find("CX,1.10.0 no Cx in the Range pane") != std::string::npos, "status: version 1.11.0, the CX line as before");
       // a Bk / Sw on the same candle keeps the label; CB / SR / Ct stand over an AR
       int bk = -1; for (int i = 0; i < (int)R.T.size(); ++i) if (R.markOf(i).code == vrr::MK_BK) bk = i;
       C(bk > 0, "a Bk candle found");
@@ -69,6 +69,6 @@ int main() {
       { vrr::Engine Z = load("nq_1123.csv", wyAR, vrr::RANGE); Z.wy.clear(); Z.wyAr.clear(); Z.wyLines = -1; C(count(Z, vrr::MK_AR) == 0 && vrr::statusText(Z, "NQ", "NQZ6", 180).find("AR,1.11.0 AR from the price chart's marks file,no file - no AR") != std::string::npos, "no marks file: no AR, the status says so"); }
       { const vrr::Engine S1 = load("nq_1123.csv", wyAR, vrr::RANGE, true); bool same = true; for (int i = 0; i < (int)R.T.size(); ++i) { const vrr::Mk x = R.markOf(i), y = S1.markOf(i); if (x.code != y.code || x.dir != y.dir) same = false; } C(same, "bar by bar = one straight pass"); } }
     C(std::string(vrr::mkText(vrr::MK_AR)) == "AR" && vrr::MK_CB > vrr::MK_AR && vrr::MK_AR > vrr::MK_P, "MK_AR: a labelled code; MK_CB stays the last code");
-    C(std::string(vrr::VERSION) == "1.15.0", "version 1.11.0");
+    C(std::string(vrr::VERSION) == "1.16.0", "version 1.11.0");
     std::printf("%s %d pass, %d fail\n", bad ? "FAILED" : "ALL PASS", ok, bad); return bad;
 }
