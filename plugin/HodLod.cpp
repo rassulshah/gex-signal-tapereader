@@ -2424,7 +2424,7 @@ int HodLod::draw(void)
         // (11-26 08:11 "why is the levels not centeed like the news box at the top": it was centred on the hidden 2.43.0 box's spot)
         const int cxC = ((int)pb.l + r) / 2;
         hsb::Draw HB; S->hbWhy = "not drawn (no room)";
-        if (r - (int)pb.l >= 40) HB = hsb::layout(S->view, meas, cxC, (int)pane.bottom, (int)pb.l, r);   // (2.54.0, Rassul 15:07 "center the level and hod lod box") centred on the candles again (was docked left 2.50.0)   // (2.50.0, Rassul 10:57 "move this box to the left of the chart and dont have any black space to the left") docked in the bottom-LEFT corner
+        if (r - (int)pb.l >= 40) HB = hsb::layout(S->view, meas, (int)pb.l, (int)pane.bottom, (int)pb.l, r);   // (2.54.1, Rassul 15:51 "left justify the box again") docked in the bottom-LEFT corner (2.54.0 had centred it)   // (2.50.0, Rassul 10:57 "move this box to the left of the chart and dont have any black space to the left") docked in the bottom-LEFT corner
         if (HB.ok && HB.t > (int)pane.top + 24) {
             for (const hsb::Item& it : HB.items) {
                 if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
@@ -2458,7 +2458,7 @@ int HodLod::draw(void)
             S->gmDrawnF = true; S->gmLevel = G.level; S->gmText = G.text;
         }
         const int nowB = gml::nowBottom(G, anchorB);
-        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, HB.ok ? (HB.l + HB.r) / 2 : cx, nowB, l, r, 10);   // (2.54.0) centred on the box   // (2.50.0) the Level line flush left ON the box (its left edge = the box's)
+        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, HB.ok ? HB.l : cx, nowB, HB.ok ? HB.l : l, r, 10);   // (2.54.1) the Level line flush left ON the box again (its left edge = the box's)   // (2.50.0) the Level line flush left ON the box (its left edge = the box's)
         const int yB = nowB, yT = D.ok ? D.t : yB - 18;
         const int gLeft = (G.pill || G.exp) ? (std::min)(G.l, G.pill ? G.pillL : G.expL) : G.l;   // (2.39.1) the pill / 0DTE at the far left
         if (gmDrawn && !(yT > (int)pane.top + 24) && !stripOk) { stripBox = hl::Box{ gLeft, G.t, G.r, G.b }; stripOk = true; }
@@ -2509,7 +2509,7 @@ int HodLod::draw(void)
         } else S->l5Why = "not drawn: " + P.why;
     }
     S->placeLine += "LAST5," + std::string(l5::VERSION) + "," + S->calWhy + "," + S->l5Why + "\n";
-    S->placeLine += "HODLOD_BOX,2.54.0," + S->hbWhy + "\n";
+    S->placeLine += "HODLOD_BOX,2.54.1," + S->hbWhy + "\n";
     S->placeLine += std::string("DISPLAY,") + hl::HL_VERSION + ",level line + HOD / LOD box (2.48.0)"
                   + (hl::HL_BOX_DRAW ? std::string(",box drawn") : boxLaid ? ",box NOT drawn - laid out at " + std::to_string(boxAt.l) + " " + std::to_string(boxAt.t) + " " + std::to_string(boxAt.r) + " " + std::to_string(boxAt.b) : std::string(",box NOT drawn - no spot"))
                   + (hl::HL_OPTIONS_LINE_DRAW ? ",options line drawn" : ",options line NOT drawn (decided + recorded)") + ",now line " + (S->nlDrawn ? "drawn" : "not drawn")
@@ -2692,6 +2692,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.54.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.54.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

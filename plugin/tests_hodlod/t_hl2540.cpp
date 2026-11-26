@@ -15,7 +15,7 @@ static void C(bool c, const std::string& m) { if (c) ++ok; else { ++f; std::prin
 static bool has(const std::string& s, const std::string& x) { return s.find(x) != std::string::npos; }
 static int M(const std::string& s, bool b) { return (int)s.size() * 6 + (b ? (int)s.size() : 0); }
 int main() {
-    C(std::string(hl::HL_VERSION) == "2.54.0" && std::string(hlset::PLUGIN_VERSION) == "2.54.0", "versions 2.54.0");
+    C(std::string(hl::HL_VERSION) >= "2.54.0" && std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION), "versions 2.54.0 or later, matching");
     C(std::string(hsw::VERSION) == "1.4.0" && std::string(l5::VERSION) == "1.0.0", "sweeps 1.4.0, last5 1.0.0");
     // the real nightly file (hodlod_levels 1.15.0, ES built 2026-11-26)
     std::ifstream in("es_sweeps_1126.csv"); std::stringstream ss; ss << in.rdbuf(); const std::string txt = ss.str();
@@ -71,8 +71,8 @@ int main() {
     C(!l5::layout(std::vector<l5::Day>(), M, 0, 70, 470, 800).ok, "no rows: not drawn");
     // the box centred on the candles (cx = the middle of the room)
     hl::View v; v.tmOk = hsw::timeCum(F, v.tmCum); v.tmOpenMin = 510; v.tm2Ok = hsw::timeCum2(F, v.tm2Cum, v.tm2Open); v.secOk = hsw::secRow(F, v.secK, v.secMin, v.secPct, v.secLast, v.secOpen);
-    const hsb::Draw H = hsb::layout(v, M, 600, 900, 0, 1200);
-    C(H.ok && std::abs((H.l + H.r) / 2 - 600) <= 1, "HOD / LOD box centred");
+    const hsb::Draw H = hsb::layout(v, M, 0, 900, 0, 1200);   // (2.54.1) the host docks it bottom-left again (cx = the pane's left edge)
+    C(H.ok && H.l == 0 && H.b == 900, "HOD / LOD box docked bottom-left");
     std::printf("t_hl2540: %d pass, %d fail\n", ok, f);
     return f ? 1 : 0;
 }
