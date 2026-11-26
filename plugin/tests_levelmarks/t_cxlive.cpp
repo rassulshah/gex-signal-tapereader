@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
         const long long t = std::stoll(v[1]); if (v[0] == "P") { pre.push_back(std::stod(v[7])); continue; }
         S.push_back(bar(t, std::stoll(v[3]), std::stoll(v[4]), std::stoll(v[5]), std::stoll(v[6]), std::stoll(v[7]))); hm[t] = v[2]; if (v[2] == "23:03") t1103 = t; if (v[2] == "23:12") t1112 = t; } }
     C(S.size() > 100 && pre.size() == 20 && t1103 && t1112, "fixture loaded");
-    const std::vector<wyr::Lvl> K;
+    std::vector<wyr::Lvl> K; { wyr::Lvl z; z.name = "PWL"; z.px = 11010; K.push_back(z); }   // (1.29.0) a Cx needs a stats / weekly level inside its candle: PWL at the 11:03 PM close (no Bk / Sw)
     // replay the session candle by candle as closed candles (the pane runs on the closed ones): when is the Cx decided, when does the Cx? show
     long long firstLive = 0, firstCx = 0; int liveWhileCx = 0, flips = 0; long long prevLive = 0;
     for (size_t n = 8; n <= S.size(); ++n) { std::vector<wyr::Bar> P(S.begin(), S.begin() + (long)n); const auto M = lvm::run(P, K, -1, 180, nullptr, nullptr, &pre); const auto L = lvm::liveCx(P, M, &pre);

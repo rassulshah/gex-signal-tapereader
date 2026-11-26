@@ -15,7 +15,7 @@ static std::vector<wyr::Bar> run(int after) {   // a rally, a heavy pivot-high c
     return B; }
 static wyr::Lvl lv(const char* n, long long px) { wyr::Lvl z; z.name = n; z.px = px; return z; }
 int main() {
-    C(std::string(lvm::VERSION) == "1.28.0", "version 1.27.0");
+    C(std::string(lvm::VERSION) == "1.29.0", "version 1.27.0");
     const std::vector<wyr::Bar> B = run(8); const long long tp = B[46].t;
     { const auto M = lvm::run(B, { lv("VAH", 1100) }); C(!M.count(tp), "no level inside the heavy pivot candle: no Cx"); }
     { const auto M = lvm::run(B, {}); C(!M.count(tp), "no key levels at all (and no hour level inside): no Cx"); }

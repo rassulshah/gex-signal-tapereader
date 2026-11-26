@@ -5,7 +5,7 @@
 #include <cstdio>
 static int f = 0, ok = 0; static void C(bool c, const std::string& m) { if (c) ++ok; else { ++f; std::printf("FAIL %s\n", m.c_str()); } }
 int main() {
-    C(std::string(lvm::VERSION) == "1.28.0" && lvm::SW_MIN == 99 && lvm::SW_BOTH_SIDES, "version 1.25.0, SW_MIN 99, both sides");
+    C(std::string(lvm::VERSION) == "1.29.0" && lvm::SW_MIN == 99 && lvm::SW_BOTH_SIDES, "version 1.25.0, SW_MIN 99, both sides");
     const int n = 220; std::vector<long long> T; std::vector<double> V, R; std::vector<char> G;
     for (int i = 0; i < n; ++i) { T.push_back(1000 + 180LL * i); V.push_back(100); R.push_back(10); G.push_back(i % 2); }
     V[150] = 900;                // biggest volume in 150 candles -> 99+

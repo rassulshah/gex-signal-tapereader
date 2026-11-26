@@ -17,7 +17,7 @@ static std::vector<wyr::Bar> make(const std::vector<wyr::Bar>& top, int sign) {
     for (int i = 0; i < 8; ++i) { const long long p = 990 - 5 * i; add(p, p + 2, p - 4, p - 3, 110); }
     return B; }
 int main() {
-    C(std::string(lvm::VERSION) == "1.28.0", "version 1.28.0");
+    C(std::string(lvm::VERSION) == "1.29.0", "version 1.28.0");
     for (int sign : { 1, -1 }) {
         const std::string sd = sign > 0 ? "buying climax (pivot high): " : "selling climax (pivot low, mirror): ";
         auto L = [&](long long px) { return std::vector<wyr::Lvl>{ lv("VAH", sign > 0 ? px : 2000 - px) }; };

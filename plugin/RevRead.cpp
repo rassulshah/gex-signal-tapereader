@@ -111,7 +111,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.40.0"   // (0.40.0, Rassul 2026-11-26 13:06-13:16 CT) LevelMarks 1.28.0: a Cx only at a level the climax (and the pivot candle after it) did NOT close beyond
+#define RVS_VERSION "0.41.0"   // (0.41.0, Rassul 2026-11-26 13:36-13:40 CT) LevelMarks 1.29.0: a Cx only at the HOD / LOD stats levels + weekly levels
+// was #define RVS_VERSION "0.40.0"   // (0.40.0, Rassul 2026-11-26 13:06-13:16 CT) LevelMarks 1.28.0: a Cx only at a level the climax (and the pivot candle after it) did NOT close beyond
 // was #define RVS_VERSION "0.39.0"   // (0.39.0, Rassul 2026-11-26 12:40 / 12:45 CT "cx ... requires a level", "A") LevelMarks 1.27.0: a Cx / Cx? only when a level is inside its candle
 // was #define RVS_VERSION "0.38.0"   // (0.38.0, Rassul 2026-11-26 12:23 CT "why is this not a cmx" - ES 10:15 AM) LevelMarks 1.26.0: a sweep candle too light for a VOB / VOT (BVMax < 99) no longer blocks its Cx / Bk
 // was RVS_VERSION "0.37.0"   // (0.37.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) LevelMarks 1.25.0: VOB / VOT = BVMax 99+, both sides
@@ -139,7 +140,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.40.0");
+    p->setVersion("0.41.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
