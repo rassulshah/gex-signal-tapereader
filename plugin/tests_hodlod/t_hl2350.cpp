@@ -97,7 +97,7 @@ int main() { (void)&fnv; (void)&itemsText;
     CHECK(scen >= 30, "scenarios laid out: " + std::to_string(scen));
     CHECK(dropOk > 0, "narrow panes drop the oldest badges (" + std::to_string(dropOk) + ")");
     std::printf("[4] versions\n");
-    CHECK(std::string(hl::HL_VERSION) == "2.44.0" && std::string(hlset::PLUGIN_VERSION) == "2.35.0", "2.35.0");
+    CHECK(std::string(hl::HL_VERSION) == "2.46.1" && std::string(hlset::PLUGIN_VERSION) == "2.35.0", "2.35.0");
     { const std::string s = rd("../HodLod.cpp"); CHECK(s.find("p->setVersion(\"2.35.0\")") != std::string::npos, "setVersion 2.35.0"); }
     std::printf("t_hl2350 (lsHodLod 2.35.0): %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
