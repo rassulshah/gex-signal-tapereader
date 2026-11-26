@@ -14,7 +14,7 @@ static std::vector<wyr::Bar> flat(int n) { std::vector<wyr::Bar> B; for (int i =
 static wyr::Lvl key(const char* n, long long px) { wyr::Lvl z; z.name = n; z.px = px; return z; }
 static std::string one(const std::map<long long, lvm::Mark>& M, long long t) { const auto it = M.find(t); return it == M.end() ? std::string("-") : std::string(lvm::codeText(it->second.code)) + " " + it->second.lv + " " + std::to_string(it->second.dir); }
 int main() {
-    C(std::string(lvm::VERSION) == "1.27.0", "LevelMarks 1.14.0");
+    C(std::string(lvm::VERSION) == "1.28.0", "LevelMarks 1.14.0");
     // ---- which levels may name a Sw
     for (const char* n : { "ONH", "ONL", "LonHI", "LonLO", "AsiaHI", "AsiaLO", "ONH/LonHI", "PDH", "PDL", "PFH/PDH", "PFH", "PFL", "PWH", "PWL", "CWH", "CWL", "R1", "R2", "S1", "S2", "PFL/PWL" }) C(lvm::swMajor(n, 0), std::string("major: ") + n);
     for (const char* n : { "VAH", "VAL", "PHH", "PHL", "DPoc", "WPoc", "Open", "VWAP", "CR0", "" }) C(!lvm::swMajor(n, 0), std::string("not major: ") + n);
@@ -70,7 +70,7 @@ int main() {
     { int sw = 0, same = 0, other = 0; for (const auto& kv : M) if (kv.second.code == 'S') ++sw;
       for (const auto& kv : live) { if (kv.first < s0 || kv.second.compare(0, 2, "Sw") == 0) continue; const auto it = M.find(kv.first);
           if (it != M.end() && std::string(lvm::codeText(it->second.code)) + " " + it->second.lv + " " + std::to_string(it->second.dir) == kv.second) ++same; else { ++other; std::printf("  differs: %lld live '%s' now '%s'\n", kv.first - D, kv.second.c_str(), one(M, kv.first).c_str()); } }
-      C(sw == 0, "GC today: no Sw left (none of the three crossed a major level)"); C(same == 11 && other == 6, "(1.20.0: the 3 wrong-side Bk gone - bearish through VAH / 3hH, bullish through 2hL; 1.27.0: the 3 Cx with NO level in their candle gone) every other Bk / Cx of the live file is unchanged: " + std::to_string(same) + " same, " + std::to_string(other) + " other");
+      C(sw == 0, "GC today: no Sw left (none of the three crossed a major level)"); C(same == 10 && other == 7, "(1.20.0: the 3 wrong-side Bk gone - bearish through VAH / 3hH, bullish through 2hL; 1.27.0: the 3 Cx with NO level in their candle gone; 1.28.0: the 6:48 AM selling climax closed UNDER 1hL, so it is named by the 2hL it held) every other Bk / Cx of the live file is unchanged: " + std::to_string(same) + " same, " + std::to_string(other) + " other");
       C(M.size() == 24, "(1.21.0) 27 marks: the 15 of 1.20.0 + 12 hour-level Bk the biggest-in-5 rule used to drop (volume OR range up now); (1.27.0) 24: 3 level-less Cx gone"); }
     for (const auto& kv : oldRule) if (kv.second.code == 'S') C(lvm::swMajor(kv.second.lv == "LHI" ? "LonHI" : kv.second.lv, 0) || kv.second.lv.size() == 3, "without 3h levels a Sw label is still major: " + kv.second.lv);
     // every Sw of every session of the fixture carries a major label; 3h-labelled marks exist somewhere in the 8 sessions

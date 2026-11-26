@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
     const auto M = lvm::run(B, K);
     long long t700 = 0; for (const auto& b : B) if (b.when == "7:00") t700 = b.t;   // the LAST 7:00 = 7:00 AM (the session starts 5 PM)
     const std::string got = str(M, t700);
-    const std::string want = "7:09 Sw PFH; 7:33 Bk 1hL; 8:27 Cx AHI; 8:30 Bk PhrH; 8:33 Sw PFH; 8:39 Sw LLO; 8:45 Bk PhrL; 8:54 Bk LLO; 9:12 Bk 1hL; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; (1.21.0) the break candle = volume OR range up: 8:54 Bk LLO and 9:12 Bk 1hL (no biggest-in-5 rule any more) join
+    const std::string want = "7:09 Sw PFH; 7:33 Bk 1hL; 8:30 Bk PhrH; 8:33 Sw PFH; 8:39 Sw LLO; 8:45 Bk PhrL; 8:54 Bk LLO; 9:12 Bk 1hL; 9:18 Bk ALO; 9:30 Bk ONL; 9:39 Sw PDL; ";   // (1.3.0) no Open / POC levels; (1.21.0) the break candle = volume; (1.28.0) no 8:27 Cx AHI: a pivot-LOW climax named by AsiaHI at its HIGH - it closed under AsiaHI, not a level the selling failed to break OR range up: 8:54 Bk LLO and 9:12 Bk 1hL (no biggest-in-5 rule any more) join
     std::printf("ES 11-19 7:00-9:48: %s\n", got.c_str());
     C(got == want, "ES 11-19 = mockup v8 + the 1.3.0 rules (1.10.0: 7:09 / 8:33 Sw of the untouched 1-hour high name PFH, the key level the attempt crossed from below and closed back under) (1.8.0: + 7:09 / 8:33 Sw PHH, no volume gate in run(); the own-candle 20 test is fillStrength)");
     for (const auto& kv : M) if (startOf[kv.first] == "9:39") C(kv.second.dir == 1 && kv.second.px == 29221, "Sw PDL bullish at 7305.25");

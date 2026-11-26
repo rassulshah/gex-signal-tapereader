@@ -18,5 +18,5 @@ int main() {
     D.push_back(bar(T0 + 180 * 12, 1005, 1006, 992, 994, 300)); bool bk = false;
     for (const auto& kv : lvm::run(D, key)) if (kv.second.code == 'B' && kv.second.lv == "ONL" && kv.second.dir == -1) bk = true;
     CHECK(bk);
-    CHECK(std::string(lvm::VERSION) == "1.27.0");
+    CHECK(std::string(lvm::VERSION) == "1.28.0");
     std::printf("t_bkside120: %d checks, %d fails\n", checks, fails); return fails ? 1 : 0; }

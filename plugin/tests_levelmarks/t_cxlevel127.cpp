@@ -15,11 +15,11 @@ static std::vector<wyr::Bar> run(int after) {   // a rally, a heavy pivot-high c
     return B; }
 static wyr::Lvl lv(const char* n, long long px) { wyr::Lvl z; z.name = n; z.px = px; return z; }
 int main() {
-    C(std::string(lvm::VERSION) == "1.27.0", "version 1.27.0");
+    C(std::string(lvm::VERSION) == "1.28.0", "version 1.27.0");
     const std::vector<wyr::Bar> B = run(8); const long long tp = B[46].t;
     { const auto M = lvm::run(B, { lv("VAH", 1100) }); C(!M.count(tp), "no level inside the heavy pivot candle: no Cx"); }
     { const auto M = lvm::run(B, {}); C(!M.count(tp), "no key levels at all (and no hour level inside): no Cx"); }
-    { const auto M = lvm::run(B, { lv("VAH", 1003) }); C(M.count(tp) && M.at(tp).code == 'C' && M.at(tp).lv == "VAH", "a level at the candle's low (inside, inclusive): Cx VAH"); }
+    { const auto M = lvm::run(B, { lv("VAH", 1005) }); C(M.count(tp) && M.at(tp).code == 'C' && M.at(tp).lv == "VAH", "a level at the candle's close (inside, inclusive; 1.28.0 closed AT it, not over): Cx VAH"); }
     { const auto M = lvm::run(B, { lv("VAH", 1014) }); C(M.count(tp) && M.at(tp).code == 'C', "a level at the candle's high (inclusive): Cx"); }
     { const auto M = lvm::run(B, { lv("VAH", 1015) }); C(!M.count(tp), "one tick above the high: no Cx"); }
     {   // the live Cx? (the leg still running at the heavy candle): with levels handed in it needs one inside, without them it is as before

@@ -17,7 +17,7 @@ static std::vector<wyr::Bar> session(long long sweepVol) {
     for (int i = 0; i < 8; ++i, t += 180) { const long long p = 1000 - 5 * i; B.push_back(bar(t, p, p + 2, p - 4, p - 3, 110)); }          // falling: pivot high at 46 confirmed
     return B; }
 int main() {
-    C(std::string(lvm::VERSION) == "1.27.0", "version 1.26.0");
+    C(std::string(lvm::VERSION) == "1.28.0", "version 1.26.0");
     std::vector<wyr::Lvl> K; { wyr::Lvl z; z.name = "PDH"; z.px = 1010; z.high = true; K.push_back(z); }
     const int sw = 46;
     {   // light sweep candle: biggest volume in 46 (>= 20 for a Cx, < 99 for a Sw)
@@ -30,7 +30,7 @@ int main() {
         std::map<long long, lvm::Mark> now = lvm::run(B, K, -1, 0, nullptr, nullptr, nullptr, &W); lvm::fillStrength(now, T, V, R, G);
         C(now.count(B[sw].t) && now[B[sw].t].code == 'C' && now[B[sw].t].dir == -1, "1.26.0: the candle is a Cx at the pivot high");
         C(now.count(B[sw].t) && now[B[sw].t].lv == "PDH", "1.26.0: the Cx names the level it traded through (PDH)");
-        C(old.count(B[sw - 1].t) && old[B[sw - 1].t].code == 'C' && !now.count(B[sw - 1].t), "1.25.0 had put the Cx on the candle BEFORE the pivot (the pivot was taken); now it sits on the pivot candle itself");
+        C(!now.count(B[sw - 1].t), "the candle before the pivot is no Cx (1.25.0 put one there; 1.28.0: the pivot candle closed over its level anyway)");
         int changed = 0; for (const auto& kv : old) { if (kv.first == B[sw - 1].t) continue; const auto it = now.find(kv.first); if (it == now.end() || it->second.code != kv.second.code) ++changed; }
         C(changed == 0, "no other mark changes"); }
     {   // heavy sweep candle: biggest in 99+ -> still the Sw (VOT), not the Cx

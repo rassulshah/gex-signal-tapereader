@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.27.0";   // (1.27.0, Rassul 2026-11-26 12:40 CT "currently cx doesn't require a level but i want to update it so that it requires a level, meaning the bar with the volume needs to be crossing a level", 12:45 "A" = every level a Cx can name) a Cx (and the live Cx?) needs a level INSIDE its candle (low <= level <= high): session, PD, PF, VAH / VAL, weekly, 3-hour S / R, PhrH / PhrL, hour highs / lows - the Cx level list (not the Bk-only hourly pivots / 4h / 3HrH). A heavy pivot candle with no level in it: no Cx (the candle before may still be the Cx if IT crosses a level)
+static const char* const VERSION = "1.28.0";   // (1.28.0, Rassul 2026-11-26 13:06-13:16 CT "its close would not close over the level", "in any buying climax, no bar closes above the level", "no" to also checking the bars that confirm the pivot) a Cx level must be one the push FAILED to close beyond: buying climax (pivot high) - the climax candle AND the pivot candle (when the climax is the candle before it) close at or under the level; selling climax (pivot low) - both close at or above it. A close beyond = a breakout, no Cx at that level
+// was static const char* const VERSION = "1.27.0";   // (1.27.0, Rassul 2026-11-26 12:40 CT "currently cx doesn't require a level but i want to update it so that it requires a level, meaning the bar with the volume needs to be crossing a level", 12:45 "A" = every level a Cx can name) a Cx (and the live Cx?) needs a level INSIDE its candle (low <= level <= high): session, PD, PF, VAH / VAL, weekly, 3-hour S / R, PhrH / PhrL, hour highs / lows - the Cx level list (not the Bk-only hourly pivots / 4h / 3HrH). A heavy pivot candle with no level in it: no Cx (the candle before may still be the Cx if IT crosses a level)
 // was static const char* const VERSION = "1.26.0";   // (1.26.0, Rassul 2026-11-26 12:23 CT "why is this not a cmx" - ES 10:15 AM HOD, 1,150 lots = the biggest in 32: the candle was a Sw CANDIDATE (closed back under ONH / LonHI / AsiaHI) that blocked the Cx step, then fillStrength dropped the Sw for BVMax < 99, leaving no mark) run() takes noSw = the candles whose own BVMax is under SW_MIN (swWeak(), the same count fillStrength uses), and drops them as Sw candidates BEFORE the Bk and Cx steps, so the candle can still be its Bk / Cx. Nothing else changes
 // was static const char* const VERSION = "1.25.0";   // (1.25.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) a Sw (VOB / VOT) = a high-volume rejection of an attempted break: the sweep candle's own BVMax must be 99+ (SW_MIN 99, was 20), and BOTH sides count again - any major level, either direction (1.23.0's highs-for-bearish / lows-for-bullish rule is off: SW_BOTH_SIDES; NQ 11-25 9:03 AM bearish at LonLO is a VOT again)
 // was static const char* const VERSION = "1.24.2";   // (1.24.2, Rassul 2026-11-25 16:10 CT "thats a problem .. lets just use BVMax 20+") the Sw strength is BVMax again (the larger of BV and the same-colour count), as 1.24.0; BV alone (1.24.1) removed most sweeps (ES / NQ 11-25 had BV 4 / 3)
@@ -303,6 +304,12 @@ inline bool newsCandle(long long t, long long spb, const std::vector<long long>*
     if (!rel || rel->empty() || spb <= 0) return false;
     const auto it = std::lower_bound(rel->begin(), rel->end(), t - spb);
     return it != rel->end() && *it < t; }
+// (1.28.0) the climax failed AT the level: every candle from the climax candle kk to the pivot candle k closed at or under it (buying climax, side -1)
+// / at or above it (selling climax, side +1) - a close beyond is a breakout, not a climax
+inline bool cxHeld(const std::vector<wyr::Bar>& B, int kk, int k, int side, long long px) {
+    for (int j = kk; j <= k && j < (int)B.size(); ++j) { const long long c = B[(size_t)j].c; if (side < 0 ? c > px : c < px) return false; }
+    return true;
+}
 inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, int openMin = -1, long long spb = 0, const std::vector<long long>* rel = nullptr, const std::vector<H3>* h3 = nullptr, const std::vector<double>* preV = nullptr, const std::set<long long>* noSw = nullptr) {   // (1.26.0) noSw = candle stamps that cannot be a Sw (own BVMax < SW_MIN, swWeak()); (1.15.0) preV = the volume of the candles before B[0], oldest first (the Cx look-back only)
     std::map<long long, Mark> out; const int n = (int)B.size(); if (n < 6) return out;
     std::vector<double> v((size_t)n); for (int i = 0; i < n; ++i) v[(size_t)i] = (double)(B[(size_t)i].buy + B[(size_t)i].sell);
@@ -390,7 +397,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             if (v[(size_t)kk] < mb) continue;
             const long long ext = side > 0 ? B[(size_t)k].l : B[(size_t)k].h;
             std::vector<std::pair<long long, Cand> > in;
-            for (const Lv& z : levelsAt(B, kk, key, h3)) if (!z.bkOnly && B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), cd)); }
+            for (const Lv& z : levelsAt(B, kk, key, h3)) if (!z.bkOnly && B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h && cxHeld(B, kk, k, side, z.px)) { Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), cd)); }
             std::stable_sort(in.begin(), in.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first < b.first; });
             if (in.empty()) continue;   // (1.27.0) no level inside the candle: no Cx
             std::vector<Cand> cs; for (size_t q = 0; q < in.size() && q < 4; ++q) cs.push_back(in[q].second);
@@ -673,7 +680,7 @@ inline std::pair<long long, int> liveCx(const std::vector<wyr::Bar>& B, const st
         double mb = 0; for (int k = std::max(0, kk - 20); k < kk; ++k) mb = std::max(mb, v[(size_t)k]);
         for (int j = kk - 20; j < 0; ++j) { const int q = pn + j; if (q >= 0) mb = std::max(mb, (*preV)[(size_t)q]); }
         if (v[(size_t)kk] < mb || v[(size_t)kk] <= 0) continue;
-        if (key) { bool lv = false; for (const Lv& z : levelsAt(B, kk, *key, h3)) if (!z.bkOnly && B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { lv = true; break; } if (!lv) continue; }   // (1.27.0)
+        if (key) { bool lv = false; for (const Lv& z : levelsAt(B, kk, *key, h3)) if (!z.bkOnly && B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h && cxHeld(B, kk, zext, side, z.px)) { lv = true; break; } if (!lv) continue; }   // (1.27.0) + (1.28.0) closed at / inside the level up to the running extreme
         return std::make_pair(B[(size_t)kk].t, side);
     }
     return std::make_pair(0LL, 0);
