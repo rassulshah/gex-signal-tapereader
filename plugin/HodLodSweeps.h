@@ -19,12 +19,13 @@
 #include <vector>
 
 namespace hsw {
-static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-26 13:27 CT "go") + SEC2: the 2nd extreme by the open + 3.5 h hourly (last step 30 min before the close) + last 30
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-26 13:43-13:46 CT) + LIFT rows read (the random rate of each sweep cell) and the ROW order kept, for the HOD / LOD swept lines
+// was static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-26 13:27 CT "go") + SEC2: the 2nd extreme by the open + 3.5 h hourly (last step 30 min before the close) + last 30
 // was static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-26) + TIME2: the 1st extreme cumulative to 2 hours + after, with its open
 static const size_t MAX_BYTES = 8192;
 static const int MIN_N = 20;
-struct Cell { int pct = -1, swept = 0, n = 0; };
-struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0; int tm2[6] = { -1, -1, -1, -1, -1, -1 }; int tm2Open = -1, tm2N = 0; int secOpen = -1, secK = 0, secN = 0, secMin[8] = { 0 }, secPct[8] = { 0 }, secLast = -1;   // (1.2.0) SEC2   // (1.1.0) TIME2: by +15 / 30 / 60 / 90 / 120 min (cumulative), after 2 h; the open they count from
+struct Cell { int pct = -1, swept = 0, n = 0, rnd = -1; };   // (1.3.0) rnd = random levels at the same distance, % (LIFT row; -1 = none)
+struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0; int tm2[6] = { -1, -1, -1, -1, -1, -1 }; int tm2Open = -1, tm2N = 0; std::vector<std::string> hiOrd, loOrd; int secOpen = -1, secK = 0, secN = 0, secMin[8] = { 0 }, secPct[8] = { 0 }, secLast = -1;   // (1.2.0) SEC2   // (1.1.0) TIME2: by +15 / 30 / 60 / 90 / 120 min (cumulative), after 2 h; the open they count from
              double onCut[2] = { NAN, NAN }; int dayTrend[3] = { -1, -1, -1 }, dayChop[3] = { -1, -1, -1 }, dayN[3] = { 0, 0, 0 }, projX100[3] = { -1, -1, -1 }; };   // (2.14.0) ONCUT / DAY / PROJ rows   // tm = % of days the 1st extreme formed 0-15 / 15-30 / 30-60 / 60+ min after the open
 struct Lv { std::string name; double px = 0; };   // one name of a LRA-KeyLevels row (merged rows are split by the caller)
 struct Row { std::string name, px, pct; bool elig = true; };
@@ -43,12 +44,17 @@ inline File parse(const std::string& text, const std::string& mkt)
             c.pct = (int)std::strtol(f[3].c_str(), &e, 10); if (!e || *e || c.pct < 0 || c.pct > 100) continue;
             c.swept = (int)std::strtol(f[4].c_str(), &e, 10); if (!e || *e) continue;
             c.n = (int)std::strtol(f[5].c_str(), &e, 10); if (!e || *e || c.n < 0) continue;
-            (f[1] == "HI" ? F.hi : F.lo)[f[2]] = c;
+            { auto& M = f[1] == "HI" ? F.hi : F.lo; auto& O = f[1] == "HI" ? F.hiOrd : F.loOrd; if (!M.count(f[2])) O.push_back(f[2]); const int keep = M.count(f[2]) ? M[f[2]].rnd : -1; M[f[2]] = c; M[f[2]].rnd = keep; }   // (1.3.0) file order kept
         }
         if (f.size() >= 3 && f[0] == "ONCUT") { char* e1 = nullptr; char* e2 = nullptr; const double a = std::strtod(f[1].c_str(), &e1), b = std::strtod(f[2].c_str(), &e2);
             if (e1 && !*e1 && e2 && !*e2 && std::isfinite(a) && std::isfinite(b) && a > 0 && b >= a) { F.onCut[0] = a; F.onCut[1] = b; } continue; }
         if (f.size() >= 5 && f[0] == "DAY") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) { F.dayTrend[k] = std::atoi(f[2].c_str()); F.dayChop[k] = std::atoi(f[3].c_str()); F.dayN[k] = std::atoi(f[4].c_str()); } continue; }
         if (f.size() >= 4 && f[0] == "PROJ") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) F.projX100[k] = std::atoi(f[2].c_str()); continue; }
+        if (f.size() >= 7 && f[0] == "LIFT" && (f[1] == "HI" || f[1] == "LO")) {   // (1.3.0) LIFT,<HI|LO>,<key>,<lift>,<random %>,<q>,<ok>
+            char* e = nullptr; const long r = std::strtol(f[4].c_str(), &e, 10);
+            if (e && !*e && !f[4].empty() && r >= 0 && r <= 100) { auto& M = f[1] == "HI" ? F.hi : F.lo; M[f[2]].rnd = (int)r; }
+            continue;
+        }
         if (f.size() >= 7 && f[0] == "SEC2") {   // (1.2.0) SEC2,<open>,<k>,<min 1>,<% 1>,...,<min k>,<% k>,<last 30 %>,<n>
             char* e = nullptr; const long op = std::strtol(f[1].c_str(), &e, 10); bool good = e && !*e && op >= 0 && op < 1440;
             const long k = good ? std::strtol(f[2].c_str(), &e, 10) : 0; good = good && e && !*e && k >= 1 && k <= 8 && (long)f.size() >= 3 + 2 * k + 2;

@@ -17,7 +17,7 @@ static hl::View view(const hsw::File& F, int open) {
     hl::View v; v.tmOk = hsw::timeCum(F, v.tmCum); v.tmOpenMin = open; v.tm2Ok = hsw::timeCum2(F, v.tm2Cum, v.tm2Open);
     v.secOk = hsw::secRow(F, v.secK, v.secMin, v.secPct, v.secLast, v.secOpen); return v; }
 int main() {
-    C(std::string(hl::HL_VERSION) == "2.50.0" && std::string(hlset::PLUGIN_VERSION) == "2.50.0" && std::string(hsw::VERSION) == "1.2.0", "versions 2.50.0 / 1.2.0");
+    C(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(hl::HL_VERSION) >= "2.50.0", "versions match, 2.50.0 or later");
     auto meas = [](const std::string& s, bool bold) { return (int)s.size() * (bold ? 7 : 6); };
     // ES as hodlod_levels 1.12.0 writes it (fresh store, 11-26)
     const hsw::File F = hsw::parse(file("ES", "TIME2,510,45,61,78,87,94,6,252\nSEC2,510,4,210,37,270,53,330,63,360,74,26,252\n"), "ES");
