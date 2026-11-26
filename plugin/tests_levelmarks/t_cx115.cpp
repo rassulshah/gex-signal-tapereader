@@ -1,4 +1,4 @@
-// t_cx115.cpp -- LevelMarks 1.15.0: the Cx look-back reaches into the candles before the session (run() preV). GC 2026-11-23, his 3-minute
+// t_cx115.cpp -- (1.27.0: each climax candle tested gets a level inside it - a Cx needs one now) LevelMarks 1.15.0: the Cx look-back reaches into the candles before the session (run() preV). GC 2026-11-23, his 3-minute
 // candles from lsFlexLevels\ChartView\GC_180_GCZ6.json (gc1123_cx.csv: t|o|h|l|c|vol in ticks, bar END, the lines before 17:03 = the prior
 // session): "why isnt this a cmx ?" - the 5:51 PM pivot low on 324 lots, the biggest in 35 candles, the 17th candle of the session.
 //   g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra t_cx115.cpp -o t && ./t gc1123_cx.csv
@@ -14,7 +14,8 @@ int main(int argc, char** argv) {
         const long long t = std::stoll(v[1]); if (v[0] == "P") { pre.push_back(std::stod(v[7])); continue; }
         S.push_back(bar(t, std::stoll(v[3]), std::stoll(v[4]), std::stoll(v[5]), std::stoll(v[6]), std::stoll(v[7]))); if (v[2] == "17:51") t551 = t; if (v[2] == "18:03") t603 = t; } }
     C(S.size() > 40 && pre.size() == 20 && t551 && t603, "fixture loaded");
-    const std::vector<wyr::Lvl> K;
+    std::vector<wyr::Lvl> K;   // (1.27.0) a Cx needs a level inside its candle: one PDL / PDH through each climax candle tested here (the look-back rules are what this test checks)
+    for (const wyr::Bar& b : S) { if (b.t == t551) { wyr::Lvl z; z.name = "PDL"; z.px = (b.h + b.l) / 2; K.push_back(z); } if (b.t == t603) { wyr::Lvl z; z.name = "PDH"; z.px = 36300; K.push_back(z); } }   /* 6:03 PM: low 36299, already traded at 6:00 PM, closes on the same side - inside the candle, no Bk / Sw */
     const auto old = lvm::run(S, K), now = lvm::run(S, K, -1, 180, nullptr, nullptr, &pre);
     C(!old.count(t551), "without the candles before the session: no Cx at 5:51 PM (the 17th candle) - 1.14.0");
     C(now.count(t551) && now.at(t551).code == 'C' && now.at(t551).dir == 1, "(1.15.0) Cx at the 5:51 PM pivot low, green");

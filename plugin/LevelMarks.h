@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.26.0";   // (1.26.0, Rassul 2026-11-26 12:23 CT "why is this not a cmx" - ES 10:15 AM HOD, 1,150 lots = the biggest in 32: the candle was a Sw CANDIDATE (closed back under ONH / LonHI / AsiaHI) that blocked the Cx step, then fillStrength dropped the Sw for BVMax < 99, leaving no mark) run() takes noSw = the candles whose own BVMax is under SW_MIN (swWeak(), the same count fillStrength uses), and drops them as Sw candidates BEFORE the Bk and Cx steps, so the candle can still be its Bk / Cx. Nothing else changes
+static const char* const VERSION = "1.27.0";   // (1.27.0, Rassul 2026-11-26 12:40 CT "currently cx doesn't require a level but i want to update it so that it requires a level, meaning the bar with the volume needs to be crossing a level", 12:45 "A" = every level a Cx can name) a Cx (and the live Cx?) needs a level INSIDE its candle (low <= level <= high): session, PD, PF, VAH / VAL, weekly, 3-hour S / R, PhrH / PhrL, hour highs / lows - the Cx level list (not the Bk-only hourly pivots / 4h / 3HrH). A heavy pivot candle with no level in it: no Cx (the candle before may still be the Cx if IT crosses a level)
+// was static const char* const VERSION = "1.26.0";   // (1.26.0, Rassul 2026-11-26 12:23 CT "why is this not a cmx" - ES 10:15 AM HOD, 1,150 lots = the biggest in 32: the candle was a Sw CANDIDATE (closed back under ONH / LonHI / AsiaHI) that blocked the Cx step, then fillStrength dropped the Sw for BVMax < 99, leaving no mark) run() takes noSw = the candles whose own BVMax is under SW_MIN (swWeak(), the same count fillStrength uses), and drops them as Sw candidates BEFORE the Bk and Cx steps, so the candle can still be its Bk / Cx. Nothing else changes
 // was static const char* const VERSION = "1.25.0";   // (1.25.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) a Sw (VOB / VOT) = a high-volume rejection of an attempted break: the sweep candle's own BVMax must be 99+ (SW_MIN 99, was 20), and BOTH sides count again - any major level, either direction (1.23.0's highs-for-bearish / lows-for-bullish rule is off: SW_BOTH_SIDES; NQ 11-25 9:03 AM bearish at LonLO is a VOT again)
 // was static const char* const VERSION = "1.24.2";   // (1.24.2, Rassul 2026-11-25 16:10 CT "thats a problem .. lets just use BVMax 20+") the Sw strength is BVMax again (the larger of BV and the same-colour count), as 1.24.0; BV alone (1.24.1) removed most sweeps (ES / NQ 11-25 had BV 4 / 3)
 // was static const char* const VERSION = "1.24.1";   // (1.24.1, Rassul 2026-11-25 16:04 CT "the vob / vot strength requires BV 20+") the Sw strength = BV, the count over ALL candles before it (1.24.0 used BVMax = the larger of BV and the same-colour count BVG / BVR); the label shows that BV ("V24")
@@ -391,6 +392,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             std::vector<std::pair<long long, Cand> > in;
             for (const Lv& z : levelsAt(B, kk, key, h3)) if (!z.bkOnly && B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { Cand cd; cd.px = z.px; cd.name = z.name; cd.hb = z.hb; cd.high = z.high; in.push_back(std::make_pair(std::llabs(z.px - ext), cd)); }
             std::stable_sort(in.begin(), in.end(), [](const std::pair<long long, Cand>& a, const std::pair<long long, Cand>& b) { return a.first < b.first; });
+            if (in.empty()) continue;   // (1.27.0) no level inside the candle: no Cx
             std::vector<Cand> cs; for (size_t q = 0; q < in.size() && q < 4; ++q) cs.push_back(in[q].second);
             raw[kk] = std::make_pair('C', cs); rawDir[kk] = side; break; } } }
     // one level each, repeats cut (per code + level, in candle order)
@@ -655,7 +657,7 @@ inline std::string iLevel(const std::string& name, int hb, bool high) { if (pri(
 // last CLOSED candle instead of when the 3-bar ZigZag confirms the pivot. It is not a decided mark: it moves or goes when a later candle
 // makes a new extreme or fails the test, and the real Cx replaces it once the pivot is confirmed (a candle that is already a mark of
 // run() - Sw / Bk / Cx - gets no Cx?). Never recorded. Returns {candle stamp, side +1 at a low / -1 at a high} or {0, 0}.
-inline std::pair<long long, int> liveCx(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks, const std::vector<double>* preV = nullptr) {
+inline std::pair<long long, int> liveCx(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks, const std::vector<double>* preV = nullptr, const std::vector<wyr::Lvl>* key = nullptr, const std::vector<H3>* h3 = nullptr) {   // (1.27.0) key / h3 given = the Cx? also needs a level inside its candle
     const int n = (int)B.size(); if (n < 6) return std::make_pair(0LL, 0);
     std::vector<double> v((size_t)n); for (int i = 0; i < n; ++i) v[(size_t)i] = (double)(B[(size_t)i].buy + B[(size_t)i].sell);
     int zd = B[1].h >= B[0].h ? 1 : -1, zext = 0;                      // = wyr::legs, to the last candle: the running leg and its extreme
@@ -671,6 +673,7 @@ inline std::pair<long long, int> liveCx(const std::vector<wyr::Bar>& B, const st
         double mb = 0; for (int k = std::max(0, kk - 20); k < kk; ++k) mb = std::max(mb, v[(size_t)k]);
         for (int j = kk - 20; j < 0; ++j) { const int q = pn + j; if (q >= 0) mb = std::max(mb, (*preV)[(size_t)q]); }
         if (v[(size_t)kk] < mb || v[(size_t)kk] <= 0) continue;
+        if (key) { bool lv = false; for (const Lv& z : levelsAt(B, kk, *key, h3)) if (!z.bkOnly && B[(size_t)kk].l <= z.px && z.px <= B[(size_t)kk].h) { lv = true; break; } if (!lv) continue; }   // (1.27.0)
         return std::make_pair(B[(size_t)kk].t, side);
     }
     return std::make_pair(0LL, 0);
