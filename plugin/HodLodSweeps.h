@@ -19,11 +19,11 @@
 #include <vector>
 
 namespace hsw {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-26) + TIME2: the 1st extreme cumulative to 2 hours + after, with its open
 static const size_t MAX_BYTES = 8192;
 static const int MIN_N = 20;
 struct Cell { int pct = -1, swept = 0, n = 0; };
-struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0;
+struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0; int tm2[6] = { -1, -1, -1, -1, -1, -1 }; int tm2Open = -1, tm2N = 0;   // (1.1.0) TIME2: by +15 / 30 / 60 / 90 / 120 min (cumulative), after 2 h; the open they count from
              double onCut[2] = { NAN, NAN }; int dayTrend[3] = { -1, -1, -1 }, dayChop[3] = { -1, -1, -1 }, dayN[3] = { 0, 0, 0 }, projX100[3] = { -1, -1, -1 }; };   // (2.14.0) ONCUT / DAY / PROJ rows   // tm = % of days the 1st extreme formed 0-15 / 15-30 / 30-60 / 60+ min after the open
 struct Lv { std::string name; double px = 0; };   // one name of a LRA-KeyLevels row (merged rows are split by the caller)
 struct Row { std::string name, px, pct; bool elig = true; };
@@ -48,6 +48,15 @@ inline File parse(const std::string& text, const std::string& mkt)
             if (e1 && !*e1 && e2 && !*e2 && std::isfinite(a) && std::isfinite(b) && a > 0 && b >= a) { F.onCut[0] = a; F.onCut[1] = b; } continue; }
         if (f.size() >= 5 && f[0] == "DAY") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) { F.dayTrend[k] = std::atoi(f[2].c_str()); F.dayChop[k] = std::atoi(f[3].c_str()); F.dayN[k] = std::atoi(f[4].c_str()); } continue; }
         if (f.size() >= 4 && f[0] == "PROJ") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) F.projX100[k] = std::atoi(f[2].c_str()); continue; }
+        if (f.size() >= 9 && f[0] == "TIME2") {  // (1.1.0, Rassul 2026-11-26 09:37 CT) TIME2,<open CT min>,<by 15>,<30>,<60>,<90>,<120>,<after 2 h>,<n days>
+            int v[8]; bool good = true;
+            for (int i = 0; i < 8; i++) { char* e = nullptr; v[i] = (int)std::strtol(f[(size_t)i + 1].c_str(), &e, 10); if (!e || *e || v[i] < 0) good = false; }
+            if (good && (v[0] < 0 || v[0] >= 1440)) good = false;
+            for (int i = 1; good && i <= 6; i++) if (v[i] > 100) good = false;
+            for (int i = 2; good && i <= 5; i++) if (v[i] < v[i - 1]) good = false;   // cumulative: never falls
+            if (good) { F.tm2Open = v[0]; for (int i = 0; i < 6; i++) F.tm2[i] = v[i + 1]; F.tm2N = v[7]; }
+            continue;
+        }
         if (f.size() >= 6 && f[0] == "TIME") {   // (2.13.0, Rassul 19:12-19:14 CT) TIME,<0-15>,<15-30>,<30-60>,<60+>,<n days>
             int v[5]; bool good = true;
             for (int i = 0; i < 5; i++) { char* e = nullptr; v[i] = (int)std::strtol(f[(size_t)i + 1].c_str(), &e, 10); if (!e || *e || v[i] < 0 || (i < 4 && v[i] > 100)) good = false; }
@@ -114,6 +123,13 @@ inline bool timeCum(const File& F, int out[4])
 {
     if (!F.ok || F.tmN <= 0 || F.tm[0] < 0) return false;
     out[0] = F.tm[0]; out[1] = (std::min)(100, F.tm[0] + F.tm[1]); out[2] = (std::min)(100, F.tm[0] + F.tm[1] + F.tm[2]); out[3] = F.tm[3]; return true;
+}
+// (1.1.0) the 2-hour table: out[0..4] cumulative by +15 / 30 / 60 / 90 / 120 min, out[5] after 2 h; open = the minute they count from
+inline bool timeCum2(const File& F, int out[6], int& open)
+{
+    if (!F.ok || F.tm2N <= 0 || F.tm2[0] < 0 || F.tm2Open < 0) return false;
+    for (int i = 0; i < 6; i++) out[i] = F.tm2[i];
+    open = F.tm2Open; return true;
 }
 inline std::string pxText(double p, int dec)
 {

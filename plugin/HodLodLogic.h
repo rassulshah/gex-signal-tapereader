@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.48.1";   // (2.48.1, Rassul 2026-11-26 08:53-09:00 CT "add typical gap value next to 2nd like 2nd - 3h 44m. then you can add the average to the 1st to give the Exp for 2nd", "in the actual, 8:48 - LOD ONL", "create some space ... in the 1st and 2nd", "remove the ~", "build") the HOD / LOD box: heading "2nd - 3h 44m", Exp 2nd = the Exp 1st window + the gap (the actual 1st + the gap once it is in), Act "8:48 - LOD ONL", wider 1st / 2nd columns
+static const char* const HL_VERSION = "2.49.0";   // (2.49.0, Rassul 2026-11-26 09:37-09:40 CT "lets increase 1st extreme with 9:30 and 10 so it includes 2 hours ... and then a probability for after the 2nd hour, which should be the remainder", "build") HOD / LOD Stats: 1st extreme by +15 / 30 / 60 / 90 / 120 min (cumulative) + after (the remainder), the times labelled from the open the nightly counted from (fixes HG labelled 7:20 while counted from 7:10)
+// was HL_VERSION = "2.48.1";   // (2.48.1, Rassul 2026-11-26 08:53-09:00 CT "add typical gap value next to 2nd like 2nd - 3h 44m. then you can add the average to the 1st to give the Exp for 2nd", "in the actual, 8:48 - LOD ONL", "create some space ... in the 1st and 2nd", "remove the ~", "build") the HOD / LOD box: heading "2nd - 3h 44m", Exp 2nd = the Exp 1st window + the gap (the actual 1st + the gap once it is in), Act "8:48 - LOD ONL", wider 1st / 2nd columns
 // was HL_VERSION = "2.48.0";   // (2.48.0, Rassul 2026-11-26 08:10-08:31 CT "i also want the hod lod box that indicated the times when the first extreme should be in", "the hod lod should be a seperate box that can be belwot the level box", "i alswayw awant to see the hod lod statistics", "do you remember the format before of exp actuals", "how about Hod/Lod Stats and then move 1st extreme and % days lower", "make sure that the levels line is right on top of the hod lod box and the box is right on top of the lower part of the price chart so there is no black space", "ok build"; TopBox-mockup.html) THE HOD / LOD BOX is back as its own small box (hsb::layout): Exp / Act x 1st / 2nd + HOD / LOD Stats (1st extreme by / % of days), centred on the candles, docked on the price pane's bottom edge; the Level line sits right on it, centred on the candles
 // was HL_VERSION = "2.47.0";   // (2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", option A of Level-Line-mockup.html) NowLevels 1.7.0: the Level line as level chips
 // was HL_VERSION = "2.46.1";   // (2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH lists the nearest untouched major levels of any kind (NowLevels 1.6.1); voice clips for both sides
@@ -779,7 +780,8 @@ struct View {
     std::vector<CobSeg> cobs;   // (2.30.0) the markets with a live Cob, right end of the top line; empty = no section
     std::vector<MkSeg> mkts;   // (2.29.0) the market strength line on top of the box (MktMove.h); empty = no line
     std::vector<Seg> htf;   // (2.17.0) the HTF trend / RS line under the header ("60m" label grey, values coloured); empty = no line   // (2.14.3) hdrLeft = "RTH 83% done", "Bar 2:13 left" right after the market
-    int tmCum[4] = { -1, -1, -1, -1 }; bool tmOk = false; bool tmQ = false; int tmOpenMin = -1;   // (2.15.4) the market's RTH open (CT minutes) for the clock-time heads
+    int tmCum[4] = { -1, -1, -1, -1 }; bool tmOk = false; bool tmQ = false; int tmOpenMin = -1;
+    int tm2Cum[6] = { -1, -1, -1, -1, -1, -1 }; bool tm2Ok = false; int tm2Open = -1;   // (2.49.0) the 2-hour table (TIME2) + the open its numbers count from   // (2.15.4) the market's RTH open (CT minutes) for the clock-time heads
     double adrTrim = NAN; long long onHi = 0, onLo = 0; bool onOk = false;
     std::string market, session;           // session = YYYY-MM-DD of the RTH shown
     int side = 0;                          // 0 not clear, 1 LOD first, 2 HOD first
@@ -3193,8 +3195,16 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     Draw D; const int ROW = 18, PX = 6, GAP = 10, PADC = 14;   // (2.48.1, 08:58 "create some space ... in the 1st and 2nd") taller rows, 14 px each side of the 1st / 2nd columns
     const std::vector<Run> e1 = runsOf(v.E[hl::K_1ST]), e2 = exp2Runs(v), a1 = actRuns(v.A[hl::K_1ST]), a2 = actRuns(v.A[hl::K_2ND]);
     auto w = [&](const std::vector<Run>& r) { int s = 0; for (const Run& x : r) s += M(x.s, x.bold); return s; };
-    std::string hd[4], pc[4];
-    for (int q = 0; q < 4; q++) {
+    // (2.49.0) the 2-hour table (TIME2): by +15 / 30 / 60 / 90 / 120 min, then "after" = the remainder; else the 4-column table as before
+    const int NC = v.tm2Ok ? 6 : 4;
+    std::string hd[6], pc[6];
+    for (int q = 0; q < NC; q++) {
+        if (v.tm2Ok) {
+            static const int OFF[5] = { 15, 30, 60, 90, 120 };
+            hd[q] = q < 5 ? hl::clk(v.tm2Open + OFF[q]) : std::string("after");
+            pc[q] = v.tm2Cum[q] < 0 ? std::string("?") : std::to_string(v.tm2Cum[q]) + "%" + (v.tmQ ? "?" : "");
+            continue;
+        }
         if (v.tmOpenMin >= 0) hd[q] = hl::clk(v.tmOpenMin + (q == 0 ? 15 : q == 1 ? 30 : 60)) + (q == 3 ? "+" : "");
         else hd[q] = q == 0 ? "15m" : q == 1 ? "30m" : q == 2 ? "60m" : "60m+";
         pc[q] = (!v.tmOk || v.tmCum[q] < 0) ? std::string("?") : std::to_string(v.tmCum[q]) + "%" + (v.tmQ ? "?" : "");
@@ -3205,9 +3215,9 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     const int c1 = (std::max)((std::max)(w(e1), w(a1)), M("1st", false));
     const int c2 = (std::max)((std::max)(w(e2), w(a2)), M(h2, false) + (h2g.empty() ? 0 : M(h2g, false)));
     const int sl = (std::max)(M(lab1, false), M(lab2, false));
-    int tc = 0; for (int q = 0; q < 4; q++) tc = (std::max)(tc, (std::max)(M(hd[q], false), M(pc[q], true)));
+    int tc = 0; for (int q = 0; q < NC; q++) tc = (std::max)(tc, (std::max)(M(hd[q], false), M(pc[q], true)));
     tc += 8;
-    const int statsW = (std::max)(sl + GAP + 4 * tc, M(lab0, true));
+    const int statsW = (std::max)(sl + GAP + NC * tc, M(lab0, true));
     const int W = PX + c0 + PADC + c1 + PADC + 1 + PADC + c2 + PADC + 1 + GAP + statsW + PX, H = 3 * ROW + 4;
     if (right - left < W) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
     int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
@@ -3225,12 +3235,12 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     D.items.push_back(Item{ 2, xs2, y0 + 2, xs2, y2 + ROW - 2, "", C_SEPV, 0, false });
     text(x3, y1, lab1, C_HEAD, false); text(x3, y2, lab2, C_HEAD, false);
     const int xt = x3 + sl + GAP;
-    for (int q = 0; q < 4; q++) {
+    for (int q = 0; q < NC; q++) {
         const int hw = M(hd[q], false), pw = M(pc[q], true), cr = xt + (q + 1) * tc;
         text(cr - hw, y1, hd[q], C_HEAD, false); text(cr - pw, y2, pc[q], C_TXT, true);
     }
     D.text = "2nd" + h2g + " ; Exp " + plainRuns(e1) + " | " + plainRuns(e2) + " ; Act " + plainRuns(a1) + " | " + plainRuns(a2) + " ; stats";
-    for (int q = 0; q < 4; q++) D.text += " " + hd[q] + "=" + pc[q];
+    for (int q = 0; q < NC; q++) D.text += " " + hd[q] + "=" + pc[q];
     D.ok = true; D.why = "drawn"; return D;
 }
 }  // namespace hsb
