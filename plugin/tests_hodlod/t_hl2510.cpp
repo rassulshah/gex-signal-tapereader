@@ -23,7 +23,7 @@ static hl::View view(const hsw::File& F) {
     for (const std::string& k : F.loOrd) { hl::SwCell c; c.name = k; c.pct = F.lo.at(k).pct; c.rnd = F.lo.at(k).rnd; v.sxLo.push_back(c); }
     return v; }
 int main() {
-    C(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(hl::HL_VERSION) >= "2.51.0" && std::string(hsw::VERSION) == "1.3.0", "versions match, 2.51.0 or later / 1.3.0");
+    C(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(hl::HL_VERSION) >= "2.51.0" && std::string(hsw::VERSION) >= "1.3.0", "versions match, 2.51.0 or later / 1.3.0 or later");
     auto meas = [](const std::string& s, bool bold) { return (int)s.size() * (bold ? 7 : 6); };
     const hsw::File F = hsw::parse(ES, "ES");
     C(F.ok && F.hiOrd.size() == 6 && F.hiOrd[0] == "PHH" && F.hiOrd[5] == "PFH" && F.loOrd[3] == "VAL", "ROW order kept (not alphabetical)");

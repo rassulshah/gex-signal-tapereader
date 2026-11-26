@@ -1,0 +1,43 @@
+VERSION,1
+MARKET,ES
+# lsHodLod sweep sections (hodlod_levels 1.15.0 (2026-11-26 15:16 CT: L5 rows - the last 5 sessions, HOD and LOD each with its CT time and up to 2 levels swept (session, daily, volume, weekly, gamma - in that order), + prior-week VAH / VAL; 1.14.0 2026-11-26 13:54 CT: sweep depth 0.20 ADR (was 0.25) for the swept lines, the random comparison and the level badges; 1.13.0 2026-11-26 13:34 CT audit #8: the level badges count a sweep only THROUGH the level by up to 0.25 ADR, as the HOD / LOD stats (was +-0.25 ADR); 1.12.0 2026-11-26 13:27 CT: SEC2 row - the 2nd extreme by the open + 3.5 h hourly, last step 30 min before the close, + last 30; 1.11.0 2026-11-26 audit #4: LIFT rows - each sweep cell against random levels at the same distance, BH q, both halves; 1.10.1 2026-11-26 audit #3: PDH / PDL after a holiday and PHH / PHL by bar END, as the chart; 1.10.0: fresh bars (package + IRT store + free Databento gap fill, seams excluded), RTH by bar START, holiday sessions out, DATA freshness row; 1.9.0 2026-11-26 09:37-09:40 CT: + TIME2 row, the 1st extreme cumulative to 2 hours + after, with the open it counts from; 1.8.0 2026-11-06 23:25-23:46 CT: first_sweeps.json over 30 sessions + lra.first_model reads (first_model.json); 1.7.0 2026-11-06: + first_sweeps.json, the month of 1st-extreme sweeps per market for the MQ Reader; 1.6.0 2026-11-01 20:38 CT: + day-type forecast and ON-scaled projection multipliers by overnight-range tercile in LRA-HodLodSweeps (ONCUT / DAY / PROJ rows); 1.5.0 2026-11-01 19:06 CT lsHodLod 2.13.0 sweep sections: LRA-HodLodSweeps-<MKT>.csv; 1.4.0 level audit: Asia (18:00, 01:00] as the chart since 2026-10-24 + PHH / PHL the hour before the RTH open; 1.3.0 2026-10-24, ADR = ATR10 trimmed; 1.2.0 2026-10-21 + level % badges LRA-LevelBadges-<MKT>.csv for lsDealerProfile 2.19.0; 1.1.0 reader_payload)) built 2026-11-26 15:20: ROW,<HI|LO>,<key>,<pct>,<swept>,<n days the level was on its side>
+ROW,HI,PHH,40,47,117
+ROW,HI,ON3,33,39,117
+ROW,HI,DPoc,24,14,59
+ROW,HI,VAH,19,16,84
+ROW,HI,PDH,12,12,96
+ROW,HI,PFH,13,13,102
+ROW,LO,PHL,36,48,134
+ROW,LO,ON3,29,39,134
+ROW,LO,DPoc,25,18,71
+ROW,LO,VAL,10,9,90
+ROW,LO,PDL,8,8,103
+ROW,LO,PFL,5,5,111
+TIME,46,15,16,23,252
+TIME2,510,46,60,77,87,93,7,252
+SEC2,510,4,210,37,270,53,330,64,360,75,25,252
+LIFT,HI,PHH,1.16,35,0.52,0
+LIFT,HI,ON3,0.97,34,0.96,0
+LIFT,HI,DPoc,1.30,18,0.56,0
+LIFT,HI,VAH,1.10,17,0.82,0
+LIFT,HI,PDH,0.86,15,0.96,0
+LIFT,HI,PFH,1.04,12,0.92,0
+LIFT,LO,PHL,1.07,34,0.78,0
+LIFT,LO,ON3,0.99,30,0.96,0
+LIFT,LO,DPoc,1.45,17,0.29,0
+LIFT,LO,VAL,0.92,11,0.96,0
+LIFT,LO,PDL,0.88,9,0.96,0
+LIFT,LO,PFL,0.68,7,0.98,0
+DATA,2026-11-25,1
+ONCUT,0.6273,0.9531
+DAY,0,12,18,84
+PROJ,0,74,84
+DAY,1,24,18,84
+PROJ,1,105,84
+DAY,2,35,4,84
+PROJ,2,118,84
+L5,2026-11-25,LOD,897,AsiaHI PS0,528,CWL PS
+L5,2026-11-24,LOD,543,-,513,PhrL PDL
+L5,2026-11-23,LOD,573,-,522,-
+L5,2026-11-20,HOD,543,ONH AsiaHI,897,-
+L5,2026-11-19,HOD,516,PhrH AsiaHI,846,-
