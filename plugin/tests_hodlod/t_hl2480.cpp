@@ -33,15 +33,15 @@ int main() {
     C(has(B.text, "7:35=34% 7:50=45% 8:20=63% 8:20+=37%"), "stats from GC's open (7:20): " + B.text);
     int heads = 0, labs = 0, seps = 0; bool exp = false, act = false;
     for (const hsb::Item& it : B.items) { if (it.k == 1 && (it.s == "1st" || it.s == "2nd" || it.s == "HOD / LOD Stats")) ++heads;
-        if (it.k == 1 && (it.s == "1st extreme by" || it.s == "% of days")) ++labs;
+        if (it.k == 1 && it.s == "1st") ++labs;   /* (2.50.0) the stats row label "1st" (the 2nd row is empty without SEC2) */
         if (it.k == 2) ++seps;
         if (it.k == 1 && it.s == "Exp" && it.bold) exp = true;
         if (it.k == 1 && it.s == "Act" && it.bold) act = true; }
-    C(heads == 3 && labs == 2 && seps == 2 && exp && act, "headings 1st / 2nd / HOD / LOD Stats, the two stat labels, two grey separators, Exp / Act bold");
+    C(heads == 4 && labs == 2 && seps == 2 && exp && act, "(2.50.0) headings 1st / 2nd / HOD / LOD Stats + the stats row label 1st, two grey separators, Exp / Act bold");
     // the stats rows line up with Exp / Act
     int yExp = -1, yBy = -1, yAct = -1, yPct = -1;
-    for (const hsb::Item& it : B.items) { if (it.s == "Exp") yExp = it.t; if (it.s == "1st extreme by") yBy = it.t; if (it.s == "Act") yAct = it.t; if (it.s == "% of days") yPct = it.t; }
-    C(yExp == yBy && yAct == yPct && yExp < yAct, "1st extreme by on the Exp row, % of days on the Act row");
+    for (const hsb::Item& it : B.items) { if (it.s == "Exp") yExp = it.t; if (it.s == "1st" && it.t != B.t + 2) yBy = it.t; if (it.s == "Act") yAct = it.t; if (it.s == "34%") yPct = it.t; }
+    C(yExp == yBy && yExp == yPct && yExp < yAct, "(2.50.0) the stats 1st row (label and %) on the Exp row");
     // no data yet (before the open) - the box still shows, stats always
     hl::View e; e.tmOk = true; e.tmOpenMin = 510; e.tmCum[0] = 46; e.tmCum[1] = 61; e.tmCum[2] = 77; e.tmCum[3] = 23;
     const hsb::Draw B2 = hsb::layout(e, meas, 400, 500, 0, 835);

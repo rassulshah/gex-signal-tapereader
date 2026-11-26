@@ -19,11 +19,12 @@
 #include <vector>
 
 namespace hsw {
-static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-26) + TIME2: the 1st extreme cumulative to 2 hours + after, with its open
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-26 13:27 CT "go") + SEC2: the 2nd extreme by the open + 3.5 h hourly (last step 30 min before the close) + last 30
+// was static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-26) + TIME2: the 1st extreme cumulative to 2 hours + after, with its open
 static const size_t MAX_BYTES = 8192;
 static const int MIN_N = 20;
 struct Cell { int pct = -1, swept = 0, n = 0; };
-struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0; int tm2[6] = { -1, -1, -1, -1, -1, -1 }; int tm2Open = -1, tm2N = 0;   // (1.1.0) TIME2: by +15 / 30 / 60 / 90 / 120 min (cumulative), after 2 h; the open they count from
+struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0; int tm2[6] = { -1, -1, -1, -1, -1, -1 }; int tm2Open = -1, tm2N = 0; int secOpen = -1, secK = 0, secN = 0, secMin[8] = { 0 }, secPct[8] = { 0 }, secLast = -1;   // (1.2.0) SEC2   // (1.1.0) TIME2: by +15 / 30 / 60 / 90 / 120 min (cumulative), after 2 h; the open they count from
              double onCut[2] = { NAN, NAN }; int dayTrend[3] = { -1, -1, -1 }, dayChop[3] = { -1, -1, -1 }, dayN[3] = { 0, 0, 0 }, projX100[3] = { -1, -1, -1 }; };   // (2.14.0) ONCUT / DAY / PROJ rows   // tm = % of days the 1st extreme formed 0-15 / 15-30 / 30-60 / 60+ min after the open
 struct Lv { std::string name; double px = 0; };   // one name of a LRA-KeyLevels row (merged rows are split by the caller)
 struct Row { std::string name, px, pct; bool elig = true; };
@@ -48,6 +49,19 @@ inline File parse(const std::string& text, const std::string& mkt)
             if (e1 && !*e1 && e2 && !*e2 && std::isfinite(a) && std::isfinite(b) && a > 0 && b >= a) { F.onCut[0] = a; F.onCut[1] = b; } continue; }
         if (f.size() >= 5 && f[0] == "DAY") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) { F.dayTrend[k] = std::atoi(f[2].c_str()); F.dayChop[k] = std::atoi(f[3].c_str()); F.dayN[k] = std::atoi(f[4].c_str()); } continue; }
         if (f.size() >= 4 && f[0] == "PROJ") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) F.projX100[k] = std::atoi(f[2].c_str()); continue; }
+        if (f.size() >= 7 && f[0] == "SEC2") {   // (1.2.0) SEC2,<open>,<k>,<min 1>,<% 1>,...,<min k>,<% k>,<last 30 %>,<n>
+            char* e = nullptr; const long op = std::strtol(f[1].c_str(), &e, 10); bool good = e && !*e && op >= 0 && op < 1440;
+            const long k = good ? std::strtol(f[2].c_str(), &e, 10) : 0; good = good && e && !*e && k >= 1 && k <= 8 && (long)f.size() >= 3 + 2 * k + 2;
+            int mn[8] = { 0 }, pc[8] = { 0 }, prevM = -1, prevP = -1;
+            for (long i = 0; good && i < k; i++) {
+                const long a = std::strtol(f[(size_t)(3 + 2 * i)].c_str(), &e, 10); if (!e || *e || a <= prevM || a > 1440) { good = false; break; }
+                const long b = std::strtol(f[(size_t)(4 + 2 * i)].c_str(), &e, 10); if (!e || *e || b < prevP || b > 100) { good = false; break; }   // cumulative: never falls
+                mn[i] = (int)a; pc[i] = (int)b; prevM = (int)a; prevP = (int)b; }
+            const long la = good ? std::strtol(f[(size_t)(3 + 2 * k)].c_str(), &e, 10) : -1; good = good && e && !*e && la >= 0 && la <= 100;
+            const long n = good ? std::strtol(f[(size_t)(4 + 2 * k)].c_str(), &e, 10) : 0; good = good && e && !*e && n > 0;
+            if (good) { F.secOpen = (int)op; F.secK = (int)k; F.secN = (int)n; F.secLast = (int)la; for (int i = 0; i < 8; i++) { F.secMin[i] = mn[i]; F.secPct[i] = pc[i]; } }
+            continue;
+        }
         if (f.size() >= 9 && f[0] == "TIME2") {  // (1.1.0, Rassul 2026-11-26 09:37 CT) TIME2,<open CT min>,<by 15>,<30>,<60>,<90>,<120>,<after 2 h>,<n days>
             int v[8]; bool good = true;
             for (int i = 0; i < 8; i++) { char* e = nullptr; v[i] = (int)std::strtol(f[(size_t)i + 1].c_str(), &e, 10); if (!e || *e || v[i] < 0) good = false; }
@@ -130,6 +144,12 @@ inline bool timeCum2(const File& F, int out[6], int& open)
     if (!F.ok || F.tm2N <= 0 || F.tm2[0] < 0 || F.tm2Open < 0) return false;
     for (int i = 0; i < 6; i++) out[i] = F.tm2[i];
     open = F.tm2Open; return true;
+}
+// (1.2.0) the 2nd-extreme row: k steps (minutes after the open, cumulative %), the last-30 share, the open they count from
+inline bool secRow(const File& F, int& k, int mins[8], int pcts[8], int& last, int& open)
+{
+    if (!F.ok || F.secK <= 0 || F.secN <= 0 || F.secOpen < 0 || F.secLast < 0) return false;
+    k = F.secK; for (int i = 0; i < 8; i++) { mins[i] = F.secMin[i]; pcts[i] = F.secPct[i]; } last = F.secLast; open = F.secOpen; return true;
 }
 inline std::string pxText(double p, int dec)
 {

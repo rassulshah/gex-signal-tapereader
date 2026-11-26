@@ -14,20 +14,20 @@ static std::string file(const std::string& mkt, const std::string& time2) {
     return "VERSION,1\nMARKET," + mkt + "\nROW,HI,PHH,43,52,120\nTIME,46,15,16,23,252\n" + time2 + "ONCUT,0.6273,0.9435\n";
 }
 int main() {
-    C(std::string(hl::HL_VERSION) == "2.49.0" && std::string(hlset::PLUGIN_VERSION) == "2.49.0" && std::string(hsw::VERSION) == "1.1.0", "versions 2.49.0 / 1.1.0");
+    C(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(hl::HL_VERSION) >= "2.49.0", "versions match, 2.49.0 or later (2.50.0: t_hl2500 covers the 2-row stats)");
     auto meas = [](const std::string& s, bool bold) { return (int)s.size() * (bold ? 7 : 6); };
     // ES as the nightly writes it today (hodlod_levels 1.9.0 on the 252-session store)
     hsw::File F = hsw::parse(file("ES", "TIME2,510,46,60,77,87,93,7,252\n"), "ES");
     int c[6], open = -1; C(F.ok && hsw::timeCum2(F, c, open) && open == 510 && c[0] == 46 && c[4] == 93 && c[5] == 7, "TIME2 parsed (ES)");
     hl::View v; v.tmOk = hsw::timeCum(F, v.tmCum); v.tmOpenMin = 510; v.tm2Ok = hsw::timeCum2(F, v.tm2Cum, v.tm2Open);
     hsb::Draw B = hsb::layout(v, meas, 400, 500, 0, 900);
-    C(B.ok && has(B.text, "8:45=46% 9:00=60% 9:30=77% 10:00=87% 10:30=93% after=7%"), "ES 2-hour table + after: " + B.text);
+    C(B.ok && has(B.text, "9:00=60% 9:30=77% 10:00=87% 10:30=93% after=7%"), "ES 2-hour table + after: " + B.text);
     for (const hsb::Item& it : B.items) C(it.l >= B.l && it.r <= B.r, "inside the box: " + it.s);
     // HG: counted from 7:10 by the nightly -> labelled 7:25 / 7:40 / 8:10 / 8:40 / 9:10 (the box's own open is 7:20)
     hsw::File G = hsw::parse(file("HG", "TIME2,430,30,46,67,79,91,9,252\n"), "HG");
     hl::View h; h.tmOk = hsw::timeCum(G, h.tmCum); h.tmOpenMin = 440; h.tm2Ok = hsw::timeCum2(G, h.tm2Cum, h.tm2Open);
     B = hsb::layout(h, meas, 400, 500, 0, 900);
-    C(has(B.text, "7:25=30% 7:40=46% 8:10=67% 8:40=79% 9:10=91% after=9%"), "HG labelled from the nightly's 7:10: " + B.text);
+    C(has(B.text, "7:40=46% 8:10=67% 8:40=79% 9:10=91% after=9%"), "HG labelled from the nightly's 7:10: " + B.text);
     // no TIME2 (an old nightly file): the 4-column table as before
     hsw::File O = hsw::parse(file("ES", ""), "ES");
     hl::View o; o.tmOk = hsw::timeCum(O, o.tmCum); o.tmOpenMin = 510; o.tm2Ok = hsw::timeCum2(O, o.tm2Cum, o.tm2Open);

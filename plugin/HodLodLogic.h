@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.49.0";   // (2.49.0, Rassul 2026-11-26 09:37-09:40 CT "lets increase 1st extreme with 9:30 and 10 so it includes 2 hours ... and then a probability for after the 2nd hour, which should be the remainder", "build") HOD / LOD Stats: 1st extreme by +15 / 30 / 60 / 90 / 120 min (cumulative) + after (the remainder), the times labelled from the open the nightly counted from (fixes HG labelled 7:20 while counted from 7:10)
+static const char* const HL_VERSION = "2.50.0";   // (2.50.0, Rassul 2026-11-26 10:31-13:27 CT "lets use 30 min increments from rth start", "lets use 3.5 hrs instead", "move this box to the left of the chart and dont have any black space to the left", "go"; mockups HodLodStats-mockup.html / HodLod-Chart-mockup.html) HOD / LOD Stats in two rows - 1st: by the open + 30 / 60 / 90 / 120 min + after; 2nd: by the open + 3.5 h hourly, the last step 30 min before the close + last 30 (SEC2); the box docked in the pane's bottom-LEFT corner, the Level line flush left on top of it
+// was static const char* const HL_VERSION = "2.49.0";   // (2.49.0, Rassul 2026-11-26 09:37-09:40 CT "lets increase 1st extreme with 9:30 and 10 so it includes 2 hours ... and then a probability for after the 2nd hour, which should be the remainder", "build") HOD / LOD Stats: 1st extreme by +15 / 30 / 60 / 90 / 120 min (cumulative) + after (the remainder), the times labelled from the open the nightly counted from (fixes HG labelled 7:20 while counted from 7:10)
 // was HL_VERSION = "2.48.1";   // (2.48.1, Rassul 2026-11-26 08:53-09:00 CT "add typical gap value next to 2nd like 2nd - 3h 44m. then you can add the average to the 1st to give the Exp for 2nd", "in the actual, 8:48 - LOD ONL", "create some space ... in the 1st and 2nd", "remove the ~", "build") the HOD / LOD box: heading "2nd - 3h 44m", Exp 2nd = the Exp 1st window + the gap (the actual 1st + the gap once it is in), Act "8:48 - LOD ONL", wider 1st / 2nd columns
 // was HL_VERSION = "2.48.0";   // (2.48.0, Rassul 2026-11-26 08:10-08:31 CT "i also want the hod lod box that indicated the times when the first extreme should be in", "the hod lod should be a seperate box that can be belwot the level box", "i alswayw awant to see the hod lod statistics", "do you remember the format before of exp actuals", "how about Hod/Lod Stats and then move 1st extreme and % days lower", "make sure that the levels line is right on top of the hod lod box and the box is right on top of the lower part of the price chart so there is no black space", "ok build"; TopBox-mockup.html) THE HOD / LOD BOX is back as its own small box (hsb::layout): Exp / Act x 1st / 2nd + HOD / LOD Stats (1st extreme by / % of days), centred on the candles, docked on the price pane's bottom edge; the Level line sits right on it, centred on the candles
 // was HL_VERSION = "2.47.0";   // (2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", option A of Level-Line-mockup.html) NowLevels 1.7.0: the Level line as level chips
@@ -781,7 +782,7 @@ struct View {
     std::vector<MkSeg> mkts;   // (2.29.0) the market strength line on top of the box (MktMove.h); empty = no line
     std::vector<Seg> htf;   // (2.17.0) the HTF trend / RS line under the header ("60m" label grey, values coloured); empty = no line   // (2.14.3) hdrLeft = "RTH 83% done", "Bar 2:13 left" right after the market
     int tmCum[4] = { -1, -1, -1, -1 }; bool tmOk = false; bool tmQ = false; int tmOpenMin = -1;
-    int tm2Cum[6] = { -1, -1, -1, -1, -1, -1 }; bool tm2Ok = false; int tm2Open = -1;   // (2.49.0) the 2-hour table (TIME2) + the open its numbers count from   // (2.15.4) the market's RTH open (CT minutes) for the clock-time heads
+    int tm2Cum[6] = { -1, -1, -1, -1, -1, -1 }; bool tm2Ok = false; int tm2Open = -1;   int secK = 0, secMin[8] = { 0 }, secPct[8] = { 0 }, secLast = -1, secOpen = -1; bool secOk = false;   // (2.50.0) the 2nd-extreme row (SEC2)   // (2.49.0) the 2-hour table (TIME2) + the open its numbers count from   // (2.15.4) the market's RTH open (CT minutes) for the clock-time heads
     double adrTrim = NAN; long long onHi = 0, onLo = 0; bool onOk = false;
     std::string market, session;           // session = YYYY-MM-DD of the RTH shown
     int side = 0;                          // 0 not clear, 1 LOD first, 2 HOD first
@@ -3195,52 +3196,66 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     Draw D; const int ROW = 18, PX = 6, GAP = 10, PADC = 14;   // (2.48.1, 08:58 "create some space ... in the 1st and 2nd") taller rows, 14 px each side of the 1st / 2nd columns
     const std::vector<Run> e1 = runsOf(v.E[hl::K_1ST]), e2 = exp2Runs(v), a1 = actRuns(v.A[hl::K_1ST]), a2 = actRuns(v.A[hl::K_2ND]);
     auto w = [&](const std::vector<Run>& r) { int s = 0; for (const Run& x : r) s += M(x.s, x.bold); return s; };
-    // (2.49.0) the 2-hour table (TIME2): by +15 / 30 / 60 / 90 / 120 min, then "after" = the remainder; else the 4-column table as before
-    const int NC = v.tm2Ok ? 6 : 4;
-    std::string hd[6], pc[6];
-    for (int q = 0; q < NC; q++) {
-        if (v.tm2Ok) {
-            static const int OFF[5] = { 15, 30, 60, 90, 120 };
-            hd[q] = q < 5 ? hl::clk(v.tm2Open + OFF[q]) : std::string("after");
-            pc[q] = v.tm2Cum[q] < 0 ? std::string("?") : std::to_string(v.tm2Cum[q]) + "%" + (v.tmQ ? "?" : "");
-            continue;
+    // (2.50.0) the stats in TWO ROWS: "1st" = by the open + 30 / 60 / 90 / 120 min (TIME2) + after; "2nd" = by the open + 3.5 h hourly + last 30
+    // (SEC2). Each cell = time (grey) + % (bold), the columns aligned over both rows. Without TIME2 the old 1st row (15 / 30 / 60 / 60+).
+    std::vector<std::string> t1, p1, t2, p2;
+    const std::string qm = v.tmQ ? "?" : "";
+    if (v.tm2Ok) {
+        static const int OFF[4] = { 30, 60, 90, 120 };
+        for (int q = 0; q < 4; q++) { t1.push_back(hl::clk(v.tm2Open + OFF[q])); p1.push_back(v.tm2Cum[q + 1] < 0 ? std::string("?") : std::to_string(v.tm2Cum[q + 1]) + "%" + qm); }
+        t1.push_back("after"); p1.push_back(v.tm2Cum[5] < 0 ? std::string("?") : std::to_string(v.tm2Cum[5]) + "%" + qm);
+    } else {
+        for (int q = 0; q < 4; q++) {
+            t1.push_back(v.tmOpenMin >= 0 ? hl::clk(v.tmOpenMin + (q == 0 ? 15 : q == 1 ? 30 : 60)) + (q == 3 ? "+" : "") : std::string(q == 0 ? "15m" : q == 1 ? "30m" : q == 2 ? "60m" : "60m+"));
+            p1.push_back((!v.tmOk || v.tmCum[q] < 0) ? std::string("?") : std::to_string(v.tmCum[q]) + "%" + qm);
         }
-        if (v.tmOpenMin >= 0) hd[q] = hl::clk(v.tmOpenMin + (q == 0 ? 15 : q == 1 ? 30 : 60)) + (q == 3 ? "+" : "");
-        else hd[q] = q == 0 ? "15m" : q == 1 ? "30m" : q == 2 ? "60m" : "60m+";
-        pc[q] = (!v.tmOk || v.tmCum[q] < 0) ? std::string("?") : std::to_string(v.tmCum[q]) + "%" + (v.tmQ ? "?" : "");
     }
-    const std::string lab0 = "HOD / LOD Stats", lab1 = "1st extreme by", lab2 = "% of days";
+    if (v.secOk && v.secK > 0) {
+        for (int q = 0; q < v.secK && q < 8; q++) { t2.push_back(hl::clk(v.secOpen + v.secMin[q])); p2.push_back(std::to_string(v.secPct[q]) + "%" + qm); }
+        t2.push_back("last 30"); p2.push_back(std::to_string(v.secLast) + "%" + qm);
+    }
+    const int NC = (int)(std::max)(t1.size(), t2.size());
+    const std::string lab0 = "HOD / LOD Stats", lab0b = " (by \xB7 % of days)", la1 = "1st", la2 = "2nd";
     const std::string h2 = "2nd", h2g = (std::isfinite(v.gapMed) && v.gapMed > 0) ? " - " + gapText(v.gapMed) : std::string();
     const int c0 = (std::max)(M("Exp", true), M("Act", true));
     const int c1 = (std::max)((std::max)(w(e1), w(a1)), M("1st", false));
     const int c2 = (std::max)((std::max)(w(e2), w(a2)), M(h2, false) + (h2g.empty() ? 0 : M(h2g, false)));
-    const int sl = (std::max)(M(lab1, false), M(lab2, false));
-    int tc = 0; for (int q = 0; q < NC; q++) tc = (std::max)(tc, (std::max)(M(hd[q], false), M(pc[q], true)));
-    tc += 8;
-    const int statsW = (std::max)(sl + GAP + NC * tc, M(lab0, true));
+    const int sl = (std::max)(M(la1, false), M(la2, false));
+    std::vector<int> tw((size_t)NC, 0), pw((size_t)NC, 0);
+    for (int q = 0; q < NC; q++) {
+        if (q < (int)t1.size()) { tw[(size_t)q] = (std::max)(tw[(size_t)q], M(t1[(size_t)q], false)); pw[(size_t)q] = (std::max)(pw[(size_t)q], M(p1[(size_t)q], true)); }
+        if (q < (int)t2.size()) { tw[(size_t)q] = (std::max)(tw[(size_t)q], M(t2[(size_t)q], false)); pw[(size_t)q] = (std::max)(pw[(size_t)q], M(p2[(size_t)q], true)); }
+    }
+    const int TG = 4, CG = 12;   // time -> % gap, cell -> cell gap
+    int cells = 0; for (int q = 0; q < NC; q++) cells += tw[(size_t)q] + TG + pw[(size_t)q] + (q ? CG : 0);
+    const int statsW = (std::max)(sl + GAP + cells, M(lab0, true) + M(lab0b, false));
     const int W = PX + c0 + PADC + c1 + PADC + 1 + PADC + c2 + PADC + 1 + GAP + statsW + PX, H = 3 * ROW + 4;
     if (right - left < W) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
     int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
     D.l = l; D.r = l + W; D.b = bottom; D.t = bottom - H;
     D.items.push_back(Item{ 0, D.l, D.t, D.r, D.b, "", C_EDGE, C_BG, false });
     const int y0 = D.t + 2, y1 = y0 + ROW, y2 = y1 + ROW;
-    auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int tw = M(s, bold); D.items.push_back(Item{ 1, x, y, x + tw, y + ROW, s, col, 0, bold }); return tw; };
+    auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int tw2 = M(s, bold); D.items.push_back(Item{ 1, x, y, x + tw2, y + ROW, s, col, 0, bold }); return tw2; };
     auto runs = [&](int x, int y, const std::vector<Run>& r) { for (const Run& g : r) x += text(x, y, g.s, g.col, g.bold); };
     const int x0 = D.l + PX, x1 = x0 + c0 + PADC, xs1 = x1 + c1 + PADC, x2 = xs1 + 1 + PADC, xs2 = x2 + c2 + PADC, x3 = xs2 + 1 + GAP;
     text(x1, y0, "1st", C_HEAD, false); { const int hw = text(x2, y0, h2, C_HEAD, false); if (!h2g.empty()) text(x2 + hw, y0, h2g, C_TXT, false); }
-    text(x3, y0, lab0, C_HEAD, true);
+    { const int hw = text(x3, y0, lab0, C_HEAD, true); text(x3 + hw, y0, lab0b, C_HEAD, false); }
     text(x0, y1, "Exp", C_TXT, true); runs(x1, y1, e1); runs(x2, y1, e2);
     text(x0, y2, "Act", C_TXT, true); runs(x1, y2, a1); runs(x2, y2, a2);
     D.items.push_back(Item{ 2, xs1, y0 + 2, xs1, y2 + ROW - 2, "", C_SEPV, 0, false });
     D.items.push_back(Item{ 2, xs2, y0 + 2, xs2, y2 + ROW - 2, "", C_SEPV, 0, false });
-    text(x3, y1, lab1, C_HEAD, false); text(x3, y2, lab2, C_HEAD, false);
-    const int xt = x3 + sl + GAP;
+    text(x3, y1, la1, C_HEAD, false); if (!t2.empty()) text(x3, y2, la2, C_HEAD, false);
+    int xc = x3 + sl + GAP;
     for (int q = 0; q < NC; q++) {
-        const int hw = M(hd[q], false), pw = M(pc[q], true), cr = xt + (q + 1) * tc;
-        text(cr - hw, y1, hd[q], C_HEAD, false); text(cr - pw, y2, pc[q], C_TXT, true);
+        if (q) xc += CG;
+        const int tr = xc + tw[(size_t)q], pr = tr + TG + pw[(size_t)q];   // time and % each right-aligned in their column
+        if (q < (int)t1.size()) { text(tr - M(t1[(size_t)q], false), y1, t1[(size_t)q], C_HEAD, false); text(pr - M(p1[(size_t)q], true), y1, p1[(size_t)q], C_TXT, true); }
+        if (q < (int)t2.size()) { text(tr - M(t2[(size_t)q], false), y2, t2[(size_t)q], C_HEAD, false); text(pr - M(p2[(size_t)q], true), y2, p2[(size_t)q], C_TXT, true); }
+        xc = pr;
     }
-    D.text = "2nd" + h2g + " ; Exp " + plainRuns(e1) + " | " + plainRuns(e2) + " ; Act " + plainRuns(a1) + " | " + plainRuns(a2) + " ; stats";
-    for (int q = 0; q < NC; q++) D.text += " " + hd[q] + "=" + pc[q];
+    D.text = "2nd" + h2g + " ; Exp " + plainRuns(e1) + " | " + plainRuns(e2) + " ; Act " + plainRuns(a1) + " | " + plainRuns(a2) + " ; 1st";
+    for (size_t q = 0; q < t1.size(); q++) D.text += " " + t1[q] + "=" + p1[q];
+    D.text += " ; 2nd"; for (size_t q = 0; q < t2.size(); q++) D.text += " " + t2[q] + "=" + p2[q];
     D.ok = true; D.why = "drawn"; return D;
 }
 }  // namespace hsb
