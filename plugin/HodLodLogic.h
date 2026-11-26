@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.51.0";   // (2.51.0, Rassul 2026-11-26 13:43 CT "i need a line above the box ... that shows the stats for levels that Hod swept and Lod swept", 13:46 "its too big, maybe have two lines, hod is top lod below", "ok"; HodLod-Swept-mockup.html) two lines on top of the HOD / LOD box: "HOD swept PhrH 45% (42%) . ON 40% (40%) ..." and "LOD swept ...", the % = days the extreme swept the level and turned, (random) = random levels at the same distance
+static const char* const HL_VERSION = "2.52.0";   // (2.52.0, Rassul 2026-11-26 13:54-13:57 CT "show me an updated mockup so the stats look a little nicer", "i'll go with your proposal.. build"; HodLod-Nicer-mockup.html #2) the swept lines as a small table - column heads PRE-HR / ON / DPoc / VA / PD / PF, HOD and LOD rows aligned, the % white when above its random rate and grey when not, the random rate grey beside it; the stats heading "extreme in by \xB7 % of days" (plain grey, was the bold "HOD / LOD Stats (by \xB7 % of days)"); "2nd \xB7 3h 44m"
+// was static const char* const HL_VERSION = "2.51.0";   // (2.51.0, Rassul 2026-11-26 13:43 CT "i need a line above the box ... that shows the stats for levels that Hod swept and Lod swept", 13:46 "its too big, maybe have two lines, hod is top lod below", "ok"; HodLod-Swept-mockup.html) two lines on top of the HOD / LOD box: "HOD swept PhrH 45% (42%) . ON 40% (40%) ..." and "LOD swept ...", the % = days the extreme swept the level and turned, (random) = random levels at the same distance
 // was static const char* const HL_VERSION = "2.50.0";   // (2.50.0, Rassul 2026-11-26 10:31-13:27 CT "lets use 30 min increments from rth start", "lets use 3.5 hrs instead", "move this box to the left of the chart and dont have any black space to the left", "go"; mockups HodLodStats-mockup.html / HodLod-Chart-mockup.html) HOD / LOD Stats in two rows - 1st: by the open + 30 / 60 / 90 / 120 min + after; 2nd: by the open + 3.5 h hourly, the last step 30 min before the close + last 30 (SEC2); the box docked in the pane's bottom-LEFT corner, the Level line flush left on top of it
 // was static const char* const HL_VERSION = "2.49.0";   // (2.49.0, Rassul 2026-11-26 09:37-09:40 CT "lets increase 1st extreme with 9:30 and 10 so it includes 2 hours ... and then a probability for after the 2nd hour, which should be the remainder", "build") HOD / LOD Stats: 1st extreme by +15 / 30 / 60 / 90 / 120 min (cumulative) + after (the remainder), the times labelled from the open the nightly counted from (fixes HG labelled 7:20 while counted from 7:10)
 // was HL_VERSION = "2.48.1";   // (2.48.1, Rassul 2026-11-26 08:53-09:00 CT "add typical gap value next to 2nd like 2nd - 3h 44m. then you can add the average to the 1st to give the Exp for 2nd", "in the actual, 8:48 - LOD ONL", "create some space ... in the 1st and 2nd", "remove the ~", "build") the HOD / LOD box: heading "2nd - 3h 44m", Exp 2nd = the Exp 1st window + the gap (the actual 1st + the gap once it is in), Act "8:48 - LOD ONL", wider 1st / 2nd columns
@@ -3217,8 +3218,8 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
         t2.push_back("last 30"); p2.push_back(std::to_string(v.secLast) + "%" + qm);
     }
     const int NC = (int)(std::max)(t1.size(), t2.size());
-    const std::string lab0 = "HOD / LOD Stats", lab0b = " (by \xB7 % of days)", la1 = "1st", la2 = "2nd";
-    const std::string h2 = "2nd", h2g = (std::isfinite(v.gapMed) && v.gapMed > 0) ? " - " + gapText(v.gapMed) : std::string();
+    const std::string lab0 = "", lab0b = "extreme in by \xB7 % of days", la1 = "1st", la2 = "2nd";   // (2.52.0) one plain grey heading
+    const std::string h2 = "2nd", h2g = (std::isfinite(v.gapMed) && v.gapMed > 0) ? " \xB7 " + gapText(v.gapMed) : std::string();   // (2.52.0) "2nd \xB7 3h 44m"
     const int c0 = (std::max)(M("Exp", true), M("Act", true));
     const int c1 = (std::max)((std::max)(w(e1), w(a1)), M("1st", false));
     const int c2 = (std::max)((std::max)(w(e2), w(a2)), M(h2, false) + (h2g.empty() ? 0 : M(h2g, false)));
@@ -3230,16 +3231,26 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     }
     const int TG = 4, CG = 12;   // time -> % gap, cell -> cell gap
     int cells = 0; for (int q = 0; q < NC; q++) cells += tw[(size_t)q] + TG + pw[(size_t)q] + (q ? CG : 0);
-    const int statsW = (std::max)(sl + GAP + cells, M(lab0, true) + M(lab0b, false));
-    // (2.51.0) the two swept lines on top: label column, then "name pct% (rnd%)" cells joined by " \xB7 "
+    const int statsW = (std::max)(sl + GAP + cells, M(lab0b, false));
+    // (2.52.0) the swept TABLE on top: a head row (PRE-HR / ON / DPoc / VA / PD / PF), then HOD swept / LOD swept; each cell "pct%" (white when
+    // above its random rate, grey when not) + " rnd" (grey); the columns are the level groups, so HOD and LOD line up
     const std::string swL[2] = { "HOD swept", "LOD swept" }; const std::vector<hl::SwCell>* swV[2] = { &v.sxHi, &v.sxLo };
     const int nSw = (v.sxHi.empty() ? 0 : 1) + (v.sxLo.empty() ? 0 : 1);
-    const int swLab = (std::max)(M(swL[0], true), M(swL[1], true)) + 10;
+    const int swLab = (std::max)(M(swL[0], true), M(swL[1], true)) + 14;
+    auto swHead = [](const std::string& k) { return (k == "PHH" || k == "PHL") ? std::string("PRE-HR") : k == "ON3" ? std::string("ON")
+        : (k == "VAH" || k == "VAL") ? std::string("VA") : (k == "PDH" || k == "PDL") ? std::string("PD") : (k == "PFH" || k == "PFL") ? std::string("PF") : k; };
     auto swName = [](const std::string& k) { return k == "PHH" ? std::string("PhrH") : k == "PHL" ? std::string("PhrL") : k == "ON3" ? std::string("ON") : k; };
-    auto swWidth = [&](const std::vector<hl::SwCell>& c) { int x = swLab; for (size_t q = 0; q < c.size(); q++) { if (q) x += M(" \xB7 ", false);
-        x += M(swName(c[q].name) + " ", false) + M(c[q].pct < 0 ? std::string("-") : std::to_string(c[q].pct) + "%", true) + (c[q].rnd >= 0 ? M(" (" + std::to_string(c[q].rnd) + "%)", false) : 0); } return x; };
-    int swW = 0; for (int k = 0; k < 2; k++) if (!swV[k]->empty()) swW = (std::max)(swW, swWidth(*swV[k]));
-    const int SWH = nSw ? nSw * ROW + 3 : 0;   // the swept rows + the grey line under them
+    auto swPct = [](const hl::SwCell& c) { return c.pct < 0 ? std::string("-") : std::to_string(c.pct) + "%"; };
+    auto swRnd = [](const hl::SwCell& c) { return c.rnd < 0 ? std::string() : " " + std::to_string(c.rnd); };
+    std::vector<std::string> swCols;   // the column heads in order (HOD's order, then any LOD-only head)
+    for (int k = 0; k < 2; k++) for (const hl::SwCell& c : *swV[k]) { const std::string h = swHead(c.name); if (std::find(swCols.begin(), swCols.end(), h) == swCols.end()) swCols.push_back(h); }
+    std::vector<int> swCw(swCols.size(), 0);
+    for (size_t q = 0; q < swCols.size(); q++) swCw[q] = M(swCols[q], false);
+    for (int k = 0; k < 2; k++) for (const hl::SwCell& c : *swV[k]) { const size_t q = (size_t)(std::find(swCols.begin(), swCols.end(), swHead(c.name)) - swCols.begin());
+        swCw[q] = (std::max)(swCw[q], M(swPct(c), true) + M(swRnd(c), false)); }
+    const int SWG = 18;   // gap between the swept columns
+    int swW = nSw ? swLab : 0; for (size_t q = 0; q < swCols.size(); q++) swW += swCw[q] + (q ? SWG : 0);
+    const int SWH = nSw ? (nSw + 1) * ROW + 3 : 0;   // head row + the swept rows + the grey line under them
     const int W = (std::max)(PX + c0 + PADC + c1 + PADC + 1 + PADC + c2 + PADC + 1 + GAP + statsW + PX, PX + swW + PX), H = 3 * ROW + 4 + SWH;
     if (right - left < W) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
     int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
@@ -3249,18 +3260,24 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int tw2 = M(s, bold); D.items.push_back(Item{ 1, x, y, x + tw2, y + ROW, s, col, 0, bold }); return tw2; };
     auto runs = [&](int x, int y, const std::vector<Run>& r) { for (const Run& g : r) x += text(x, y, g.s, g.col, g.bold); };
     const int x0 = D.l + PX, x1 = x0 + c0 + PADC, xs1 = x1 + c1 + PADC, x2 = xs1 + 1 + PADC, xs2 = x2 + c2 + PADC, x3 = xs2 + 1 + GAP;
-    {   // (2.51.0) the swept lines
-        int row = 0;
-        for (int k = 0; k < 2; k++) { const std::vector<hl::SwCell>& c = *swV[k]; if (c.empty()) continue;
-            const int y = D.t + 2 + row * ROW; int x = D.l + PX; text(x, y, swL[k], k == 0 ? hl::C_RED : hl::C_GREEN, true); x += swLab;
-            for (size_t q = 0; q < c.size(); q++) { if (q) x += text(x, y, " \xB7 ", C_SEPV, false);
-                x += text(x, y, swName(c[q].name) + " ", C_HEAD, false); x += text(x, y, c[q].pct < 0 ? std::string("-") : std::to_string(c[q].pct) + "%", C_TXT, true);
-                if (c[q].rnd >= 0) x += text(x, y, " (" + std::to_string(c[q].rnd) + "%)", C_HEAD, false); }
-            ++row; }
-        if (nSw) D.items.push_back(Item{ 2, D.l + PX, D.t + 2 + nSw * ROW + 1, D.r - PX, D.t + 2 + nSw * ROW + 1, "", C_SEPV, 0, false });
+    {   // (2.52.0) the swept table
+        if (nSw) {
+            const int yh = D.t + 2; int x = D.l + PX + swLab;
+            for (size_t q = 0; q < swCols.size(); q++) { const int hw = M(swCols[q], false); text(x + (swCw[q] - hw) / 2, yh, swCols[q], C_HEAD, false); x += swCw[q] + SWG; }
+            int row = 1;
+            for (int k = 0; k < 2; k++) { const std::vector<hl::SwCell>& cs = *swV[k]; if (cs.empty()) continue;
+                const int y = D.t + 2 + row * ROW; text(D.l + PX, y, swL[k], k == 0 ? hl::C_RED : hl::C_GREEN, true);
+                for (const hl::SwCell& c : cs) { const size_t q = (size_t)(std::find(swCols.begin(), swCols.end(), swHead(c.name)) - swCols.begin());
+                    int cx0 = D.l + PX + swLab; for (size_t z = 0; z < q; z++) cx0 += swCw[z] + SWG;
+                    const std::string p = swPct(c), r = swRnd(c); const int w = M(p, true) + M(r, false); int xx = cx0 + (swCw[q] - w) / 2;
+                    const bool beats = c.pct >= 0 && c.rnd >= 0 && c.pct > c.rnd;
+                    xx += text(xx, y, p, beats || c.rnd < 0 ? C_TXT : C_HEAD, true); if (!r.empty()) text(xx, y, r, C_HEAD, false); }
+                ++row; }
+            D.items.push_back(Item{ 2, D.l + PX, D.t + 2 + (nSw + 1) * ROW + 1, D.r - PX, D.t + 2 + (nSw + 1) * ROW + 1, "", C_SEPV, 0, false });
+        }
     }
     text(x1, y0, "1st", C_HEAD, false); { const int hw = text(x2, y0, h2, C_HEAD, false); if (!h2g.empty()) text(x2 + hw, y0, h2g, C_TXT, false); }
-    { const int hw = text(x3, y0, lab0, C_HEAD, true); text(x3 + hw, y0, lab0b, C_HEAD, false); }
+    text(x3, y0, lab0b, C_HEAD, false);   // (2.52.0)
     text(x0, y1, "Exp", C_TXT, true); runs(x1, y1, e1); runs(x2, y1, e2);
     text(x0, y2, "Act", C_TXT, true); runs(x1, y2, a1); runs(x2, y2, a2);
     D.items.push_back(Item{ 2, xs1, y0 + 2, xs1, y2 + ROW - 2, "", C_SEPV, 0, false });

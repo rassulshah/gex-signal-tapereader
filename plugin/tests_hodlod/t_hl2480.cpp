@@ -37,7 +37,7 @@ int main() {
         if (it.k == 2) ++seps;
         if (it.k == 1 && it.s == "Exp" && it.bold) exp = true;
         if (it.k == 1 && it.s == "Act" && it.bold) act = true; }
-    C(heads == 4 && labs == 2 && seps == 2 && exp && act, "(2.50.0) headings 1st / 2nd / HOD / LOD Stats + the stats row label 1st, two grey separators, Exp / Act bold");
+    C(heads == 3 && labs == 2 && seps == 2 && exp && act, "(2.52.0) headings 1st / 2nd + the stats row label 1st (the bold title is gone), two grey separators, Exp / Act bold");
     // the stats rows line up with Exp / Act
     int yExp = -1, yBy = -1, yAct = -1, yPct = -1;
     for (const hsb::Item& it : B.items) { if (it.s == "Exp") yExp = it.t; if (it.s == "1st" && it.t != B.t + 2) yBy = it.t; if (it.s == "Act") yAct = it.t; if (it.s == "34%") yPct = it.t; }
@@ -58,7 +58,7 @@ int main() {
         s.E[hl::K_2ND] = hl::mkCell("late-day", hl::C_GREY); s.E[hl::K_2ND].s3 = "HOD";
         s.tmOk = true; s.tmOpenMin = 510; s.tmCum[0] = 46; s.tmCum[1] = 61; s.tmCum[2] = 77; s.tmCum[3] = 23;
         hsb::Draw X = hsb::layout(s, meas, 400, 500, 0, 835);
-        C(X.ok && has(X.text, "2nd - 3h 44m"), "heading 2nd - 3h 44m: " + X.text);
+        C(X.ok && has(X.text, "2nd \xB7 3h 44m"), "(2.52.0) heading 2nd \xB7 3h 44m: " + X.text);
         C(has(X.text, "| 12:17 - 12:56 HOD ;"), "before the 1st: Exp 2nd = 8:33 - 9:12 + 3h44 = 12:17 - 12:56 HOD: " + X.text);
         C(!has(X.text, "~") && !has(X.text, "late-day"), "no ~, no late-day");
         bool red = false; for (const hsb::Item& it : X.items) if (it.s == " HOD" && it.col == hl::C_RED) red = true; C(red, "HOD word red");
@@ -72,8 +72,8 @@ int main() {
         C(has(X.text, "Act 8:48 - LOD ONL | 2:57 - HOD LonHI"), "Act 8:48 - LOD ONL: " + X.text);
         C(!has(X.text, " in"), "no in tag");
         // GC: 2h33 gap -> "2nd - 2h 33m"; no gap known -> the old cell, plain "2nd"
-        s.gapMed = 153; X = hsb::layout(s, meas, 400, 500, 0, 835); C(has(X.text, "2nd - 2h 33m"), "2nd - 2h 33m");
-        s.gapMed = 45; X = hsb::layout(s, meas, 400, 500, 0, 835); C(has(X.text, "2nd - 45m ;"), "under an hour: 45m");
+        s.gapMed = 153; X = hsb::layout(s, meas, 400, 500, 0, 835); C(has(X.text, "2nd \xB7 2h 33m"), "2nd \xB7 2h 33m");
+        s.gapMed = 45; X = hsb::layout(s, meas, 400, 500, 0, 835); C(has(X.text, "2nd \xB7 45m ;"), "under an hour: 45m");
         s.gapMed = NAN; X = hsb::layout(s, meas, 400, 500, 0, 835); C(has(X.text, "2nd ; Exp") && has(X.text, "late-day  HOD"), "no gap: the old Exp 2nd cell: " + X.text);
         // the 1st / 2nd columns have 14 px of room each side: the separators sit 14 px from the text
         s.gapMed = 224; X = hsb::layout(s, meas, 400, 500, 0, 835);
