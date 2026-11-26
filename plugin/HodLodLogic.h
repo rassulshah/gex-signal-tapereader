@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.54.1";   // (2.54.1, Rassul 2026-11-26 15:51 CT "left justify the box again") the HOD / LOD box and the Level line docked bottom-left again; the last 5 days panel unchanged
+static const char* const HL_VERSION = "2.55.0";   // (2.55.0, Rassul 2026-11-26 16:05-16:14 CT, StopsBusy-mockup.html, "this looks good .. build") the box: 1st / 2nd stacked left, "extreme in by" as "9:00 61%" rows over the swept table on shared columns, swept columns PRE-HR ON PD PF then DPoc VA; Stops resting / Stops run right of the box (HodLodStops.h); the Level line "Next", centred on the box
+// was static const char* const HL_VERSION = "2.54.1";   // (2.54.1, Rassul 2026-11-26 15:51 CT "left justify the box again") the HOD / LOD box and the Level line docked bottom-left again; the last 5 days panel unchanged
 // was static const char* const HL_VERSION = "2.54.0";   // (2.54.0, Rassul 2026-11-26 14:59-15:18 CT, LastFive-Vertical-mockup.html, "build") + the LAST 5 DAYS panel (HodLodLast5.h): vertical, flush left, centred between the Event Calendar and the Level line; the Level line and the HOD / LOD box centred on the candles again ("center the level and hod lod box")
 // was static const char* const HL_VERSION = "2.53.0";   // (2.53.0, Rassul 2026-11-26 14:52 CT "revers the positions put the hod and lod swept below") the swept table sits at the BOTTOM of the box, under Exp / Act and the stats (a grey line between)
 // was static const char* const HL_VERSION = "2.52.0";   // (2.52.0, Rassul 2026-11-26 13:54-13:57 CT "show me an updated mockup so the stats look a little nicer", "i'll go with your proposal.. build"; HodLod-Nicer-mockup.html #2) the swept lines as a small table - column heads PRE-HR / ON / DPoc / VA / PD / PF, HOD and LOD rows aligned, the % white when above its random rate and grey when not, the random rate grey beside it; the stats heading "extreme in by \xB7 % of days" (plain grey, was the bold "HOD / LOD Stats (by \xB7 % of days)"); "2nd \xB7 3h 44m"
@@ -3221,79 +3222,84 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
         t2.push_back("last 30"); p2.push_back(std::to_string(v.secLast) + "%" + qm);
     }
     const int NC = (int)(std::max)(t1.size(), t2.size());
-    const std::string lab0 = "", lab0b = "extreme in by \xB7 % of days", la1 = "1st", la2 = "2nd";   // (2.52.0) one plain grey heading
-    const std::string h2 = "2nd", h2g = (std::isfinite(v.gapMed) && v.gapMed > 0) ? " \xB7 " + gapText(v.gapMed) : std::string();   // (2.52.0) "2nd \xB7 3h 44m"
+    // (2.55.0, Rassul 2026-11-26 16:05-16:14 CT, BoxVertical-mockup.html / StopsBusy-mockup.html, "this looks good .. build") LEFT: the 1st and
+    // the 2nd stacked (1st: Exp / Act, a thin line, 2nd \xB7 gap: Exp / Act); a grey divider; RIGHT: "extreme in by" as "9:00 61%" cells (16:07 "use
+    // 9:00 61% format ... to make the box shorter") on the SAME columns as the HOD / LOD swept table under it; swept columns PRE-HR, ON, PD, PF
+    // then DPoc, VA (16:13 "move DPoc and VA after all the price based levels")
+    const std::string lab0b = "extreme in by \xB7 % of days", la1 = "1st", la2 = "2nd";
+    const std::string h2 = "2nd", h2g = (std::isfinite(v.gapMed) && v.gapMed > 0) ? " \xB7 " + gapText(v.gapMed) : std::string();
     const int c0 = (std::max)(M("Exp", true), M("Act", true));
-    const int c1 = (std::max)((std::max)(w(e1), w(a1)), M("1st", false));
-    const int c2 = (std::max)((std::max)(w(e2), w(a2)), M(h2, false) + (h2g.empty() ? 0 : M(h2g, false)));
-    const int sl = (std::max)(M(la1, false), M(la2, false));
-    std::vector<int> tw((size_t)NC, 0), pw((size_t)NC, 0);
-    for (int q = 0; q < NC; q++) {
-        if (q < (int)t1.size()) { tw[(size_t)q] = (std::max)(tw[(size_t)q], M(t1[(size_t)q], false)); pw[(size_t)q] = (std::max)(pw[(size_t)q], M(p1[(size_t)q], true)); }
-        if (q < (int)t2.size()) { tw[(size_t)q] = (std::max)(tw[(size_t)q], M(t2[(size_t)q], false)); pw[(size_t)q] = (std::max)(pw[(size_t)q], M(p2[(size_t)q], true)); }
-    }
-    const int TG = 4, CG = 12;   // time -> % gap, cell -> cell gap
-    int cells = 0; for (int q = 0; q < NC; q++) cells += tw[(size_t)q] + TG + pw[(size_t)q] + (q ? CG : 0);
-    const int statsW = (std::max)(sl + GAP + cells, M(lab0b, false));
-    // (2.52.0) the swept TABLE on top: a head row (PRE-HR / ON / DPoc / VA / PD / PF), then HOD swept / LOD swept; each cell "pct%" (white when
-    // above its random rate, grey when not) + " rnd" (grey); the columns are the level groups, so HOD and LOD line up
+    const int c1 = (std::max)((std::max)((std::max)(w(e1), w(a1)), (std::max)(w(e2), w(a2))), (std::max)(M("1st", false), M(h2, false) + (h2g.empty() ? 0 : M(h2g, false))));
+    const int leftW = c0 + PADC + c1;
     const std::string swL[2] = { "HOD swept", "LOD swept" }; const std::vector<hl::SwCell>* swV[2] = { &v.sxHi, &v.sxLo };
     const int nSw = (v.sxHi.empty() ? 0 : 1) + (v.sxLo.empty() ? 0 : 1);
-    const int swLab = (std::max)(M(swL[0], true), M(swL[1], true)) + 14;
     auto swHead = [](const std::string& k) { return (k == "PHH" || k == "PHL") ? std::string("PRE-HR") : k == "ON3" ? std::string("ON")
         : (k == "VAH" || k == "VAL") ? std::string("VA") : (k == "PDH" || k == "PDL") ? std::string("PD") : (k == "PFH" || k == "PFL") ? std::string("PF") : k; };
     auto swName = [](const std::string& k) { return k == "PHH" ? std::string("PhrH") : k == "PHL" ? std::string("PhrL") : k == "ON3" ? std::string("ON") : k; };
     auto swPct = [](const hl::SwCell& c) { return c.pct < 0 ? std::string("-") : std::to_string(c.pct) + "%"; };
     auto swRnd = [](const hl::SwCell& c) { return c.rnd < 0 ? std::string() : " " + std::to_string(c.rnd); };
-    std::vector<std::string> swCols;   // the column heads in order (HOD's order, then any LOD-only head)
+    std::vector<std::string> swCols;
     for (int k = 0; k < 2; k++) for (const hl::SwCell& c : *swV[k]) { const std::string h = swHead(c.name); if (std::find(swCols.begin(), swCols.end(), h) == swCols.end()) swCols.push_back(h); }
-    std::vector<int> swCw(swCols.size(), 0);
-    for (size_t q = 0; q < swCols.size(); q++) swCw[q] = M(swCols[q], false);
+    {   // (2.55.0) price levels first, then the volume levels; any other head keeps its place after them
+        static const char* const ORD[6] = { "PRE-HR", "ON", "PD", "PF", "DPoc", "VA" };
+        auto rank = [](const std::string& h) { for (int i = 0; i < 6; i++) if (h == ORD[i]) return i; return 6; };
+        std::stable_sort(swCols.begin(), swCols.end(), [&](const std::string& a, const std::string& b) { return rank(a) < rank(b); });
+    }
+    const int NCOL = (int)(std::max)((size_t)NC, swCols.size());
+    const int TG = 4, SWG = 14;   // time -> % gap; gap between the columns
+    const int rl = (std::max)((std::max)(M(la1, true), M(la2, true)), nSw ? (std::max)(M(swL[0], true), M(swL[1], true)) : 0) + 12;   // the right block's label column
+    std::vector<int> cw((size_t)NCOL, 0);
+    for (int q = 0; q < NCOL; q++) {
+        if (q < (int)t1.size()) cw[(size_t)q] = (std::max)(cw[(size_t)q], M(t1[(size_t)q], false) + TG + M(p1[(size_t)q], true));
+        if (q < (int)t2.size()) cw[(size_t)q] = (std::max)(cw[(size_t)q], M(t2[(size_t)q], false) + TG + M(p2[(size_t)q], true));
+        if (q < (int)swCols.size()) cw[(size_t)q] = (std::max)(cw[(size_t)q], M(swCols[(size_t)q], false));
+    }
     for (int k = 0; k < 2; k++) for (const hl::SwCell& c : *swV[k]) { const size_t q = (size_t)(std::find(swCols.begin(), swCols.end(), swHead(c.name)) - swCols.begin());
-        swCw[q] = (std::max)(swCw[q], M(swPct(c), true) + M(swRnd(c), false)); }
-    const int SWG = 18;   // gap between the swept columns
-    int swW = nSw ? swLab : 0; for (size_t q = 0; q < swCols.size(); q++) swW += swCw[q] + (q ? SWG : 0);
-    const int SWH = nSw ? (nSw + 1) * ROW + 3 : 0;   // head row + the swept rows + the grey line under them
-    const int W = (std::max)(PX + c0 + PADC + c1 + PADC + 1 + PADC + c2 + PADC + 1 + GAP + statsW + PX, PX + swW + PX), H = 3 * ROW + 4 + SWH;
+        cw[q] = (std::max)(cw[q], M(swPct(c), true) + M(swRnd(c), false)); }
+    int cols = 0; for (int q = 0; q < NCOL; q++) cols += cw[(size_t)q] + (q ? SWG : 0);
+    const int rightW = (std::max)(rl + cols, M(lab0b, false));
+    const int RULE = 5;
+    const int Hl = 6 * ROW + RULE, Hr = 3 * ROW + (nSw ? RULE + (nSw + 1) * ROW : 0);
+    const int W = PX + leftW + PADC + 1 + GAP + rightW + PX, H = 4 + (std::max)(Hl, Hr);
     if (right - left < W) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
     int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
     D.l = l; D.r = l + W; D.b = bottom; D.t = bottom - H;
     D.items.push_back(Item{ 0, D.l, D.t, D.r, D.b, "", C_EDGE, C_BG, false });
-    const int y0 = D.t + 2, y1 = y0 + ROW, y2 = y1 + ROW;   // (2.53.0) Exp / Act + stats on top; the swept table under them
-    const int ySw = y2 + ROW + 3;   // the swept table's head row
     auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int tw2 = M(s, bold); D.items.push_back(Item{ 1, x, y, x + tw2, y + ROW, s, col, 0, bold }); return tw2; };
     auto runs = [&](int x, int y, const std::vector<Run>& r) { for (const Run& g : r) x += text(x, y, g.s, g.col, g.bold); };
-    const int x0 = D.l + PX, x1 = x0 + c0 + PADC, xs1 = x1 + c1 + PADC, x2 = xs1 + 1 + PADC, xs2 = x2 + c2 + PADC, x3 = xs2 + 1 + GAP;
-    {   // (2.52.0) the swept table
+    const int y0 = D.t + 2, x0 = D.l + PX, x1 = x0 + c0 + PADC, xs = x0 + leftW + PADC, xr = xs + 1 + GAP;
+    {   // LEFT: 1st over 2nd
+        text(x0, y0, "1st", C_HEAD, false);
+        text(x0, y0 + ROW, "Exp", C_TXT, true); runs(x1, y0 + ROW, e1);
+        text(x0, y0 + 2 * ROW, "Act", C_TXT, true); runs(x1, y0 + 2 * ROW, a1);
+        const int yr = y0 + 3 * ROW + RULE / 2; D.items.push_back(Item{ 2, x0, yr, xs - PADC / 2, yr, "", C_SEPV, 0, false });
+        const int y3 = y0 + 3 * ROW + RULE; const int hw = text(x0, y3, h2, C_HEAD, false); if (!h2g.empty()) text(x0 + hw, y3, h2g, C_TXT, false);
+        text(x0, y3 + ROW, "Exp", C_TXT, true); runs(x1, y3 + ROW, e2);
+        text(x0, y3 + 2 * ROW, "Act", C_TXT, true); runs(x1, y3 + 2 * ROW, a2);
+    }
+    D.items.push_back(Item{ 2, xs, D.t + 4, xs, D.b - 4, "", C_SEPV, 0, false });   // the divider between the two blocks
+    auto colX = [&](int q) { int x = xr + rl; for (int z = 0; z < q; z++) x += cw[(size_t)z] + SWG; return x; };
+    {   // RIGHT: extreme in by (1st / 2nd rows of "9:00 61%" cells), then the swept table on the same columns
+        text(xr, y0, lab0b, C_HEAD, false);
+        for (int r = 0; r < 2; r++) {
+            const std::vector<std::string>& T = r == 0 ? t1 : t2; const std::vector<std::string>& P = r == 0 ? p1 : p2; if (T.empty()) continue;
+            const int y = y0 + (r + 1) * ROW; text(xr, y, r == 0 ? la1 : la2, C_TXT, true);
+            for (size_t q = 0; q < T.size() && (int)q < NCOL; q++) { const int cwid = M(T[q], false) + TG + M(P[q], true); int x = colX((int)q) + (cw[q] - cwid) / 2;
+                x += text(x, y, T[q], C_HEAD, false) + TG; text(x, y, P[q], C_TXT, true); }
+        }
         if (nSw) {
-            const int yh = ySw; int x = D.l + PX + swLab;
-            for (size_t q = 0; q < swCols.size(); q++) { const int hw = M(swCols[q], false); text(x + (swCw[q] - hw) / 2, yh, swCols[q], C_HEAD, false); x += swCw[q] + SWG; }
+            const int yr = y0 + 3 * ROW + RULE / 2; D.items.push_back(Item{ 2, xr, yr, D.r - PX, yr, "", C_SEPV, 0, false });
+            const int yh = y0 + 3 * ROW + RULE;
+            for (size_t q = 0; q < swCols.size(); q++) { const int hw = M(swCols[q], false); text(colX((int)q) + (cw[q] - hw) / 2, yh, swCols[q], C_HEAD, false); }
             int row = 1;
             for (int k = 0; k < 2; k++) { const std::vector<hl::SwCell>& cs = *swV[k]; if (cs.empty()) continue;
-                const int y = ySw + row * ROW; text(D.l + PX, y, swL[k], k == 0 ? hl::C_RED : hl::C_GREEN, true);
+                const int y = yh + row * ROW; text(xr, y, swL[k], k == 0 ? hl::C_RED : hl::C_GREEN, true);
                 for (const hl::SwCell& c : cs) { const size_t q = (size_t)(std::find(swCols.begin(), swCols.end(), swHead(c.name)) - swCols.begin());
-                    int cx0 = D.l + PX + swLab; for (size_t z = 0; z < q; z++) cx0 += swCw[z] + SWG;
-                    const std::string p = swPct(c), r = swRnd(c); const int w = M(p, true) + M(r, false); int xx = cx0 + (swCw[q] - w) / 2;
+                    const std::string p = swPct(c), r = swRnd(c); const int wd = M(p, true) + M(r, false); int xx = colX((int)q) + (cw[q] - wd) / 2;
                     const bool beats = c.pct >= 0 && c.rnd >= 0 && c.pct > c.rnd;
                     xx += text(xx, y, p, beats || c.rnd < 0 ? C_TXT : C_HEAD, true); if (!r.empty()) text(xx, y, r, C_HEAD, false); }
                 ++row; }
-            D.items.push_back(Item{ 2, D.l + PX, y2 + ROW + 1, D.r - PX, y2 + ROW + 1, "", C_SEPV, 0, false });   // (2.53.0) the grey line between the stats and the swept table
         }
-    }
-    text(x1, y0, "1st", C_HEAD, false); { const int hw = text(x2, y0, h2, C_HEAD, false); if (!h2g.empty()) text(x2 + hw, y0, h2g, C_TXT, false); }
-    text(x3, y0, lab0b, C_HEAD, false);   // (2.52.0)
-    text(x0, y1, "Exp", C_TXT, true); runs(x1, y1, e1); runs(x2, y1, e2);
-    text(x0, y2, "Act", C_TXT, true); runs(x1, y2, a1); runs(x2, y2, a2);
-    D.items.push_back(Item{ 2, xs1, y0 + 2, xs1, y2 + ROW - 2, "", C_SEPV, 0, false });
-    D.items.push_back(Item{ 2, xs2, y0 + 2, xs2, y2 + ROW - 2, "", C_SEPV, 0, false });
-    text(x3, y1, la1, C_HEAD, false); if (!t2.empty()) text(x3, y2, la2, C_HEAD, false);
-    int xc = x3 + sl + GAP;
-    for (int q = 0; q < NC; q++) {
-        if (q) xc += CG;
-        const int tr = xc + tw[(size_t)q], pr = tr + TG + pw[(size_t)q];   // time and % each right-aligned in their column
-        if (q < (int)t1.size()) { text(tr - M(t1[(size_t)q], false), y1, t1[(size_t)q], C_HEAD, false); text(pr - M(p1[(size_t)q], true), y1, p1[(size_t)q], C_TXT, true); }
-        if (q < (int)t2.size()) { text(tr - M(t2[(size_t)q], false), y2, t2[(size_t)q], C_HEAD, false); text(pr - M(p2[(size_t)q], true), y2, p2[(size_t)q], C_TXT, true); }
-        xc = pr;
     }
     D.text = "2nd" + h2g + " ; Exp " + plainRuns(e1) + " | " + plainRuns(e2) + " ; Act " + plainRuns(a1) + " | " + plainRuns(a2) + " ; 1st";
     for (size_t q = 0; q < t1.size(); q++) D.text += " " + t1[q] + "=" + p1[q];

@@ -26,7 +26,7 @@ int main() {
     C(B.b == bottom, "docked on the pane's bottom edge (no black space under it)");
     C(std::abs((B.l + B.r) / 2 - cx) <= 1, "centred on the candles");
     C(B.l >= paneL && B.r <= lastBar, "inside the candle area (never right of the last bar)");
-    C(B.b - B.t == 3 * 18 + 4, "three rows (18 px, 2.48.1)");
+    C(B.b - B.t == 4 + 6 * 18 + 5, "(2.55.0) 1st and 2nd stacked: six rows (18 px) + a line");
     for (const hsb::Item& it : B.items) C(it.l >= B.l && it.r <= B.r && it.t >= B.t && it.b <= B.b, "every item inside the box: " + it.s);
     C(has(B.text, "Exp 7:24 - 8:12  70% | likely 8:00-9:15 LOD"), "Exp row: " + B.text);
     C(has(B.text, "Act HOD so far 7:33 | LOD so far 8:00 ONL"), "Act row: " + B.text);
@@ -40,7 +40,7 @@ int main() {
     C(heads == 3 && labs == 2 && seps == 2 && exp && act, "(2.52.0) headings 1st / 2nd + the stats row label 1st (the bold title is gone), two grey separators, Exp / Act bold");
     // the stats rows line up with Exp / Act
     int yExp = -1, yBy = -1, yAct = -1, yPct = -1;
-    for (const hsb::Item& it : B.items) { if (it.s == "Exp") yExp = it.t; if (it.s == "1st" && it.t != B.t + 2) yBy = it.t; if (it.s == "Act") yAct = it.t; if (it.s == "34%") yPct = it.t; }
+    for (const hsb::Item& it : B.items) { if (it.s == "Exp" && yExp < 0) yExp = it.t; if (it.s == "1st" && it.t != B.t + 2) yBy = it.t; if (it.s == "Act" && yAct < 0) yAct = it.t; if (it.s == "34%") yPct = it.t; }
     C(yExp == yBy && yExp == yPct && yExp < yAct, "(2.50.0) the stats 1st row (label and %) on the Exp row");
     // no data yet (before the open) - the box still shows, stats always
     hl::View e; e.tmOk = true; e.tmOpenMin = 510; e.tmCum[0] = 46; e.tmCum[1] = 61; e.tmCum[2] = 77; e.tmCum[3] = 23;

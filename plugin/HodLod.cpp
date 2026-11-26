@@ -247,6 +247,7 @@
 #include "GammaLine.h"              // (2.39.0) the GAMMA line (SDK-free, tests_hodlod/t_hl2390.cpp)
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodRange.h"          // (2.19.0) the Range Day pill (SDK-free)
+#include "HodLodStops.h"
 #include "HodLodSweeps.h"         // (2.13.0) the HOD / LOD sweep sections (SDK-free)
 static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not drawn
 #include "ChartRead.h"              // (2.20.0) the 3-line chart read (SDK-free) - 2.22.0: still built + logged for lra.read_grade, no longer drawn
@@ -426,7 +427,8 @@ struct HLState {
     // stamp-checked at most every 5 s
     long long rdStamp = -2; time_t rdChecked = 0; hrd::File rdf; std::string rdWhy; hrd::Out rdOut;   // (2.19.0) LRA-RangeDay-<MKT>.csv
     int calH = -1; long long calStamp = -2; std::string calWhy = "not read";   // (2.54.0) lsEventCal's box height (its status file), for the last 5 days panel
-    std::string l5Why = "not drawn"; bool hbBoxOk = false; int hbBoxT = 0;   // (2.54.0) the HOD / LOD box drawn this pass + its top
+    std::string l5Why = "not drawn"; bool hbBoxOk = false; int hbBoxT = 0;
+    std::string stWhy = "not drawn"; bool stOk = false; hl::Box stBox = { 0, 0, 0, 0 };   // (2.55.0) the Stops resting / Stops run section   // (2.54.0) the HOD / LOD box drawn this pass + its top
     long long swStamp = -2, swKeyStamp = -2; time_t swChecked = 0; hsw::File sw; std::vector<hsw::Lv> swKeys; std::string swWhy, swKeyWhy;
     bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
     // (2.4.0) the regime's ONE source: GammaProfile-MQ-<MKT>.csv HVL0 (stamp, at most every 5 s) and its verdict (Fresh.h)
@@ -2434,6 +2436,22 @@ int HodLod::draw(void)
             S->hbWhy = "drawn " + std::to_string(HB.l) + "," + std::to_string(HB.t) + "," + std::to_string(HB.r) + "," + std::to_string(HB.b) + " : " + HB.text;
         } else { if (!HB.why.empty()) S->hbWhy = "not drawn: " + HB.why; HB.ok = false; }
         S->hbBoxOk = HB.ok; S->hbBoxT = HB.t;
+        S->stOk = false;
+        if (HB.ok) {   // (2.55.0, StopsBusy-mockup.html) STOPS RESTING / STOPS RUN right of the box: the highs / lows whose stops were run today
+            std::vector<stp::Lv> K; for (const hsw::Lv& k : S->swKeys) K.push_back(stp::Lv{ k.name, k.px });
+            std::vector<stp::Bar> SB; for (const nowl::Bar& b : S->nlBars) SB.push_back(stp::Bar{ b.t, b.h, b.l, b.c });
+            const stp::Out SO = stp::compute(K, SB, S->mi >= 0 ? hl::MKTS[S->mi].open : 510, S->tick, SB.empty() ? NAN : SB.back().c);
+            const stp::Draw SD = stp::layout(SO, meas, HB.r, (int)pane.bottom, HB.b - HB.t, (int)pane.top + 24, r);
+            if (SD.ok) {
+                for (const stp::Item& it : SD.items) {
+                    if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
+                    else if (it.k == 1) textIn(it.l, it.r, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
+                    else line(it.l, it.t, it.r, it.b, (COLOR)it.col, 1);
+                }
+                S->stOk = true; S->stBox = hl::Box{ SD.l, SD.t, SD.r, SD.b };
+                S->stWhy = "drawn " + std::to_string(SD.l) + "," + std::to_string(SD.t) + "," + std::to_string(SD.r) + "," + std::to_string(SD.b) + " : " + SD.text;
+            } else S->stWhy = "not drawn: " + SD.why;
+        } else S->stWhy = "not drawn: no HOD / LOD box";
         const int anchorB = HB.ok ? HB.t : (int)pane.bottom;   // the Level line's bottom edge ON the box's top edge (no gap); no box = the pane's bottom
         const int cx = cxC;
         const hl::Seg pill = hl::gammaPill(S->view); std::string ex; unsigned exC = hl::C_SLATE;
@@ -2458,7 +2476,7 @@ int HodLod::draw(void)
             S->gmDrawnF = true; S->gmLevel = G.level; S->gmText = G.text;
         }
         const int nowB = gml::nowBottom(G, anchorB);
-        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, HB.ok ? HB.l : cx, nowB, HB.ok ? HB.l : l, r, 10);   // (2.54.1) the Level line flush left ON the box again (its left edge = the box's)   // (2.50.0) the Level line flush left ON the box (its left edge = the box's)
+        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, HB.ok ? (HB.l + HB.r) / 2 : cx, nowB, l, r, 10);   // (2.55.0, Rassul 16:08 "update Vob Watch to Next and center it") centred on the box   // (2.50.0) the Level line flush left ON the box (its left edge = the box's)
         const int yB = nowB, yT = D.ok ? D.t : yB - 18;
         const int gLeft = (G.pill || G.exp) ? (std::min)(G.l, G.pill ? G.pillL : G.expL) : G.l;   // (2.39.1) the pill / 0DTE at the far left
         if (gmDrawn && !(yT > (int)pane.top + 24) && !stripOk) { stripBox = hl::Box{ gLeft, G.t, G.r, G.b }; stripOk = true; }
@@ -2491,6 +2509,7 @@ int HodLod::draw(void)
             if (stripOk) { stripBox.l = (std::min)(stripBox.l, HB.l); stripBox.r = (std::max)(stripBox.r, HB.r); stripBox.t = (std::min)(stripBox.t, HB.t); stripBox.b = (std::max)(stripBox.b, HB.b); }
             else { stripBox = hl::Box{ HB.l, HB.t, HB.r, HB.b }; stripOk = true; }
         }
+        if (S->stOk) { if (stripOk) { stripBox.r = (std::max)(stripBox.r, S->stBox.r); stripBox.t = (std::min)(stripBox.t, S->stBox.t); stripBox.b = (std::max)(stripBox.b, S->stBox.b); } else { stripBox = S->stBox; stripOk = true; } }   // (2.55.0)
     }
     {   // (2.54.0, LastFive-Vertical-mockup.html) THE LAST 5 DAYS PANEL: flush with the pane's left edge, centred vertically between the Event
         // Calendar (its status file) and the Level line / HOD-LOD box; the nightly's L5 rows (each day's HOD / LOD, time, <= 2 levels swept)
@@ -2508,8 +2527,9 @@ int HodLod::draw(void)
             S->l5Why = "drawn " + std::to_string(P.l) + "," + std::to_string(P.t) + "," + std::to_string(P.r) + "," + std::to_string(P.b) + " days " + std::to_string(P.shown) + " : " + P.text;
         } else S->l5Why = "not drawn: " + P.why;
     }
+    S->placeLine += "STOPS," + std::string(stp::VERSION) + "," + S->stWhy + "\n";
     S->placeLine += "LAST5," + std::string(l5::VERSION) + "," + S->calWhy + "," + S->l5Why + "\n";
-    S->placeLine += "HODLOD_BOX,2.54.1," + S->hbWhy + "\n";
+    S->placeLine += "HODLOD_BOX,2.55.0," + S->hbWhy + "\n";
     S->placeLine += std::string("DISPLAY,") + hl::HL_VERSION + ",level line + HOD / LOD box (2.48.0)"
                   + (hl::HL_BOX_DRAW ? std::string(",box drawn") : boxLaid ? ",box NOT drawn - laid out at " + std::to_string(boxAt.l) + " " + std::to_string(boxAt.t) + " " + std::to_string(boxAt.r) + " " + std::to_string(boxAt.b) : std::string(",box NOT drawn - no spot"))
                   + (hl::HL_OPTIONS_LINE_DRAW ? ",options line drawn" : ",options line NOT drawn (decided + recorded)") + ",now line " + (S->nlDrawn ? "drawn" : "not drawn")
@@ -2692,6 +2712,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.54.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.55.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

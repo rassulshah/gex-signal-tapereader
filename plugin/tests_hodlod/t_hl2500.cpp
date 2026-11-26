@@ -31,7 +31,7 @@ int main() {
     {   // the two rows: every 1st cell on row 1, every 2nd cell on row 2, the columns aligned (same right edge for the % of a column)
         int y1 = -1, y2 = -1; int r60 = -1, r37 = -1;
         for (const hsb::Item& it : B.items) { if (it.k != 1) continue; if (it.s == "61%") { y1 = it.t; r60 = it.r; } if (it.s == "37%") { y2 = it.t; r37 = it.r; } }
-        C(y1 >= 0 && y2 > y1, "1st on the Exp row, 2nd on the Act row"); C(r60 == r37 && r60 > 0, "column 1's % right-aligned over both rows"); }
+        C(y1 >= 0 && y2 > y1, "1st on the Exp row, 2nd on the Act row"); C(r60 > 0 && std::abs(r60 - r37) <= 6, "(2.55.0) column 1 over both rows (the 9:00 61% cells centred in their column)"); }
     // CL: 3 steps (11:30 / 12:30 / 1:00) + last 30; GC: 2 steps (10:50 / 12:00)
     { const hsw::File G = hsw::parse(file("CL", "TIME2,480,36,49,65,78,87,13,252\nSEC2,480,3,210,40,270,59,300,74,26,252\n"), "CL");
       B = hsb::layout(view(G, 480), meas, 0, 500, 0, 1400); C(has(B.text, "; 2nd 11:30=40% 12:30=59% 1:00=74% last 30=26%"), "CL 2nd row: " + B.text); }

@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.7.0";   // (1.7.0 = lsHodLod 2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", "add it ... i'll go with your recommendation", mockup Level-Line-mockup.html option A) LEVEL CHIPS: the label "VOB(T) WATCH" in gold text (no block), each watched level its own chip - a low below price green (a VOB can form there), a high above red (a VOT) - "Bk / VOB(T)" dropped; the state words (TESTING / VOB / VOT / BREAK / WATCH BkTst Rev) stay filled badges with the level in a chip after them; NEXT / LAST BK as grey labels, the arrow green / red, the level white. Same rules and content
+static const char* const VERSION = "1.8.0";   // (1.8.0 = lsHodLod 2.55.0, Rassul 16:08 CT) the gold "VOB(T) WATCH" word reads "Next"; the host centres the line on the HOD / LOD box
+// was "1.7.0";   // (1.7.0 = lsHodLod 2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", "add it ... i'll go with your recommendation", mockup Level-Line-mockup.html option A) LEVEL CHIPS: the label "VOB(T) WATCH" in gold text (no block), each watched level its own chip - a low below price green (a VOB can form there), a high above red (a VOT) - "Bk / VOB(T)" dropped; the state words (TESTING / VOB / VOT / BREAK / WATCH BkTst Rev) stay filled badges with the level in a chip after them; NEXT / LAST BK as grey labels, the arrow green / red, the level white. Same rules and content
 // was "1.6.1";   // (1.6.1 = lsHodLod 2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH names the nearest untouched major levels above and below again, any kind (1.5.1's highs-above / lows-below filter is off: NL_SIDE_FILTER); TESTING reads "Bk / VOB(T)"
 // was "1.6.0";   // (1.6.0 = lsHodLod 2.46.0, Rassul 2026-11-25 14:28-14:29 CT "i want to relabel sweep  to VOB  (volume off the bottom) and VOT (Volume off the top)", "yes   VOB(T) WATCH    .   for the  voice just use the letters"; mockup vob-vot-mockup.html) a sweep is named VOB (bullish, off a low) / VOT (bearish, off a high) on the line: "VOB: CWL", "VOB(T) WATCH: ...", "TESTING: ONL Bk / VOB"
 // was "1.5.1";   // (1.5.1 = lsHodLod 2.45.1, Rassul 2026-11-25 13:11 CT "bearish sweeps use highs and bullish sweeps use lows", LevelMarks 1.23.0) SWEEP WATCH names only highs above price and only lows below it
@@ -419,7 +420,7 @@ inline std::vector<Seg> segments(const Out& o, const Liq& lq = Liq()) {
         // (1.5.0, 11:47 "rename to Sweep Watch") was "WATCH: "
         // (1.6.0, 14:29 "VOB(T) WATCH") was "SWEEP WATCH: " ... "Bk / Sw"
         // (1.7.0, option A) "VOB(T) WATCH" as gold text, each level its own chip: the low below price green, the high above red; no "Bk / VOB(T)"
-        add("VOB(T) WATCH", 0, "", C_GOLD, true, 2);
+        add("Next", 0, "", C_GOLD, true, 2);   // (1.8.0 = lsHodLod 2.55.0, Rassul 2026-11-26 16:08 CT "update Vob Watch to Next and center it") was "VOB(T) WATCH"
         if (dn.ok) { chip(-1, dn.name, -1, 2); named.push_back(dn.name); }
         if (up.ok) { chip(1, up.name, 1, 2); named.push_back(up.name); }
         { std::vector<std::string> lvs; if (dn.ok) lvs.push_back(dn.name); if (up.ok) lvs.push_back(up.name); phrase(lvs); }

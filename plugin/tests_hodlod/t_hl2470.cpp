@@ -16,11 +16,11 @@ int main(int argc, char** argv) {
     auto meas = [](const std::string& s, bool bold) { return (int)s.size() * (bold ? 8 : 7); };
     nowl::Out o; o.ok = true; o.dn.ok = true; o.dn.name = "PDL"; o.up.ok = true; o.up.name = "AHI"; o.haveBk = true; o.bk.lv = "R1"; o.bk.dir = 1;
     const std::vector<nowl::Seg> v = nowl::segments(o); const std::string p = nowl::plain(v);
-    C(p == "VOB(T) WATCH {\xE2\x86\x93 PDL} {\xE2\x86\x91 AHI} \xE2\x94\x82 LAST BK \xE2\x86\x91 R1", "WATCH line: " + p);
+    C(p == "Next {\xE2\x86\x93 PDL} {\xE2\x86\x91 AHI} \xE2\x94\x82 LAST BK \xE2\x86\x91 R1", "WATCH line: " + p);
     C(!has(p, "Bk / VOB(T)") && !has(p, "["), "no 'Bk / VOB(T)', no filled badge on a plain WATCH");
     int chips = 0; for (const nowl::Seg& g : v) if (g.chip) { ++chips; C(g.s2 == "PDL" ? (g.col == nowl::CH_DN_T && g.bcol == nowl::CH_DN_B && g.arrow == -1) : (g.col == nowl::CH_UP_T && g.bcol == nowl::CH_UP_B && g.arrow == 1), "chip colours / arrow for " + g.s2); }
     C(chips == 2, "two level chips");
-    C(v[0].s == "VOB(T) WATCH" && v[0].col == nowl::C_GOLD && !v[0].badge, "the label: gold text, no block");
+    C(v[0].s == "Next" && v[0].col == nowl::C_GOLD && !v[0].badge, "the label: gold text, no block");
     { bool gl = false, gr = false, wh = false; for (const nowl::Seg& g : v) { if (g.s == "LAST BK" && g.col == nowl::C_GREY) gl = true; if (g.arrow == 1 && !g.chip && g.col == nowl::C_GREEN) gr = true; if (g.s == "R1" && g.col == nowl::C_WHITE) wh = true; }
       C(gl && gr && wh, "LAST BK grey, arrow green, R1 white"); }
     const nowl::Draw D = nowl::layout(v, meas, 500, 300, 0, 1000, 10);

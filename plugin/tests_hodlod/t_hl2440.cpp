@@ -36,8 +36,8 @@ int main() {
       for (const nowl::Key& q : k) { if (q.name == "R1" && std::fabs(q.px - 3691.0) < 1e-6) r1 = true; if (q.name == "S1" && std::fabs(q.px - 3599.9) < 1e-6) s1 = true; if (q.name == "S2" && std::fabs(q.px - 3502.9) < 1e-6) s2 = true; }
       C(r1 && s1 && s2, "the 3h keys at 2:15 PM: R1 3691.0, S1 3599.9, S2 3502.9 (his 180-minute chart)");
       const std::string a = lineAt(A.size(), wyNew, k), b = lineAt(A.size(), wyOld, k);
-      C(a == "VOB(T) WATCH {\xE2\x86\x93 PFH} {\xE2\x86\x91 R1} \xE2\x94\x82 LAST BK \xE2\x86\x91 ONH", "GC 2:15 PM with 0.24.0's marks: " + a);
-      C(b == "VOB(T) WATCH {\xE2\x86\x93 PFH} {\xE2\x86\x91 R1} \xE2\x94\x82 LAST BK \xE2\x86\x91 LHI", "the same with the live (0.23.0) marks: the last MAJOR break is LHI 7:27 AM (the 1hL breaks after it are not named): " + b); }
+      C(a == "Next {\xE2\x86\x93 PFH} {\xE2\x86\x91 R1} \xE2\x94\x82 LAST BK \xE2\x86\x91 ONH", "GC 2:15 PM with 0.24.0's marks: " + a);
+      C(b == "Next {\xE2\x86\x93 PFH} {\xE2\x86\x91 R1} \xE2\x94\x82 LAST BK \xE2\x86\x91 LHI", "the same with the live (0.23.0) marks: the last MAJOR break is LHI 7:27 AM (the 1hL breaks after it are not named): " + b); }
     // every candle close of today: no hour level, VAH / VAL or pre-open hour on the line; a line is always there
     { int bad = 0, empty = 0, steps = 0; hsr::Walk W; hsr::Snap s; size_t fed = 0;
       for (size_t n = 0; n < A.size(); ++n) { if (A[n].t < s0 + 60 * 180) continue; ++steps;
@@ -52,7 +52,7 @@ int main() {
       const std::string bk = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Bk|1|ONH|36364|V99+\n", k), swH = lineAt(n, "WY|1|GC|180|0.23.0\n" + st + "|Sw|1|PhrL|36125|V99+\n", k);
       const std::string swM = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Sw|1|ONL|36125|V99+\n", k), bkH = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Bk|1|1hH|36270|V99+\n", k), bk3 = lineAt(n, "WY|1|GC|180|0.24.0\n" + st + "|Bk|1|R1|36364|V99+\n", k);
       C(has(bk, "[BREAK] {") && has(bk, " ONH}"), "a Bk ONH mark on the closed candle: [BREAK] {ONH} - " + bk);
-      C(!has(swH, "SWEEP:") && has(swH, "WATCH"), "a Sw on PhrL (not major) gives no SWEEP badge - " + swH);
+      C(!has(swH, "SWEEP:") && has(swH, "Next"), "a Sw on PhrL (not major) gives no SWEEP badge - " + swH);
       C(has(swM, "[VOB] {") && has(swM, " ONL}"), "a Sw on a session level: SWEEP - " + swM);
       C(!has(bkH, "BREAK") && !has(bkH, "LAST BK") && !has(bkH, "1hH"), "a Bk on an hour level: no BREAK badge, no Last Bk part - " + bkH);
       C(has(bk3, "[BREAK] {") && has(bk3, " R1}"), "a Bk on the 3h R1: [BREAK] {R1} - " + bk3); }

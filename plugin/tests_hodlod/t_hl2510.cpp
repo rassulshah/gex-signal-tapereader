@@ -31,18 +31,18 @@ int main() {
     const hl::View v = view(F); hsb::Draw B = hsb::layout(v, meas, 0, 600, 0, 1600);
     C(B.ok && has(B.text, "; HOD swept PhrH=45%(42%) ON=40%(40%) DPoc=26%(21%) VAH=21%(20%) PDH=14%(17%) PFH=12%(15%)"), "HOD line: " + B.text);
     C(has(B.text, "; LOD swept PhrL=40%(38%) ON=35%(33%) DPoc=26%(20%) VAL=10%(13%) PDL=8%(10%) PFL=5%(8%)"), "LOD line: " + B.text);
-    C(B.b == 600 && B.b - B.t == 3 * 18 + 4 + 3 * 18 + 3, "(2.52.0) the box grows by the head row + the two swept rows (+ the grey line), still docked on the bottom");
+    C(B.b == 600 && B.b - B.t == 4 + 6 * 18 + 5, "(2.55.0) 1st / 2nd stacked on the left (6 rows + a line) = the box height; still docked on the bottom");
     for (const hsb::Item& it : B.items) C(it.l >= B.l && it.r <= B.r && it.t >= B.t && it.b <= B.b, "inside the box: " + it.s);
     {   // HOD line on top, LOD below, both above the Exp / Act rows; labels in red / green
         int yH = -1, yL = -1, yE = -1; unsigned cH = 0, cL = 0;
-        for (const hsb::Item& it : B.items) { if (it.k != 1) continue; if (it.s == "HOD swept") { yH = it.t; cH = it.col; } if (it.s == "LOD swept") { yL = it.t; cL = it.col; } if (it.s == "Exp") yE = it.t; }
-        C(yH >= 0 && yL > yH && yE >= 0 && yE < yH, "(2.53.0) Exp / Act on top, then HOD swept, then LOD swept"); C(cH == hl::C_RED && cL == hl::C_GREEN, "labels red / green"); }
+        for (const hsb::Item& it : B.items) { if (it.k != 1) continue; if (it.s == "HOD swept") { yH = it.t; cH = it.col; } if (it.s == "LOD swept") { yL = it.t; cL = it.col; } if (it.s == "Exp" && yE < 0) yE = it.t; }
+        C(yH >= 0 && yL > yH && yE >= 0 && yE < yH, "(2.55.0) the 1st Exp on top, then HOD swept, then LOD swept"); C(cH == hl::C_RED && cL == hl::C_GREEN, "labels red / green"); }
     {   // no LIFT rows (an old file): the % without brackets; no ROW rows: no swept lines, the box as 2.50.0
         std::string old = ES; old = old.substr(0, old.find("LIFT,"));
         const hl::View o = view(hsw::parse(old, "ES")); B = hsb::layout(o, meas, 0, 600, 0, 1600);
         C(has(B.text, "HOD swept PhrH=45% ON=40%") && !has(B.text, "(42%)"), "no LIFT: % only: " + B.text);
         hl::View n = o; n.sxHi.clear(); n.sxLo.clear(); B = hsb::layout(n, meas, 0, 600, 0, 1600);
-        C(B.ok && B.b - B.t == 3 * 18 + 4 && !has(B.text, "swept"), "no swept data: the 2.50.0 box"); }
+        C(B.ok && B.b - B.t == 4 + 6 * 18 + 5 && !has(B.text, "swept"), "no swept data: the box keeps the stacked 1st / 2nd height"); }
     {   // garbled LIFT values are ignored
         std::string bad = std::string(ES) + "LIFT,HI,PHH,1.08,x,0.80,0\nLIFT,HI,PDH,0.85,150,0.96,0\n"; const hsw::File G = hsw::parse(bad, "ES");
         C(G.hi.at("PHH").rnd == 42 && G.hi.at("PDH").rnd == 17, "a bad LIFT random % keeps the good one"); }
