@@ -158,11 +158,13 @@ static int& dpGHoldSec() { static int s = 60; return s; }   // (2.59.0) the node
 static const bool DP_LIQ_RANK_FRONT = true;   // (2.52.0, Rassul 2026-11-03 "the rank in front of the liquidity", mockup rank_front.png) Liquidity column: [rank] | R S notP F + bar | lots score pct% - the rank box at the row's FRONT (left), one aligned column
 static const bool DP_LIQ_RANK_RIGHT = !DP_LIQ_RANK_FRONT;   // was true (2.42.0, Rassul 10:36 CT "the rank of the liquidity should also be after the level label") Liquidity column: bar | lots pct% names | [rank]
 static const bool DP_KEYS_RIGHT = true;    // (2.40.0, Rassul "move the levels to the right side before the liquidity profile")
+static const bool DP_LIQ_COL = false;      // (2.71.0) the Liquidity column on the right: hidden (Rassul 2026-11-25)
 static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-02 10:27-10:30 CT "the liquidity column is taking up too much space, reduce it by 25% ... make them the same size") 200 + 230 -> 170 + 170 = 340   // was 200, 230:   // (2.40.0) right mode: Key Levels 200 px + Liquidity 230 px (bars + "465  52%  VAH") = one published Levels width of 430 (<= 460)
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.70.0";   // (2.70.0, Rassul 2026-11-24 13:53 CT "there are too many levels on the limit profile , remeive the gamma levels. list the key levels", 14:0x CT picked "Volume VAH/VAL/DPoc/WPoc, Asia AsiaHI / AsiaLO, Prior hour PhrH / PhrL"): CR0 / PS0 (gamma), WPoc is no longer a row, dim lines or level-liquidity watches (dpKeepLevel; a merged name keeps its other parts, "Open/PhrH" -> "Open"); 13:57 CT "keep certain levels faded like asia and open. dpoc. dont draw their lines": Asia / Open / DPoc rows are faded with no line across the chart (dpFaint); 14:07 CT "keep vah val also but fade them": VAH / VAL the same. 14:01 CT "remove the vwap badge": no VWAP row. Full: PW / PF / PD / ON / London highs and lows, the 3h R1 / R2 / S1 / S2
+static const char* DP_VERSION = "2.71.0";   // (2.71.0, Rassul 2026-11-25 "hide the limit side on the right and keep the levels on the left displayed", 2026-11-26 01:42 CT "did you implement ... hiding the right side of the liquidity profile"): DP_LIQ_COL = false - the LIQUIDITY column (the king / liquidity rows, its header) is not drawn and the published Levels width is the Key Levels column alone (170 px); the header "LP v2.71.0" moves to the top of the Key Levels column; the book is still read, the king still decided and its facts / records / files still written (only the drawing is muted, MuteGuard), the level lines and their liquidity marks on the price chart unchanged
+// was static const char* DP_VERSION = "2.70.0";   // (2.70.0, Rassul 2026-11-24 13:53 CT "there are too many levels on the limit profile , remeive the gamma levels. list the key levels", 14:0x CT picked "Volume VAH/VAL/DPoc/WPoc, Asia AsiaHI / AsiaLO, Prior hour PhrH / PhrL"): CR0 / PS0 (gamma), WPoc is no longer a row, dim lines or level-liquidity watches (dpKeepLevel; a merged name keeps its other parts, "Open/PhrH" -> "Open"); 13:57 CT "keep certain levels faded like asia and open. dpoc. dont draw their lines": Asia / Open / DPoc rows are faded with no line across the chart (dpFaint); 14:07 CT "keep vah val also but fade them": VAH / VAL the same. 14:01 CT "remove the vwap badge": no VWAP row. Full: PW / PF / PD / ON / London highs and lows, the 3h R1 / R2 / S1 / S2
 // was static const char* DP_VERSION = "2.69.1";   // (2.69.1, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2) a level line across the chart whose row carries R1 / R2 is RED, S1 / S2 GREEN (hsr::rsSide / rsColour) - same fade and width as before; the badges keep their colours; a row that is only R / S still leaves its line to lsCobSignal / lsHtfSR (now red / green there too)
 // was DP_VERSION = "2.69.0";   // (2.69.0, 2026-11-20 Rassul 11:16 CT "the key levels like overnight pdl pfl etc are too dim, make them a little more noticable", 11:19 "B" on key-level-lines-mockup.html) the KEY level lines across the chart (session / PD / PF / London / Asia / weekly / prior hour / Open) at 55% of their colour and 2 px (DP_XLINE_KEY_FADE / _W); volume and gamma lines stay 30%, 1 px
 // was DP_VERSION = "2.68.0";   // (2.68.0, 2026-11-20 Rassul approved 06:02 CT "ok. i'll go with your recommendation", mockup level-liquidity-states-mockup.html) WHAT THE LIQUIDITY ON A LEVEL LINE DID (LevelLiq.h 1.0.0, own MBO feed only): for every bright level-line stretch BUILDING / LEAVING (node lots vs when price came within 1 ATR, +-10%), at the contact candle's close X (attackers slowing, size stays), H (hit, held, closed back), P (pulled while hit); scored per market (NOTES-LP2680.md): all LEARNING, so only H is DRAWN (a small green box on a bid line / red on an offer line at the contact candle - a description) and a line ENDS at the candle that broke 3+ ticks through and closed through; everything else is computed, recorded (<MKT>-<spb>-levelliq-<session>.csv for the nightly lra.levelliq_score) and published for lsHodLod's Now line (DealerProfile\levelliq-<MKT>-<spb>.txt, shown = 0 for states that did not pass); no numbers, no hovers, decided on closed candles, redrawn from the record after a restart
@@ -498,6 +500,8 @@ public:
     void writeStatus(const char* what);
     short yOf(float price);
     void box(short l, short t, short r, short b, COLOR c);
+    bool muteDraw = false;   // (2.71.0) set (MuteGuard) only while the hidden Liquidity column is "drawn": its math / facts run, nothing is painted
+    struct MuteGuard { bool& f; bool old; MuteGuard(bool& x, bool on) : f(x), old(x) { f = on; } ~MuteGuard() { f = old; } };
     void dashRect(short l, short t, short r, short b, COLOR c);
     void line(short x1, short y1, short x2, short y2, COLOR c, int w);
     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
@@ -808,15 +812,17 @@ void DealerProfile::alignContract()
 }
 
 short DealerProfile::yOf(float price) { PNT p; p.set(lastBar, price); return p.v; }
-void DealerProfile::box(short l, short t, short r, short b, COLOR c) { RCT rc; rc.set(l, t, r, b); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
+void DealerProfile::box(short l, short t, short r, short b, COLOR c) { if (muteDraw) return; RCT rc; rc.set(l, t, r, b); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
 void DealerProfile::line(short x1, short y1, short x2, short y2, COLOR c, int w)
 {
+    if (muteDraw) return;
     setPen(c, (short)w, P_SOLID);
     PNT a; a.set(0, 0.0f); a.h = x1; a.v = y1; a.setDrawPosition();
     PNT b; b.set(0, 0.0f); b.h = x2; b.v = y2; b.drawLineTo();
 }
 void DealerProfile::dashRect(short l, short t, short r, short b, COLOR c)
 {
+    if (muteDraw) return;
     setPen(c, 1, P_SOLID);   // (1.3.2) operator: "the border of the node is dashed, make it solid"
     PNT p; p.set(0, 0.0f);
     p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
@@ -829,6 +835,7 @@ int DealerProfile::textW(const char* s, int sz, bool bold)
 // the rect text draw baselines low (~0.45 x font below y, GammaProfile v0.73): shift up so it sits ON y
 void DealerProfile::textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold)
 {
+    if (muteDraw) return;
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
     setTextColor(col);
     short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
@@ -840,6 +847,7 @@ void DealerProfile::textRJ(short rightX, short y, const char* s, COLOR col, int 
 // price text 4 px right of x+1), so a box centred with textLJ + textW was off by that inset; centring by IRT cancels it.
 void DealerProfile::textC(short centerX, short y, const char* s, COLOR col, int sz, bool bold)
 {
+    if (muteDraw) return;
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
     setTextColor(col);
     short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
@@ -848,6 +856,7 @@ void DealerProfile::textC(short centerX, short y, const char* s, COLOR col, int 
 }
 void DealerProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
 {
+    if (muteDraw) return;
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
     setTextColor(col);
     short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
@@ -2013,7 +2022,7 @@ void DealerProfile::flushLines(const Settings& S)
     if (colAll.w() <= 0 || !cs.lay.ok) { cs.badgesDropped = (int)pend.size(); pend.clear(); return; }
     // (2.40.0, Rassul 2026-11-01 "move the levels to the right side before the liquidity profile") the published Levels width holds BOTH: the Key
     // Levels column [colAll.l, colAll.l + kWr] then the Liquidity column [.., colAll.r]; a squeezed chart shrinks both in proportion
-    const int kWr = DP_KEYS_RIGHT ? std::max(60, (int)((long long)colAll.w() * DP_KEYS_RW / (DP_KEYS_RW + DP_LQ_RW))) : 0;
+    const int kWr = DP_KEYS_RIGHT ? (DP_LIQ_COL ? std::max(60, (int)((long long)colAll.w() * DP_KEYS_RW / (DP_KEYS_RW + DP_LQ_RW))) : colAll.w()) : 0;   // (2.71.0) no Liquidity column: the Key Levels column is the whole published width
     bp::Box col = colAll; if (DP_KEYS_RIGHT) col.l = colAll.l + kWr;
     RCT pane; pane.getPaneRect(false);
     const long nb = getBarCount();
@@ -2057,6 +2066,12 @@ void DealerProfile::flushLines(const Settings& S)
         if (DP_KEYS_RIGHT) line((short)kL, (short)pane.top, (short)kL, (short)pane.bottom, 0x00334155, 1);   // (2.40.0) its left edge faces the price area   // (2.34.0) full height (the table is right of it)
     }
     if (xR - xL < 120) { cs.badgesDropped = (int)pend.size(); pend.clear(); return; }
+    if (!DP_LIQ_COL) {   // (2.71.0) the title + version at the top of the Key Levels column (the Liquidity column is hidden)
+        const std::string ht = std::string(DP_TAG) + " v" + DP_VERSION; textLJ((short)(kL + 4), (short)(pane.top + 4 + bh / 2), ht.c_str(), C_HEAD, sf, true);
+        double age0 = -1; if (!nx.empty() && gridVerdict(S.clock, age0).stale()) { char sb0[40]; if (age0 >= 2880) snprintf(sb0, sizeof(sb0), "STALE %dd", (int)(age0 / 1440 + 0.5)); else if (age0 >= 90) snprintf(sb0, sizeof(sb0), "STALE %dh", (int)(age0 / 60 + 0.5)); else snprintf(sb0, sizeof(sb0), "STALE %dm", (int)(age0 + 0.5));
+            textLJ((short)(kL + 4 + textW(ht.c_str(), sf, true) + 6), (short)(pane.top + 4 + bh / 2), sb0, 0x00FF9A8F, sf, true); }
+    }
+    { MuteGuard mg0(muteDraw, !DP_LIQ_COL);
     box(col.l, pane.top, col.r, pane.bottom, C_COL);                       // the liquidity column's ground
     {   double age = -1; const bool stale = !nx.empty() && gridVerdict(S.clock, age).stale();
         // (2.52.2) lsLiquidityProfile's order book is warming: "LIQUIDITY \xB7 warming" on the title row when it fits the column, else the
@@ -2068,6 +2083,7 @@ void DealerProfile::flushLines(const Settings& S)
             if (stale) textLJ((short)(col.l + 6), (short)(pane.top + 6 + bh + bh / 2), b, 0x00FF9A8F, sf, true);
             if (warm2) textLJ((short)(col.l + 6 + (stale ? textW(b, sf, true) + 6 : 0)), (short)(pane.top + 6 + bh + bh / 2), "LIQUIDITY \xB7 warming", C_HEAD, sf, true); }
     }
+    }   // (2.71.0) end of the muted Liquidity header
     const int dec = std::max(0, std::min(6, (int)std::lround(-std::log10(std::max(1e-6, chartTick(mkt))) + 0.49)));
     // (2.36.0, Rassul 16:26 CT "the chart is extremely messy") the off-screen level markers sit in the Key Levels column (top / bottom, small),
     // never in the price area
@@ -2657,6 +2673,7 @@ void DealerProfile::flushLines(const Settings& S)
     }
     // (2.30.0) the LIQUIDITY TOP 10 (left column): rank chip, a bar pointing toward price (grows right), the lots - at each order's own price
     if (cs.qFromBoard) {
+        MuteGuard mg1(muteDraw, !DP_LIQ_COL);   // (2.71.0) the king / rows are decided and posted, not drawn
         long long mx = 1; for (const TopQ& q : topq) mx = std::max(mx, q.lots);
         // (2.31.1) only on-screen levels are drawn in the column; the ranks / king were decided over the whole book
         std::vector<cb::Item> it2; std::vector<size_t> drawn; for (size_t k = 0; k < topq.size(); ++k) if (topq[k].on) { cb::Item it; it.want = topq[k].y; it.h = bh + 1; it2.push_back(it); drawn.push_back(k); }
@@ -2788,7 +2805,7 @@ void DealerProfile::flushLines(const Settings& S)
                 // the rank box right after the label (never past the column's right end)
                 const int x0 = (rkR || rkF) ? BAR_R + 4 : std::max(BAR_R + 4, TXR - lw);   // (2.52.0) front rank: the label still starts 4 px after the bar
                 {   const int rx = rkR ? std::min(RKX, x0 + lw + 4) : RKX;
-                    RCT rb; rb.set((short)rx, (short)(t + 1), (short)(rx + RKW), (short)(b - 1)); rb.draw(1, base, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);   // (2.52.1) RKW wide
+                    RCT rb; rb.set((short)rx, (short)(t + 1), (short)(rx + RKW), (short)(b - 1)); if (!muteDraw) rb.draw(1, base, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);   // (2.52.1) RKW wide
                     textC((short)(rx + RKW / 2), (short)yc, rk.c_str(), king ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
                     cs.lqGapMax = std::max(cs.lqGapMax, x0 - BAR_R); }
                 if (sc.empty()) textLJ((short)x0, (short)yc, lt.c_str(), tc, sf, king);
@@ -2816,7 +2833,7 @@ void DealerProfile::flushLines(const Settings& S)
                 }
                 ++cs.lvcLiq; continue; }
             const std::string rk = std::to_string(q.rank);
-            RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + RKW), (short)(b - 1)); rb.draw(1, base, q.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);   // (2.52.1) RKW wide
+            RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + RKW), (short)(b - 1)); if (!muteDraw) rb.draw(1, base, q.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);   // (2.52.1) RKW wide
             textC((short)(RKX + RKW / 2), (short)yc, rk.c_str(), q.rank == 1 ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
             const int fl = std::max(6, (int)std::lround((double)BW * (double)q.lots / (double)mx));
             std::string lt = (q.dim ? "~" : "") + std::to_string(q.lots);   // (2.31.1) "~" = this order is moving / quoting
@@ -2838,6 +2855,7 @@ void DealerProfile::flushLines(const Settings& S)
     }
     postLevels(rows, shown, in, lastPx);   // (2.30.0) the levels as SignalBoard 'V' facts (with odds), for READ / the combiner
     if (cs.qFromBoard) { pend.clear(); return; }
+    MuteGuard mg2(muteDraw, !DP_LIQ_COL);   // (2.71.0) the fallback Liquidity rows: not drawn
     // (2.29.0 fallback: no 'B' producer) the LIQUIDITY column: rank + the orders at the level, on the level's line
     std::vector<size_t> lq; for (size_t r : shown) if (rows[r].lots > 0) lq.push_back(r);
     std::vector<cb::Item> items;
@@ -2853,7 +2871,7 @@ void DealerProfile::flushLines(const Settings& S)
         const COLOR base = R.bid ? C_BUY : C_SELL, txt = R.bid ? (COLOR)0x004ADE80 : (COLOR)0x00F87171;
         if (R.rank > 0) {
             const std::string rk = std::to_string(R.rank);
-            RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + bh - 2), (short)(b - 1)); rb.draw(1, base, R.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
+            RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + bh - 2), (short)(b - 1)); if (!muteDraw) rb.draw(1, base, R.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
             textC((short)(RKX + (bh - 2) / 2), (short)yc, rk.c_str(), R.rank == 1 ? C_DARK : (COLOR)0x00F8FAFC, sf, true);   // (2.52.1) centred by IRT (fallback column, box unchanged)
         }
         const int fl = std::max(18, (int)std::lround((double)LQW * std::min(1.0, maxLots > 0 ? (double)R.lots / (double)maxLots : 1.0)));
@@ -3019,7 +3037,7 @@ short DealerProfile::rightEdge(const RCT& pane)
 // detail that used to sit in the wide label (price, odds "33%  /  50%", liquidity, STALE / age) is in the badge's hover.
 // (2.14.0) the Levels column is at least 124 px so "LonHI+ 7755.75 476" fits (the setting can make it wider, never narrower than that)
 // (2.40.0) DP_LINES: + the Key Levels column (it sits inside the published Levels width, left of the Liquidity column)
-static int lvlW(const Settings& c) { if (DP_LINES) return std::min(cb::range(cb::LEVELS).hi, (DP_KEYS_RIGHT ? DP_KEYS_RW + DP_LQ_RW : DP_LQ_W)); if (DP_LVC) return std::min(cb::range(cb::LEVELS).hi, DP_LVC_W); return std::min(cb::range(cb::LEVELS).hi, std::max(c.levelsW, 150) + (c.levelPct ? DP_PCT_W : 0)); }   // (2.19.0) + the % block   // (2.14.1) 150: an NQ 5-digit price + the HL block
+static int lvlW(const Settings& c) { if (DP_LINES) return std::min(cb::range(cb::LEVELS).hi, (DP_KEYS_RIGHT ? (DP_LIQ_COL ? DP_KEYS_RW + DP_LQ_RW : DP_KEYS_RW) : DP_LQ_W)); if (DP_LVC) return std::min(cb::range(cb::LEVELS).hi, DP_LVC_W); return std::min(cb::range(cb::LEVELS).hi, std::max(c.levelsW, 150) + (c.levelPct ? DP_PCT_W : 0)); }   // (2.19.0) + the % block   // (2.14.1) 150: an NQ 5-digit price + the HL block
 void DealerProfile::flushLabels(const Settings& S)
 {
     flushLines(S);   // (2.29.0) the level lines + the Key Levels / Liquidity columns; (2.40.0 cleanup) the pre-2.29 badge / column paths were removed
@@ -3135,6 +3153,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.70.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.71.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
