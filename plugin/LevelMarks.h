@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.25.0";   // (1.25.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) a Sw (VOB / VOT) = a high-volume rejection of an attempted break: the sweep candle's own BVMax must be 99+ (SW_MIN 99, was 20), and BOTH sides count again - any major level, either direction (1.23.0's highs-for-bearish / lows-for-bullish rule is off: SW_BOTH_SIDES; NQ 11-25 9:03 AM bearish at LonLO is a VOT again)
+static const char* const VERSION = "1.26.0";   // (1.26.0, Rassul 2026-11-26 12:23 CT "why is this not a cmx" - ES 10:15 AM HOD, 1,150 lots = the biggest in 32: the candle was a Sw CANDIDATE (closed back under ONH / LonHI / AsiaHI) that blocked the Cx step, then fillStrength dropped the Sw for BVMax < 99, leaving no mark) run() takes noSw = the candles whose own BVMax is under SW_MIN (swWeak(), the same count fillStrength uses), and drops them as Sw candidates BEFORE the Bk and Cx steps, so the candle can still be its Bk / Cx. Nothing else changes
+// was static const char* const VERSION = "1.25.0";   // (1.25.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) a Sw (VOB / VOT) = a high-volume rejection of an attempted break: the sweep candle's own BVMax must be 99+ (SW_MIN 99, was 20), and BOTH sides count again - any major level, either direction (1.23.0's highs-for-bearish / lows-for-bullish rule is off: SW_BOTH_SIDES; NQ 11-25 9:03 AM bearish at LonLO is a VOT again)
 // was static const char* const VERSION = "1.24.2";   // (1.24.2, Rassul 2026-11-25 16:10 CT "thats a problem .. lets just use BVMax 20+") the Sw strength is BVMax again (the larger of BV and the same-colour count), as 1.24.0; BV alone (1.24.1) removed most sweeps (ES / NQ 11-25 had BV 4 / 3)
 // was static const char* const VERSION = "1.24.1";   // (1.24.1, Rassul 2026-11-25 16:04 CT "the vob / vot strength requires BV 20+") the Sw strength = BV, the count over ALL candles before it (1.24.0 used BVMax = the larger of BV and the same-colour count BVG / BVR); the label shows that BV ("V24")
 // was static const char* const VERSION = "1.24.0";   // (1.24.0, Rassul 2026-11-25 13:56 CT "tighten strength to reuire the bigest volume in at least 20 bars", 13:59 "there is one at 12:09 but now it would not work becasue it doesnt have BV of at least 20", 14:00 "go"): a Sw needs ITS OWN candle's BVMax >= 20 (volume only - a big range alone no longer makes a Sw: HG 11-25 12:09 LonHI R91 drops); the Sw's strength line shows the volume count ("V24")
@@ -301,7 +302,7 @@ inline bool newsCandle(long long t, long long spb, const std::vector<long long>*
     if (!rel || rel->empty() || spb <= 0) return false;
     const auto it = std::lower_bound(rel->begin(), rel->end(), t - spb);
     return it != rel->end() && *it < t; }
-inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, int openMin = -1, long long spb = 0, const std::vector<long long>* rel = nullptr, const std::vector<H3>* h3 = nullptr, const std::vector<double>* preV = nullptr) {   // (1.15.0) preV = the volume of the candles before B[0], oldest first (the Cx look-back only)
+inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, int openMin = -1, long long spb = 0, const std::vector<long long>* rel = nullptr, const std::vector<H3>* h3 = nullptr, const std::vector<double>* preV = nullptr, const std::set<long long>* noSw = nullptr) {   // (1.26.0) noSw = candle stamps that cannot be a Sw (own BVMax < SW_MIN, swWeak()); (1.15.0) preV = the volume of the candles before B[0], oldest first (the Cx look-back only)
     std::map<long long, Mark> out; const int n = (int)B.size(); if (n < 6) return out;
     std::vector<double> v((size_t)n); for (int i = 0; i < n; ++i) v[(size_t)i] = (double)(B[(size_t)i].buy + B[(size_t)i].sell);
     auto maxV = [&](int a, int b) { double m = 0; for (int k = std::max(0, a); k < b; ++k) m = std::max(m, v[(size_t)k]); return m; };
@@ -352,6 +353,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     // (1.14.0) a sweep candle that crossed NO major level is not a Sw any more: it is taken out HERE, before the Bk and Cx steps, so the candle can
     // still be the Bk / Cx it is (GC 2026-11-23 7:57 AM: a sweep of the pre-open hour's low that closed up through LonHI, AsiaHI, ONH and PFH - a Bk)
     for (auto it = raw.begin(); it != raw.end(); ) { bool mj = false; if (it->second.first == 'S') { for (const Cand& z : it->second.second) if (swMajor(z.name, z.hb) && swSideOk(z.name, rawDir[it->first])) mj = true; }   // (1.23.0) a major level OF ITS SIDE
+        if (it->second.first == 'S' && noSw && noSw->count(B[(size_t)it->first].t)) mj = false;   // (1.26.0) too little volume to be a Sw (fillStrength would drop it AFTER the Cx step): free the candle now
         if (it->second.first == 'S' && !mj) { rawDir.erase(it->first); rawA.erase(it->first); it = raw.erase(it); } else ++it; }
     // Bk: closes through a level
     std::set<int> weakBk;   // (1.17.0) a Bk crossed ONLY hourly pivots / 4-hour levels: a Cx may still take its candle
@@ -536,6 +538,12 @@ inline int strengthN(const std::vector<double>& vol, const std::vector<double>& 
     int nv = 0, nr = 0; if (a < 0) a = 0;
     for (int k = a; k <= b && k < (int)vol.size(); ++k) { nv = std::max(nv, stCount(vol, green, k)); if (k < (int)rng.size()) nr = std::max(nr, stCount(rng, green, k)); }
     return std::max(nv, nr);
+}
+// (1.26.0) the closed candles that can NOT be a Sw: own BVMax (stCount, volume) under SW_MIN - the same test fillStrength applies, made BEFORE run()
+// so a failed sweep candle does not block its Cx / Bk. T ascending stamps, V volume, G green.
+inline std::set<long long> swWeak(const std::vector<long long>& T, const std::vector<double>& V, const std::vector<char>& G) {
+    std::set<long long> out; for (int i = 0; i < (int)T.size() && i < (int)V.size() && i < (int)G.size(); ++i) if (stCount(V, G, i) < SW_MIN) out.insert(T[(size_t)i]);
+    return out;
 }
 inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G) {
     int n = 0;

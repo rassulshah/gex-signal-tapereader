@@ -111,7 +111,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.37.0"   // (0.37.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) LevelMarks 1.25.0: VOB / VOT = BVMax 99+, both sides
+#define RVS_VERSION "0.38.0"   // (0.38.0, Rassul 2026-11-26 12:23 CT "why is this not a cmx" - ES 10:15 AM) LevelMarks 1.26.0: a sweep candle too light for a VOB / VOT (BVMax < 99) no longer blocks its Cx / Bk
+// was RVS_VERSION "0.37.0"   // (0.37.0, Rassul 2026-11-25 16:46-16:59 CT "You know I'm looking for high volume rejection from an attempted break of a level", "In this case we should use 99+ bvmax", both sides (answered 17:00)) LevelMarks 1.25.0: VOB / VOT = BVMax 99+, both sides
 // was RVS_VERSION "0.36.2"   // (0.36.2, Rassul 2026-11-25 16:10 CT "thats a problem .. lets just use BVMax 20+") LevelMarks 1.24.2: VOB / VOT strength = BVMax 20+ again
 // was RVS_VERSION "0.36.1"   // (0.36.1, Rassul 2026-11-25 16:04 CT "the vob / vot strength requires BV 20+") LevelMarks 1.24.1: the VOB / VOT strength = BV (all candles), was BVMax
 // was RVS_VERSION "0.36.0"   // (0.36.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw mark is DRAWN as VOB (bullish, under a low) / VOT (bearish, at a high); the files keep the code "Sw"
@@ -136,7 +137,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.37.0");
+    p->setVersion("0.38.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -738,6 +739,12 @@ public:
                             const std::string p3 = base + "\\tstl3-" + mx + "-" + sp + ".txt"; if (p3 != e.tl3Path) { e.tl3Path = p3; e.tl3.clear(); e.tl3Loaded = false; e.tl3Dirty = false; }
                             if (!e.tl3Loaded) { std::string u; const int r3 = rd(p3, 262144, u, nullptr); std::map<long long, std::string> m;
                                 if (r3 == 0) e.tl3Loaded = true; else if (r3 == 1) { if (wyi::parseTl3(u, mx, (long long)S.spb, m)) for (const auto& kv : m) e.tl3[kv.first] = kv.second; e.tl3Loaded = true; } } } }
+                    std::set<long long> noSw;   // (0.38.0) LevelMarks 1.26.0: the closed candles whose own BVMax is under 99 can not be a Sw - known BEFORE run(), so a failed sweep candle keeps its Cx / Bk (ES 11-26 10:15 AM)
+                    try { RTARRAYI vo(barVolume); RTARRAY so(barOpen), sc(barClose); const int nC = (int)count - 1;
+                        if (nC > 0 && vo.count >= nC && so.count >= nC && sc.count >= nC) {
+                            std::vector<long long> T((size_t)nC); std::vector<double> V((size_t)nC); std::vector<char> G((size_t)nC);
+                            for (int i = 0; i < nC; ++i) { T[(size_t)i] = (long long)times[i]; const double vv = (double)vo[i]; V[(size_t)i] = std::isfinite(vv) && vv > 0 ? vv : 0.0; G[(size_t)i] = (double)sc[i] >= (double)so[i] ? 1 : 0; }
+                            if (std::is_sorted(T.begin(), T.end())) noSw = lvm::swWeak(T, V, G); } } catch (...) { noSw.clear(); }
                     for (int seg = 0; seg < 4 && segEnd >= 0 && (int)count - 2 - segEnd < 2400; ++seg) {
                     std::vector<wyr::Bar> WB; std::vector<lvm::H3> WH;   /* (0.24.0) WH[j] = the 3h S / R before WB[j] */ const long long sk = sessKey(segEnd); int first = segEnd;
                     while (first > 0 && segEnd - first < 600 && sessKey(first - 1) == sk) --first;
@@ -764,7 +771,7 @@ public:
                     const std::vector<long long> relNow = WB.empty() ? std::vector<long long>() : rvh::rvReleases(rvh::flexDir(), !e.mkt.empty() ? e.mkt : rvh::marketOf(S.market), WB.front().t, WB.back().t);   // (0.22.1)
                     std::vector<double> preV;   // (0.24.1) the volume of the 20 candles before the session's first: the Cx look-back (LevelMarks 1.15.0)
                     { for (int i = first - 1; i >= 0 && (int)preV.size() < 20; --i) { const rvs::Poc* p = pocAt(i); if (!p) continue; preV.push_back((double)(p->buy + p->sell)); } std::reverse(preV.begin(), preV.end()); }
-                    try { const std::map<long long, lvm::Mark> lm = lvm::run(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), lvm::rthOpenMin(!e.mkt.empty() ? e.mkt : rvh::marketOf(S.market)), (long long)S.spb, &relNow, WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr, &preV)   /* (0.24.0) LevelMarks 1.14.0: + the 3h S / R, a Sw only on a major level */   /* (0.22.0) LevelMarks 1.11.0: no Sw on the RTH opening candle; (0.22.1) 1.12.0: nor on a release candle */; for (const auto& kv : lm) lvAll[kv.first] = kv.second;
+                    try { const std::map<long long, lvm::Mark> lm = lvm::run(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), lvm::rthOpenMin(!e.mkt.empty() ? e.mkt : rvh::marketOf(S.market)), (long long)S.spb, &relNow, WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr, &preV, noSw.empty() ? nullptr : &noSw)   /* (0.38.0) LevelMarks 1.26.0 noSw */   /* (0.24.0) LevelMarks 1.14.0: + the 3h S / R, a Sw only on a major level */   /* (0.22.0) LevelMarks 1.11.0: no Sw on the RTH opening candle; (0.22.1) 1.12.0: nor on a release candle */; for (const auto& kv : lm) lvAll[kv.first] = kv.second;
                         if (seg == 0) { try { e.cxLive = lvm::liveCx(WB, lm, &preV); } catch (...) { e.cxLive = std::make_pair(0LL, 0); } }   // (0.25.0) the live Cx? (this session, the last closed candle)
                         // (0.20.0, Rassul 15:35-16:58 CT, price-pane-cleanup-mockup.html) Bk -> FT -> Tst -> Rev (LevelMarks 1.3.0 seq), the session by itself
                         const std::map<long long, std::vector<lvm::SMark> > sq = lvm::seq(WB, lm); for (const auto& kv : sq) seqAll[kv.first] = kv.second;
