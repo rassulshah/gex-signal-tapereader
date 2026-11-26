@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.48.0";   // (2.48.0, Rassul 2026-11-26 08:10-08:31 CT "i also want the hod lod box that indicated the times when the first extreme should be in", "the hod lod should be a seperate box that can be belwot the level box", "i alswayw awant to see the hod lod statistics", "do you remember the format before of exp actuals", "how about Hod/Lod Stats and then move 1st extreme and % days lower", "make sure that the levels line is right on top of the hod lod box and the box is right on top of the lower part of the price chart so there is no black space", "ok build"; TopBox-mockup.html) THE HOD / LOD BOX is back as its own small box (hsb::layout): Exp / Act x 1st / 2nd + HOD / LOD Stats (1st extreme by / % of days), centred on the candles, docked on the price pane's bottom edge; the Level line sits right on it, centred on the candles
+static const char* const HL_VERSION = "2.48.1";   // (2.48.1, Rassul 2026-11-26 08:53-09:00 CT "add typical gap value next to 2nd like 2nd - 3h 44m. then you can add the average to the 1st to give the Exp for 2nd", "in the actual, 8:48 - LOD ONL", "create some space ... in the 1st and 2nd", "remove the ~", "build") the HOD / LOD box: heading "2nd - 3h 44m", Exp 2nd = the Exp 1st window + the gap (the actual 1st + the gap once it is in), Act "8:48 - LOD ONL", wider 1st / 2nd columns
+// was HL_VERSION = "2.48.0";   // (2.48.0, Rassul 2026-11-26 08:10-08:31 CT "i also want the hod lod box that indicated the times when the first extreme should be in", "the hod lod should be a seperate box that can be belwot the level box", "i alswayw awant to see the hod lod statistics", "do you remember the format before of exp actuals", "how about Hod/Lod Stats and then move 1st extreme and % days lower", "make sure that the levels line is right on top of the hod lod box and the box is right on top of the lower part of the price chart so there is no black space", "ok build"; TopBox-mockup.html) THE HOD / LOD BOX is back as its own small box (hsb::layout): Exp / Act x 1st / 2nd + HOD / LOD Stats (1st extreme by / % of days), centred on the candles, docked on the price pane's bottom edge; the Level line sits right on it, centred on the candles
 // was HL_VERSION = "2.47.0";   // (2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", option A of Level-Line-mockup.html) NowLevels 1.7.0: the Level line as level chips
 // was HL_VERSION = "2.46.1";   // (2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH lists the nearest untouched major levels of any kind (NowLevels 1.6.1); voice clips for both sides
 // was HL_VERSION = "2.46.0";   // (2.46.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)", "VOB(T) WATCH", voice in letters) the Level line names a sweep VOB / VOT (NowLevels 1.6.0); the spoken alert says "E S, V O B, C W L." (SweepVoice 1.2.0, new clips)
@@ -811,6 +812,7 @@ struct View {
     Cell E[13], A[13];                   // every value, by key (NALL); the table shows SHOWN (static_assert below)
     int win1a = -1, win1b = -1, win2a = -1, win2b = -1;
     int gapBucket = -2; double gapP25 = NAN, gapP75 = NAN;
+    double gapMed = NAN;    // (2.48.1) the typical 1st -> 2nd gap in minutes (the same number as the E_GAP cell), for the HOD / LOD box
     int recWin = -1; double recP = NAN;                    // (v15) the reclaim window (minutes after the 1st extreme) and its share
     int recFrom = -1, recTo = -1;                          // the reclaim window shown (minute of day) - the A tag's reference
     double s1p = NAN, s1pLod = NAN;                        // hlr::stage1: P(1st in its window), P(the LOD prints first)
@@ -1295,12 +1297,12 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         else v.E[K_2ND].s3.clear();
         v.E[K_DIR2] = rh.callIn ? mkCell(rh.side == 0 ? "HOD" : "LOD", sideCol(rh.side == 0)) : mkCell("either", C_GREY);
         // ---- Gap (status / optional column): the median 1st -> 2nd time by the 1st extreme's 30-min bucket once known
-        v.gapBucket = -2; v.E[K_GAP].s = "-";
-        if (fin(rh.gapMin)) { v.E[K_GAP].s = "~" + durT(std::llround(rh.gapMin)); v.gapBucket = -3; }   // hlr::stage3
+        v.gapBucket = -2; v.E[K_GAP].s = "-"; v.gapMed = NAN;
+        if (fin(rh.gapMin)) { v.E[K_GAP].s = "~" + durT(std::llround(rh.gapMin)); v.gapBucket = -3; v.gapMed = rh.gapMin; }   // hlr::stage3
         else if (MM) {
             const hlm::Gap* G = &MM->gapAll;
             if (v.side != 0) { int k = hlm::gapBucketOf((double)v.took); if (k >= 0 && MM->gapBucket[k].med >= 0) { G = &MM->gapBucket[k]; v.gapBucket = k; } else v.gapBucket = -1; }
-            if (G->med >= 0) { v.E[K_GAP].s = "~" + durT(std::llround(G->med)); v.gapP25 = G->p25; v.gapP75 = G->p75; }
+            if (G->med >= 0) { v.E[K_GAP].s = "~" + durT(std::llround(G->med)); v.gapP25 = G->p25; v.gapP75 = G->p75; v.gapMed = G->med; }
         }
         v.E[K_ROOM].s = v.haveHle && fin(v.ex.roomLeft) ? "~" + ptsMean(v.ex.roomLeft, tick, dec) : "-";
         v.E[K_RANGE].s = fin(eRange) ? "~" + ptsMean(eRange, tick, dec) : "-";
@@ -3160,9 +3162,36 @@ inline std::vector<Run> runsOf(const hl::Cell& c) {
 }
 inline std::string plainRuns(const std::vector<Run>& v) { std::string s; for (const Run& r : v) s += r.s; return s; }
 // M(text, bold) = pixel width at the box font; cx = the candles' centre; bottom = the pane's bottom edge; [left, right] = the room
+// (2.48.1) "3h 44m" / "45m"
+inline std::string gapText(double m) { const long long x = std::llround(m); char b[24]; if (x >= 60) std::snprintf(b, sizeof b, "%lldh %02lldm", x / 60, x % 60); else std::snprintf(b, sizeof b, "%lldm", x); return b; }
+// (2.48.1, Rassul 08:56 "in the actual, 8:48 - LOD ONL") a called-in Act cell: "8:48 - LOD ONL" (time, dash, the side, the levels; no in / early / late tag)
+inline std::vector<Run> actRuns(const hl::Cell& c) {
+    if (c.s2.empty()) return runsOf(c);                 // "HOD so far 7:33" / "Pending": as it is
+    std::vector<Run> v; v.push_back(Run{ c.s + " - ", c.col, c.bold }); v.push_back(Run{ c.s2, c.col2 ? c.col2 : c.col, true });
+    for (const hl::LvSeg& g : c.lv) v.push_back(Run{ " " + g.s, g.col ? g.col : c.col, false });
+    return v;
+}
+// (2.48.1, Rassul 08:53 "add the average to the 1st to give the Exp for 2nd") Exp 2nd = the Exp 1st window + the typical gap; once the 1st is
+// called in, its actual time + the gap. The side word (HOD red / LOD green) when the read names it. No gap = the old cell as it was.
+inline std::vector<Run> exp2Runs(const hl::View& v) {
+    if (!std::isfinite(v.gapMed) || v.gapMed <= 0) return runsOf(v.E[hl::K_2ND]);
+    const int g = (int)std::llround(v.gapMed);
+    const int firstMod = v.side == 1 ? v.lodMod : (v.side == 2 ? v.hodMod : -1);
+    std::string t;
+    if (v.firstFinal && firstMod >= 0) t = hl::clk(firstMod + g);
+    else if (v.win1a >= 0 && v.win1b >= v.win1a) t = hl::clk(v.win1a + g) + " - " + hl::clk(v.win1b + g);
+    else return runsOf(v.E[hl::K_2ND]);
+    std::vector<Run> r; r.push_back(Run{ t, C_TXT, false });
+    std::string side; unsigned sc = 0;
+    if (v.firstFinal && v.side != 0) { side = v.side == 1 ? "HOD" : "LOD"; sc = v.side == 1 ? hl::C_RED : hl::C_GREEN; }
+    else if (!v.E[hl::K_2ND].s3.empty()) { side = v.E[hl::K_2ND].s3; sc = side == "HOD" ? hl::C_RED : hl::C_GREEN; }
+    if (!side.empty()) r.push_back(Run{ " " + side, sc, false });
+    return r;
+}
+// M(text, bold) = pixel width at the box font; cx = the candles' centre; bottom = the pane's bottom edge; [left, right] = the room
 inline Draw layout(const hl::View& v, const std::function<int(const std::string&, bool)>& M, int cx, int bottom, int left, int right) {
-    Draw D; const int ROW = 15, PX = 6, GAP = 10;
-    const std::vector<Run> e1 = runsOf(v.E[hl::K_1ST]), e2 = runsOf(v.E[hl::K_2ND]), a1 = runsOf(v.A[hl::K_1ST]), a2 = runsOf(v.A[hl::K_2ND]);
+    Draw D; const int ROW = 18, PX = 6, GAP = 10, PADC = 14;   // (2.48.1, 08:58 "create some space ... in the 1st and 2nd") taller rows, 14 px each side of the 1st / 2nd columns
+    const std::vector<Run> e1 = runsOf(v.E[hl::K_1ST]), e2 = exp2Runs(v), a1 = actRuns(v.A[hl::K_1ST]), a2 = actRuns(v.A[hl::K_2ND]);
     auto w = [&](const std::vector<Run>& r) { int s = 0; for (const Run& x : r) s += M(x.s, x.bold); return s; };
     std::string hd[4], pc[4];
     for (int q = 0; q < 4; q++) {
@@ -3171,14 +3200,15 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
         pc[q] = (!v.tmOk || v.tmCum[q] < 0) ? std::string("?") : std::to_string(v.tmCum[q]) + "%" + (v.tmQ ? "?" : "");
     }
     const std::string lab0 = "HOD / LOD Stats", lab1 = "1st extreme by", lab2 = "% of days";
+    const std::string h2 = "2nd", h2g = (std::isfinite(v.gapMed) && v.gapMed > 0) ? " - " + gapText(v.gapMed) : std::string();
     const int c0 = (std::max)(M("Exp", true), M("Act", true));
     const int c1 = (std::max)((std::max)(w(e1), w(a1)), M("1st", false));
-    const int c2 = (std::max)((std::max)(w(e2), w(a2)), M("2nd", false));
+    const int c2 = (std::max)((std::max)(w(e2), w(a2)), M(h2, false) + (h2g.empty() ? 0 : M(h2g, false)));
     const int sl = (std::max)(M(lab1, false), M(lab2, false));
     int tc = 0; for (int q = 0; q < 4; q++) tc = (std::max)(tc, (std::max)(M(hd[q], false), M(pc[q], true)));
     tc += 8;
     const int statsW = (std::max)(sl + GAP + 4 * tc, M(lab0, true));
-    const int W = PX + c0 + GAP + c1 + GAP + 1 + GAP + c2 + GAP + 1 + GAP + statsW + PX, H = 3 * ROW + 4;
+    const int W = PX + c0 + PADC + c1 + PADC + 1 + PADC + c2 + PADC + 1 + GAP + statsW + PX, H = 3 * ROW + 4;
     if (right - left < W) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
     int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
     D.l = l; D.r = l + W; D.b = bottom; D.t = bottom - H;
@@ -3186,8 +3216,9 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     const int y0 = D.t + 2, y1 = y0 + ROW, y2 = y1 + ROW;
     auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int tw = M(s, bold); D.items.push_back(Item{ 1, x, y, x + tw, y + ROW, s, col, 0, bold }); return tw; };
     auto runs = [&](int x, int y, const std::vector<Run>& r) { for (const Run& g : r) x += text(x, y, g.s, g.col, g.bold); };
-    const int x0 = D.l + PX, x1 = x0 + c0 + GAP, xs1 = x1 + c1 + GAP, x2 = xs1 + 1 + GAP, xs2 = x2 + c2 + GAP, x3 = xs2 + 1 + GAP;
-    text(x1, y0, "1st", C_HEAD, false); text(x2, y0, "2nd", C_HEAD, false); text(x3, y0, lab0, C_HEAD, true);
+    const int x0 = D.l + PX, x1 = x0 + c0 + PADC, xs1 = x1 + c1 + PADC, x2 = xs1 + 1 + PADC, xs2 = x2 + c2 + PADC, x3 = xs2 + 1 + GAP;
+    text(x1, y0, "1st", C_HEAD, false); { const int hw = text(x2, y0, h2, C_HEAD, false); if (!h2g.empty()) text(x2 + hw, y0, h2g, C_TXT, false); }
+    text(x3, y0, lab0, C_HEAD, true);
     text(x0, y1, "Exp", C_TXT, true); runs(x1, y1, e1); runs(x2, y1, e2);
     text(x0, y2, "Act", C_TXT, true); runs(x1, y2, a1); runs(x2, y2, a2);
     D.items.push_back(Item{ 2, xs1, y0 + 2, xs1, y2 + ROW - 2, "", C_SEPV, 0, false });
@@ -3198,7 +3229,7 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
         const int hw = M(hd[q], false), pw = M(pc[q], true), cr = xt + (q + 1) * tc;
         text(cr - hw, y1, hd[q], C_HEAD, false); text(cr - pw, y2, pc[q], C_TXT, true);
     }
-    D.text = "Exp " + plainRuns(e1) + " | " + plainRuns(e2) + " ; Act " + plainRuns(a1) + " | " + plainRuns(a2) + " ; stats";
+    D.text = "2nd" + h2g + " ; Exp " + plainRuns(e1) + " | " + plainRuns(e2) + " ; Act " + plainRuns(a1) + " | " + plainRuns(a2) + " ; stats";
     for (int q = 0; q < 4; q++) D.text += " " + hd[q] + "=" + pc[q];
     D.ok = true; D.why = "drawn"; return D;
 }
