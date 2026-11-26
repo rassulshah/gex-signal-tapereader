@@ -36,7 +36,7 @@ int main() {
     {   // HOD line on top, LOD below, both above the Exp / Act rows; labels in red / green
         int yH = -1, yL = -1, yE = -1; unsigned cH = 0, cL = 0;
         for (const hsb::Item& it : B.items) { if (it.k != 1) continue; if (it.s == "HOD swept") { yH = it.t; cH = it.col; } if (it.s == "LOD swept") { yL = it.t; cL = it.col; } if (it.s == "Exp") yE = it.t; }
-        C(yH >= 0 && yL > yH && yE > yL, "HOD swept on top, LOD swept below, then Exp / Act"); C(cH == hl::C_RED && cL == hl::C_GREEN, "labels red / green"); }
+        C(yH >= 0 && yL > yH && yE >= 0 && yE < yH, "(2.53.0) Exp / Act on top, then HOD swept, then LOD swept"); C(cH == hl::C_RED && cL == hl::C_GREEN, "labels red / green"); }
     {   // no LIFT rows (an old file): the % without brackets; no ROW rows: no swept lines, the box as 2.50.0
         std::string old = ES; old = old.substr(0, old.find("LIFT,"));
         const hl::View o = view(hsw::parse(old, "ES")); B = hsb::layout(o, meas, 0, 600, 0, 1600);

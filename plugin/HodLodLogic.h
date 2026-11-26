@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.52.0";   // (2.52.0, Rassul 2026-11-26 13:54-13:57 CT "show me an updated mockup so the stats look a little nicer", "i'll go with your proposal.. build"; HodLod-Nicer-mockup.html #2) the swept lines as a small table - column heads PRE-HR / ON / DPoc / VA / PD / PF, HOD and LOD rows aligned, the % white when above its random rate and grey when not, the random rate grey beside it; the stats heading "extreme in by \xB7 % of days" (plain grey, was the bold "HOD / LOD Stats (by \xB7 % of days)"); "2nd \xB7 3h 44m"
+static const char* const HL_VERSION = "2.53.0";   // (2.53.0, Rassul 2026-11-26 14:52 CT "revers the positions put the hod and lod swept below") the swept table sits at the BOTTOM of the box, under Exp / Act and the stats (a grey line between)
+// was static const char* const HL_VERSION = "2.52.0";   // (2.52.0, Rassul 2026-11-26 13:54-13:57 CT "show me an updated mockup so the stats look a little nicer", "i'll go with your proposal.. build"; HodLod-Nicer-mockup.html #2) the swept lines as a small table - column heads PRE-HR / ON / DPoc / VA / PD / PF, HOD and LOD rows aligned, the % white when above its random rate and grey when not, the random rate grey beside it; the stats heading "extreme in by \xB7 % of days" (plain grey, was the bold "HOD / LOD Stats (by \xB7 % of days)"); "2nd \xB7 3h 44m"
 // was static const char* const HL_VERSION = "2.51.0";   // (2.51.0, Rassul 2026-11-26 13:43 CT "i need a line above the box ... that shows the stats for levels that Hod swept and Lod swept", 13:46 "its too big, maybe have two lines, hod is top lod below", "ok"; HodLod-Swept-mockup.html) two lines on top of the HOD / LOD box: "HOD swept PhrH 45% (42%) . ON 40% (40%) ..." and "LOD swept ...", the % = days the extreme swept the level and turned, (random) = random levels at the same distance
 // was static const char* const HL_VERSION = "2.50.0";   // (2.50.0, Rassul 2026-11-26 10:31-13:27 CT "lets use 30 min increments from rth start", "lets use 3.5 hrs instead", "move this box to the left of the chart and dont have any black space to the left", "go"; mockups HodLodStats-mockup.html / HodLod-Chart-mockup.html) HOD / LOD Stats in two rows - 1st: by the open + 30 / 60 / 90 / 120 min + after; 2nd: by the open + 3.5 h hourly, the last step 30 min before the close + last 30 (SEC2); the box docked in the pane's bottom-LEFT corner, the Level line flush left on top of it
 // was static const char* const HL_VERSION = "2.49.0";   // (2.49.0, Rassul 2026-11-26 09:37-09:40 CT "lets increase 1st extreme with 9:30 and 10 so it includes 2 hours ... and then a probability for after the 2nd hour, which should be the remainder", "build") HOD / LOD Stats: 1st extreme by +15 / 30 / 60 / 90 / 120 min (cumulative) + after (the remainder), the times labelled from the open the nightly counted from (fixes HG labelled 7:20 while counted from 7:10)
@@ -3256,24 +3257,25 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
     D.l = l; D.r = l + W; D.b = bottom; D.t = bottom - H;
     D.items.push_back(Item{ 0, D.l, D.t, D.r, D.b, "", C_EDGE, C_BG, false });
-    const int y0 = D.t + 2 + SWH, y1 = y0 + ROW, y2 = y1 + ROW;
+    const int y0 = D.t + 2, y1 = y0 + ROW, y2 = y1 + ROW;   // (2.53.0) Exp / Act + stats on top; the swept table under them
+    const int ySw = y2 + ROW + 3;   // the swept table's head row
     auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int tw2 = M(s, bold); D.items.push_back(Item{ 1, x, y, x + tw2, y + ROW, s, col, 0, bold }); return tw2; };
     auto runs = [&](int x, int y, const std::vector<Run>& r) { for (const Run& g : r) x += text(x, y, g.s, g.col, g.bold); };
     const int x0 = D.l + PX, x1 = x0 + c0 + PADC, xs1 = x1 + c1 + PADC, x2 = xs1 + 1 + PADC, xs2 = x2 + c2 + PADC, x3 = xs2 + 1 + GAP;
     {   // (2.52.0) the swept table
         if (nSw) {
-            const int yh = D.t + 2; int x = D.l + PX + swLab;
+            const int yh = ySw; int x = D.l + PX + swLab;
             for (size_t q = 0; q < swCols.size(); q++) { const int hw = M(swCols[q], false); text(x + (swCw[q] - hw) / 2, yh, swCols[q], C_HEAD, false); x += swCw[q] + SWG; }
             int row = 1;
             for (int k = 0; k < 2; k++) { const std::vector<hl::SwCell>& cs = *swV[k]; if (cs.empty()) continue;
-                const int y = D.t + 2 + row * ROW; text(D.l + PX, y, swL[k], k == 0 ? hl::C_RED : hl::C_GREEN, true);
+                const int y = ySw + row * ROW; text(D.l + PX, y, swL[k], k == 0 ? hl::C_RED : hl::C_GREEN, true);
                 for (const hl::SwCell& c : cs) { const size_t q = (size_t)(std::find(swCols.begin(), swCols.end(), swHead(c.name)) - swCols.begin());
                     int cx0 = D.l + PX + swLab; for (size_t z = 0; z < q; z++) cx0 += swCw[z] + SWG;
                     const std::string p = swPct(c), r = swRnd(c); const int w = M(p, true) + M(r, false); int xx = cx0 + (swCw[q] - w) / 2;
                     const bool beats = c.pct >= 0 && c.rnd >= 0 && c.pct > c.rnd;
                     xx += text(xx, y, p, beats || c.rnd < 0 ? C_TXT : C_HEAD, true); if (!r.empty()) text(xx, y, r, C_HEAD, false); }
                 ++row; }
-            D.items.push_back(Item{ 2, D.l + PX, D.t + 2 + (nSw + 1) * ROW + 1, D.r - PX, D.t + 2 + (nSw + 1) * ROW + 1, "", C_SEPV, 0, false });
+            D.items.push_back(Item{ 2, D.l + PX, y2 + ROW + 1, D.r - PX, y2 + ROW + 1, "", C_SEPV, 0, false });   // (2.53.0) the grey line between the stats and the swept table
         }
     }
     text(x1, y0, "1st", C_HEAD, false); { const int hw = text(x2, y0, h2, C_HEAD, false); if (!h2g.empty()) text(x2 + hw, y0, h2g, C_TXT, false); }
