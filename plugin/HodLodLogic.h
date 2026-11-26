@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.46.1";   // (2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH lists the nearest untouched major levels of any kind (NowLevels 1.6.1); voice clips for both sides
+static const char* const HL_VERSION = "2.47.0";   // (2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", option A of Level-Line-mockup.html) NowLevels 1.7.0: the Level line as level chips
+// was HL_VERSION = "2.46.1";   // (2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH lists the nearest untouched major levels of any kind (NowLevels 1.6.1); voice clips for both sides
 // was HL_VERSION = "2.46.0";   // (2.46.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)", "VOB(T) WATCH", voice in letters) the Level line names a sweep VOB / VOT (NowLevels 1.6.0); the spoken alert says "E S, V O B, C W L." (SweepVoice 1.2.0, new clips)
 // was HL_VERSION = "2.45.1";   // (2.45.1, Rassul 2026-11-25 13:11 CT "bearish sweeps use highs and bullish sweeps use lows") SWEEP WATCH: highs above price, lows below (NowLevels 1.5.1, LevelMarks 1.23.0)
 // was HL_VERSION = "2.45.0";   // (2.45.0, Rassul 2026-11-25 11:41 CT "update the level line to look for potential sweep levels", 11:47 "rename to Sweep Watch also . go") the Level line badge reads "SWEEP WATCH: <lv> ... " and names only major levels not yet traded through in the current session part (NowLevels 1.5.0); the host hands the RTH open minute in

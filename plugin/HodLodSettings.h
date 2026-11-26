@@ -5,7 +5,7 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.46.1";   // (2.46.1) no settings change
+static const char* const PLUGIN_VERSION = "2.47.0";   // (2.47.0) no settings change; was "2.46.1"   // (2.46.1) no settings change
 // was PLUGIN_VERSION = "2.46.0";   // (2.46.0) no settings change
 // was PLUGIN_VERSION = "2.45.1";   // (2.45.1) no settings change
 // was PLUGIN_VERSION = "2.45.0";   // (2.45.0) no settings change (Sweep Watch, NowLevels 1.5.0)

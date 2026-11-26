@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.6.1";   // (1.6.1 = lsHodLod 2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH names the nearest untouched major levels above and below again, any kind (1.5.1's highs-above / lows-below filter is off: NL_SIDE_FILTER); TESTING reads "Bk / VOB(T)"
+static const char* const VERSION = "1.7.0";   // (1.7.0 = lsHodLod 2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", "add it ... i'll go with your recommendation", mockup Level-Line-mockup.html option A) LEVEL CHIPS: the label "VOB(T) WATCH" in gold text (no block), each watched level its own chip - a low below price green (a VOB can form there), a high above red (a VOT) - "Bk / VOB(T)" dropped; the state words (TESTING / VOB / VOT / BREAK / WATCH BkTst Rev) stay filled badges with the level in a chip after them; NEXT / LAST BK as grey labels, the arrow green / red, the level white. Same rules and content
+// was "1.6.1";   // (1.6.1 = lsHodLod 2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH names the nearest untouched major levels above and below again, any kind (1.5.1's highs-above / lows-below filter is off: NL_SIDE_FILTER); TESTING reads "Bk / VOB(T)"
 // was "1.6.0";   // (1.6.0 = lsHodLod 2.46.0, Rassul 2026-11-25 14:28-14:29 CT "i want to relabel sweep  to VOB  (volume off the bottom) and VOT (Volume off the top)", "yes   VOB(T) WATCH    .   for the  voice just use the letters"; mockup vob-vot-mockup.html) a sweep is named VOB (bullish, off a low) / VOT (bearish, off a high) on the line: "VOB: CWL", "VOB(T) WATCH: ...", "TESTING: ONL Bk / VOB"
 // was "1.5.1";   // (1.5.1 = lsHodLod 2.45.1, Rassul 2026-11-25 13:11 CT "bearish sweeps use highs and bullish sweeps use lows", LevelMarks 1.23.0) SWEEP WATCH names only highs above price and only lows below it
 // was "1.5.0";   // (1.5.0 = lsHodLod 2.45.0, Rassul 2026-11-25 11:41 CT "update the level line to look for potential sweep levels", 11:47 "rename to Sweep Watch also . go", mockup watch-sweep-levels-mockup.html) the Next levels are only major levels NOT yet traded through in the current session part (day = since the RTH opening candle, as LevelMarks 1.22.0; overnight = since the session start); an empty side stays empty; the badge reads "SWEEP WATCH: ..."
@@ -65,11 +66,13 @@ struct Key { std::string name; double px = 0; };
 
 // colours (BGR like the host uses COLORREF 0x00BBGGRR)
 // colours as the host's COLOR (0x00RRGGBB, as hl::C_GREEN): labels grey, levels gold, bearish red, bullish green
+// (1.7.0) the chips: text / border / fill - a low (green), a high (red), a level with no side yet (gold)
+static const unsigned CH_DN_T = 0x0086EFAC, CH_DN_B = 0x001F6B3A, CH_DN_F = 0x000D2617, CH_UP_T = 0x00FCA5A5, CH_UP_B = 0x007A2626, CH_UP_F = 0x002A1010, CH_GD_T = 0x00F0C040, CH_GD_B = 0x006B5A1F, CH_GD_F = 0x00261F0D;
 static const unsigned C_GREY = 0x0094A3B8, C_GOLD = 0x00F0C040, C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_WHITE = 0x00E5E7EB, C_BLACK = 0x00000000, C_SEP = 0x00475569, C_BG = 0x0015181D, C_BORDER = 0x003A3F47;
 
 // one piece of the line: s, then an arrow (+1 up / -1 down, drawn with pen strokes - IRT's drawText is cp1252, no arrow glyphs), then s2;
 // sep = the thin vertical separator between parts; badge = a filled box (fill) with black bold text
-struct Seg { std::string s, s2; int arrow = 0; unsigned col = C_WHITE; bool bold = false; bool badge = false; bool sep = false; unsigned fill = 0; int part = 0; int drop = 0; };   // drop: 0 keep, 2 the Last Bk part, 3 (1.3.0) the liquidity phrase (dropped first)
+struct Seg { std::string s, s2; int arrow = 0; unsigned col = C_WHITE; bool bold = false; bool badge = false; bool sep = false; unsigned fill = 0; int part = 0; int drop = 0; bool chip = false; unsigned bcol = 0; };   // (1.7.0) chip = one level in its own outlined box (fill + border bcol)   // drop: 0 keep, 2 the Last Bk part, 3 (1.3.0) the liquidity phrase (dropped first)
 // (1.3.0) one row of lsLimitProfile's level liquidity file: "L|name|level_tick|B or O|state|shown|since_ct_s|conf"
 struct LiqRow { std::string name; bool bid = true; std::string st; bool shown = false; long long since = 0; };
 struct Liq { bool ok = false; std::vector<LiqRow> rows; std::string why = "no file"; };
@@ -371,6 +374,11 @@ inline std::vector<Seg> segments(const Out& o, const Liq& lq = Liq()) {
     auto add = [&](const std::string& s, int arrow, const std::string& s2, unsigned col, bool bold, int part, int drop = 0) { Seg g; g.s = s; g.arrow = arrow; g.s2 = s2; g.col = col; g.bold = bold; g.part = part; g.drop = drop; v.push_back(g); };
     auto badge = [&](const std::string& s, int arrow, const std::string& s2, unsigned fill, int part) { Seg g; g.s = s; g.arrow = arrow; g.s2 = s2; g.col = C_BLACK; g.bold = true; g.badge = true; g.fill = fill; g.part = part; v.push_back(g); };
     auto sep = [&](int part, int drop = 0) { if (v.empty()) return; Seg g; g.sep = true; g.col = C_SEP; g.part = part; g.drop = drop; v.push_back(g); };
+    // (1.7.0) a level chip: kind -1 = green (a low / bullish), +1 = red (a high / bearish), 0 = gold (no side yet); arrow in the chip before the name
+    auto chip = [&](int arrow, const std::string& name, int kind, int part, int drop = 0) { Seg g; g.arrow = arrow; g.s2 = name; g.bold = true; g.chip = true; g.part = part; g.drop = drop;
+        g.col = kind < 0 ? CH_DN_T : kind > 0 ? CH_UP_T : CH_GD_T; g.bcol = kind < 0 ? CH_DN_B : kind > 0 ? CH_UP_B : CH_GD_B; g.fill = kind < 0 ? CH_DN_F : kind > 0 ? CH_UP_F : CH_GD_F; v.push_back(g); };
+    // (1.7.0) a level after a grey label: the arrow green (up) / red (down), the name white
+    auto arrowLv = [&](int arrow, const std::string& name, int part, int drop = 0) { add("", arrow, "", arrow > 0 ? C_GREEN : C_RED, true, part, drop); add(name, 0, "", C_WHITE, true, part, drop); };
     const std::string dot = "\xB7";   // cp1252 middle dot
     // (1.3.0) the liquidity phrase for the badge's level(s), right after the badge (part 4, dropped first); one level named: "Bids building",
     // several (the WATCH badge): "<level> bids leaving"
@@ -380,41 +388,45 @@ inline std::vector<Seg> segments(const Out& o, const Liq& lq = Liq()) {
     const Next dn = o.dn, up = o.up;
     const bool testing = o.tst.ok && o.tst.state == 2;
     if (!testing && (o.bs.state == 1 || o.bs.state == 2)) {   // 0. BREAK / SWEEP of the closed candle (1.2.0: from its mark), red / green by side; then the next level that way only
-        badge(std::string(o.bs.state == 1 ? "BREAK: " : o.bs.dir > 0 ? "VOB: " : "VOT: ") + o.bs.name,   /* (1.6.0) was "SWEEP: " */ o.bs.dir, "", o.bs.dir < 0 ? C_RED : C_GREEN, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
+        badge(std::string(o.bs.state == 1 ? "BREAK" : o.bs.dir > 0 ? "VOB" : "VOT"),   /* (1.7.0) the word, then the level in a chip; (1.6.0) was "SWEEP: " */ 0, "", o.bs.dir < 0 ? C_RED : C_GREEN, 1);
+        chip(o.bs.dir, o.bs.name, o.bs.dir < 0 ? 1 : -1, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
         const Next& nx = o.bs.dir < 0 ? dn : up;
-        if (nx.ok && !has(nx.name)) { sep(2); add("Next", 0, "", C_GREY, false, 2); add("", o.bs.dir, nx.name, C_GOLD, true, 2); named.push_back(nx.name); }
+        if (nx.ok && !has(nx.name)) { sep(2); add("NEXT", 0, "", C_GREY, false, 2); arrowLv(o.bs.dir, nx.name, 2); named.push_back(nx.name); }
     } else if (!testing && o.bs.state == 3) {   // (1.2.0, 23:02 CT) the forming candle at / through a watched level: gold, no side yet; then the next levels
-        badge("TESTING: " + o.bs.name + std::string(" Bk / VOB(T)"), 0,   /* (1.6.1) either side can reject the attempt */   /* (1.6.0) was " Bk / Sw" */ "", C_GOLD, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
+        badge("TESTING", 0,   /* (1.7.0) the word, then the level in a gold chip (either side can reject the attempt); (1.6.1) was "TESTING: <lv> Bk / VOB(T)" */ "", C_GOLD, 1);
+        chip(0, o.bs.name, 0, 1); named.push_back(o.bs.name); phrase({ o.bs.name });
         const bool d = dn.ok && !has(dn.name), u = up.ok && !has(up.name) && !(d && up.name == dn.name);
         if (d || u) {
-            sep(2); add("Next", 0, "", C_GREY, false, 2);
-            if (d) { add("", -1, dn.name, C_GOLD, true, 2); named.push_back(dn.name); }
+            sep(2); add("NEXT", 0, "", C_GREY, false, 2);
+            if (d) { arrowLv(-1, dn.name, 2); named.push_back(dn.name); }
             if (d && u) add(dot, 0, "", C_GREY, false, 2);
-            if (u) { add("", 1, up.name, C_GOLD, true, 2); named.push_back(up.name); }
+            if (u) { arrowLv(1, up.name, 2); named.push_back(up.name); }
         }
     } else if (o.tst.ok) {   // 1. a BkTst coming / in progress: "WATCH: <level> · BkTst Rev <arrow>" (18:52, gold) / "TESTING: ..." (18:48, red / green by side)
-        badge(o.tst.state == 2 ? "TESTING: " + o.tst.lv + " BkTst" : "WATCH: " + o.tst.lv + " BkTst Rev", o.tst.dir < 0 ? -1 : 1, "", o.tst.state != 2 ? C_GOLD : o.tst.dir < 0 ? C_RED : C_GREEN, 1);   // (18:53) every WATCH is gold; only TESTING is red / green
+        badge(o.tst.state == 2 ? "TESTING BkTst" : "WATCH BkTst Rev", 0, "", o.tst.state != 2 ? C_GOLD : o.tst.dir < 0 ? C_RED : C_GREEN, 1);   // (18:53) every WATCH is gold; only TESTING is red / green; (1.7.0) the level in a chip after it
+        chip(o.tst.dir < 0 ? -1 : 1, o.tst.lv, o.tst.dir < 0 ? 1 : -1, 1);
         named.push_back(o.tst.lv); phrase({ o.tst.lv });
         const bool d = dn.ok && !has(dn.name), u = up.ok && !has(up.name) && !(d && up.name == dn.name);
         if (d || u) {   // then the next levels, plainly (not in a badge: one badge at a time, 18:47)
-            sep(2); add("Next", 0, "", C_GREY, false, 2);
-            if (d) { add("", -1, dn.name, C_GOLD, true, 2); named.push_back(dn.name); }
+            sep(2); add("NEXT", 0, "", C_GREY, false, 2);
+            if (d) { arrowLv(-1, dn.name, 2); named.push_back(dn.name); }
             if (d && u) add(dot, 0, "", C_GREY, false, 2);
-            if (u) { add("", 1, up.name, C_GOLD, true, 2); named.push_back(up.name); }
+            if (u) { arrowLv(1, up.name, 2); named.push_back(up.name); }
         }
     } else if (dn.ok || up.ok) {   // 2. else the gold WATCH badge with the next levels and their arrows (18:50): "WATCH: Bk / Sw at ↓ PDL · ↑ ONL"
         // (19:03 "for watch it should be in this format : Watch Level Signal") "WATCH: PDL Bk / Sw ↓ · ONL Bk / Sw ↑" - below first, then above
         // (19:06 "update to WATCH: PDL ↓ · ONL↑ · Bk / Sw") the levels with their arrows, then the signal once at the end
         // (1.5.0, 11:47 "rename to Sweep Watch") was "WATCH: "
         // (1.6.0, 14:29 "VOB(T) WATCH") was "SWEEP WATCH: " ... "Bk / Sw"
-        if (dn.ok) { badge("VOB(T) WATCH: " + dn.name, -1, "", C_GOLD, 2); named.push_back(dn.name); }
-        if (up.ok) { badge((dn.ok ? dot + " " : std::string("VOB(T) WATCH: ")) + up.name, 1, "", C_GOLD, 2); named.push_back(up.name); }
-        badge(dot + " Bk / VOB(T)", 0, "", C_GOLD, 2);
+        // (1.7.0, option A) "VOB(T) WATCH" as gold text, each level its own chip: the low below price green, the high above red; no "Bk / VOB(T)"
+        add("VOB(T) WATCH", 0, "", C_GOLD, true, 2);
+        if (dn.ok) { chip(-1, dn.name, -1, 2); named.push_back(dn.name); }
+        if (up.ok) { chip(1, up.name, 1, 2); named.push_back(up.name); }
         { std::vector<std::string> lvs; if (dn.ok) lvs.push_back(dn.name); if (up.ok) lvs.push_back(up.name); phrase(lvs); }
     }
     if (o.haveBk && !has(o.bk.lv)) {   // 3. the last Bk (context, dropped first) - only when its level is not on the line already (18:50)
-        sep(3, 2); add("Last Bk", 0, "", C_GREY, false, 3, 2);
-        add("", o.bk.dir < 0 ? -1 : 1, o.bk.lv, o.bk.dir < 0 ? C_RED : C_GREEN, true, 3, 2);
+        sep(3, 2); add("LAST BK", 0, "", C_GREY, false, 3, 2);
+        arrowLv(o.bk.dir < 0 ? -1 : 1, o.bk.lv, 3, 2);   // (1.7.0) the arrow green / red, the level white
     }
     return v;
 }
@@ -430,7 +442,8 @@ inline std::string plain(const std::vector<Seg>& v) {
     for (size_t q = 0; q < v.size(); q++) { const Seg& g = v[q];
         std::string x = g.sep ? std::string("\xE2\x94\x82") : u(g.s);
         if (g.arrow) { if (!x.empty()) x += ' '; x += g.arrow > 0 ? "\xE2\x86\x91" : "\xE2\x86\x93"; }
-        if (!g.s2.empty()) x += " " + u(g.s2);
+        if (!g.s2.empty()) x += (x.empty() ? std::string() : std::string(" ")) + u(g.s2);   // (1.7.0) a chip with no arrow: no leading space
+        if (g.chip) x = "{" + x + "}";   // (1.7.0) a level chip
         if (badgeFirst(v, q)) x = "[" + x;
         if (badgeLast(v, q)) x += "]";
         if (!t.empty()) t += ' ';
@@ -449,7 +462,7 @@ template <class M> inline int segW(const std::vector<Seg>& v, size_t q, M meas) 
     int w = 0; if (!g.s.empty()) w += meas(g.s, g.bold);
     if (g.arrow) w += ASP + ARW + ASP;
     if (!g.s2.empty()) w += (g.arrow ? 0 : (w ? 4 : 0)) + meas(g.s2, g.bold);
-    return w + (badgeFirst(v, q) ? PADX : 0) + (badgeLast(v, q) ? PADX : 0);
+    return w + (badgeFirst(v, q) ? PADX : 0) + (badgeLast(v, q) ? PADX : 0) + (g.chip ? 2 * PADX : 0);
 }
 template <class M> inline Draw layout(const std::vector<Seg>& all, M meas, int cx, int yBottom, int xMin, int xMax, int fs) {
     Draw D; if (all.empty() || xMax - xMin < 40) return D;
@@ -469,9 +482,11 @@ template <class M> inline Draw layout(const std::vector<Seg>& all, M meas, int c
     for (size_t q = 0; q < v.size(); q++) if (badgeFirst(v, q)) {   // the badge fills first, under their text
         size_t e = q; while (!badgeLast(v, e)) e++;
         Item F; F.k = 0; F.l = xs[q]; F.t = t; F.r = xs[e] + segW(v, e, meas); F.b = b; F.fill = v[q].fill; F.col = v[q].fill; D.items.push_back(F); }
+    for (size_t q = 0; q < v.size(); q++) if (v[q].chip) {   // (1.7.0) the chips: a dark tint inside a 1-px solid border of their colour
+        Item F; F.k = 0; F.l = xs[q]; F.t = t; F.r = xs[q] + segW(v, q, meas); F.b = b; F.fill = v[q].fill; F.col = v[q].bcol; D.items.push_back(F); }
     for (size_t q = 0; q < v.size(); q++) { const Seg& g = v[q];
         if (g.sep) { Item L2; L2.k = 2; L2.l = L2.r = xs[q] + SEPW / 2; L2.t = t + 1; L2.b = b - 1; L2.col = C_SEP; D.items.push_back(L2); continue; }
-        int xx = xs[q] + (badgeFirst(v, q) ? PADX : 0);
+        int xx = xs[q] + (badgeFirst(v, q) ? PADX : 0) + (g.chip ? PADX : 0);
         if (!g.s.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold; T.s = g.s; T.r = xx + meas(g.s, g.bold); D.items.push_back(T); xx = T.r + (!g.arrow && !g.s2.empty() ? 4 : 0); }
         if (g.arrow) { const int ax = xx + ASP + ARW / 2, d = g.arrow > 0 ? -1 : 1;   // a shaft + two head strokes in the arrow's own slot; d = +1 points down
             Item a1; a1.k = 2; a1.arw = true; a1.l = a1.r = ax; a1.t = ym - 4 * d; a1.b = ym + 4 * d; a1.col = g.col; D.items.push_back(a1);
