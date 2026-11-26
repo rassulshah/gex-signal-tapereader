@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.47.0";   // (2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", option A of Level-Line-mockup.html) NowLevels 1.7.0: the Level line as level chips
+static const char* const HL_VERSION = "2.48.0";   // (2.48.0, Rassul 2026-11-26 08:10-08:31 CT "i also want the hod lod box that indicated the times when the first extreme should be in", "the hod lod should be a seperate box that can be belwot the level box", "i alswayw awant to see the hod lod statistics", "do you remember the format before of exp actuals", "how about Hod/Lod Stats and then move 1st extreme and % days lower", "make sure that the levels line is right on top of the hod lod box and the box is right on top of the lower part of the price chart so there is no black space", "ok build"; TopBox-mockup.html) THE HOD / LOD BOX is back as its own small box (hsb::layout): Exp / Act x 1st / 2nd + HOD / LOD Stats (1st extreme by / % of days), centred on the candles, docked on the price pane's bottom edge; the Level line sits right on it, centred on the candles
+// was HL_VERSION = "2.47.0";   // (2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", option A of Level-Line-mockup.html) NowLevels 1.7.0: the Level line as level chips
 // was HL_VERSION = "2.46.1";   // (2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH lists the nearest untouched major levels of any kind (NowLevels 1.6.1); voice clips for both sides
 // was HL_VERSION = "2.46.0";   // (2.46.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)", "VOB(T) WATCH", voice in letters) the Level line names a sweep VOB / VOT (NowLevels 1.6.0); the spoken alert says "E S, V O B, C W L." (SweepVoice 1.2.0, new clips)
 // was HL_VERSION = "2.45.1";   // (2.45.1, Rassul 2026-11-25 13:11 CT "bearish sweeps use highs and bullish sweeps use lows") SWEEP WATCH: highs above price, lows below (NowLevels 1.5.1, LevelMarks 1.23.0)
@@ -3134,4 +3135,72 @@ inline std::map<std::string, std::string> mstTrend(const View& v)
 }
 
 }  // namespace hl
+
+// ---- (2.48.0) THE HOD / LOD BOX (hsb) ---------------------------------------------------------------------------------------------
+// Rassul 2026-11-26 08:10-08:31 CT (TopBox-mockup.html, "ok build"): a separate box under the Level line, docked on the bottom of the
+// price pane, centred on the candles, no black space. His old Exp / Act format with the 1st and 2nd extreme columns (a grey line between
+// them) and, to the right, "HOD / LOD Stats" with "1st extreme by" (the clock times) and "% of days" (always shown):
+//          1st                 | 2nd                      | HOD / LOD Stats
+//   Exp    7:24 - 8:12  70%    | likely 8:00-9:15  LOD    | 1st extreme by  7:35  7:50  8:20  8:20+
+//   Act    HOD so far 7:33     | LOD so far 8:00 ONL      | % of days        34%   45%   63%   37%
+// The cells are the View's own E / A cells (the same text the old box showed), so nothing new is computed here.
+namespace hsb {
+static const unsigned C_BG = 0x000B0F14, C_EDGE = 0x00444444, C_SEPV = 0x003A3F47, C_HEAD = 0x009A9A9A, C_TXT = 0x00E5E7EB;
+struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; std::string s; unsigned col = 0, fill = 0; bool bold = false; };   // k 0 box, 1 text, 2 line
+struct Draw { bool ok = false; int l = 0, t = 0, r = 0, b = 0; std::vector<Item> items; std::string text, why; };
+struct Run { std::string s; unsigned col; bool bold; };
+inline std::vector<Run> runsOf(const hl::Cell& c) {
+    std::vector<Run> v;
+    if (!c.s.empty()) v.push_back(Run{ c.s, c.col, c.bold });
+    if (!c.s2.empty()) v.push_back(Run{ (v.empty() ? "" : " ") + c.s2, c.col2 ? c.col2 : c.col, true });
+    for (const hl::LvSeg& g : c.lv) v.push_back(Run{ " " + g.s, g.col ? g.col : c.col, false });
+    if (!c.s3.empty()) v.push_back(Run{ "  " + c.s3, c.col3 ? c.col3 : c.col, false });
+    if (v.empty()) v.push_back(Run{ "-", C_HEAD, false });
+    return v;
+}
+inline std::string plainRuns(const std::vector<Run>& v) { std::string s; for (const Run& r : v) s += r.s; return s; }
+// M(text, bold) = pixel width at the box font; cx = the candles' centre; bottom = the pane's bottom edge; [left, right] = the room
+inline Draw layout(const hl::View& v, const std::function<int(const std::string&, bool)>& M, int cx, int bottom, int left, int right) {
+    Draw D; const int ROW = 15, PX = 6, GAP = 10;
+    const std::vector<Run> e1 = runsOf(v.E[hl::K_1ST]), e2 = runsOf(v.E[hl::K_2ND]), a1 = runsOf(v.A[hl::K_1ST]), a2 = runsOf(v.A[hl::K_2ND]);
+    auto w = [&](const std::vector<Run>& r) { int s = 0; for (const Run& x : r) s += M(x.s, x.bold); return s; };
+    std::string hd[4], pc[4];
+    for (int q = 0; q < 4; q++) {
+        if (v.tmOpenMin >= 0) hd[q] = hl::clk(v.tmOpenMin + (q == 0 ? 15 : q == 1 ? 30 : 60)) + (q == 3 ? "+" : "");
+        else hd[q] = q == 0 ? "15m" : q == 1 ? "30m" : q == 2 ? "60m" : "60m+";
+        pc[q] = (!v.tmOk || v.tmCum[q] < 0) ? std::string("?") : std::to_string(v.tmCum[q]) + "%" + (v.tmQ ? "?" : "");
+    }
+    const std::string lab0 = "HOD / LOD Stats", lab1 = "1st extreme by", lab2 = "% of days";
+    const int c0 = (std::max)(M("Exp", true), M("Act", true));
+    const int c1 = (std::max)((std::max)(w(e1), w(a1)), M("1st", false));
+    const int c2 = (std::max)((std::max)(w(e2), w(a2)), M("2nd", false));
+    const int sl = (std::max)(M(lab1, false), M(lab2, false));
+    int tc = 0; for (int q = 0; q < 4; q++) tc = (std::max)(tc, (std::max)(M(hd[q], false), M(pc[q], true)));
+    tc += 8;
+    const int statsW = (std::max)(sl + GAP + 4 * tc, M(lab0, true));
+    const int W = PX + c0 + GAP + c1 + GAP + 1 + GAP + c2 + GAP + 1 + GAP + statsW + PX, H = 3 * ROW + 4;
+    if (right - left < W) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
+    int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
+    D.l = l; D.r = l + W; D.b = bottom; D.t = bottom - H;
+    D.items.push_back(Item{ 0, D.l, D.t, D.r, D.b, "", C_EDGE, C_BG, false });
+    const int y0 = D.t + 2, y1 = y0 + ROW, y2 = y1 + ROW;
+    auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int tw = M(s, bold); D.items.push_back(Item{ 1, x, y, x + tw, y + ROW, s, col, 0, bold }); return tw; };
+    auto runs = [&](int x, int y, const std::vector<Run>& r) { for (const Run& g : r) x += text(x, y, g.s, g.col, g.bold); };
+    const int x0 = D.l + PX, x1 = x0 + c0 + GAP, xs1 = x1 + c1 + GAP, x2 = xs1 + 1 + GAP, xs2 = x2 + c2 + GAP, x3 = xs2 + 1 + GAP;
+    text(x1, y0, "1st", C_HEAD, false); text(x2, y0, "2nd", C_HEAD, false); text(x3, y0, lab0, C_HEAD, true);
+    text(x0, y1, "Exp", C_TXT, true); runs(x1, y1, e1); runs(x2, y1, e2);
+    text(x0, y2, "Act", C_TXT, true); runs(x1, y2, a1); runs(x2, y2, a2);
+    D.items.push_back(Item{ 2, xs1, y0 + 2, xs1, y2 + ROW - 2, "", C_SEPV, 0, false });
+    D.items.push_back(Item{ 2, xs2, y0 + 2, xs2, y2 + ROW - 2, "", C_SEPV, 0, false });
+    text(x3, y1, lab1, C_HEAD, false); text(x3, y2, lab2, C_HEAD, false);
+    const int xt = x3 + sl + GAP;
+    for (int q = 0; q < 4; q++) {
+        const int hw = M(hd[q], false), pw = M(pc[q], true), cr = xt + (q + 1) * tc;
+        text(cr - hw, y1, hd[q], C_HEAD, false); text(cr - pw, y2, pc[q], C_TXT, true);
+    }
+    D.text = "Exp " + plainRuns(e1) + " | " + plainRuns(e2) + " ; Act " + plainRuns(a1) + " | " + plainRuns(a2) + " ; stats";
+    for (int q = 0; q < 4; q++) D.text += " " + hd[q] + "=" + pc[q];
+    D.ok = true; D.why = "drawn"; return D;
+}
+}  // namespace hsb
 #endif

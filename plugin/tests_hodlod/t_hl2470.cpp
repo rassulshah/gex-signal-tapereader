@@ -12,7 +12,7 @@ static int ok = 0, f = 0;
 static void C(bool c, const std::string& m) { if (c) ++ok; else { ++f; std::printf("FAIL %s\n", m.c_str()); } }
 static bool has(const std::string& s, const std::string& x) { return s.find(x) != std::string::npos; }
 int main(int argc, char** argv) {
-    C(std::string(nowl::VERSION) == "1.7.0" && std::string(hl::HL_VERSION) == "2.47.0" && std::string(hlset::PLUGIN_VERSION) == "2.47.0", "versions 1.7.0 / 2.47.0");
+    C(std::string(nowl::VERSION) == "1.7.0" && std::string(hl::HL_VERSION) >= std::string("2.47.0") && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "versions 1.7.0 / 2.47.0");
     auto meas = [](const std::string& s, bool bold) { return (int)s.size() * (bold ? 8 : 7); };
     nowl::Out o; o.ok = true; o.dn.ok = true; o.dn.name = "PDL"; o.up.ok = true; o.up.name = "AHI"; o.haveBk = true; o.bk.lv = "R1"; o.bk.dir = 1;
     const std::vector<nowl::Seg> v = nowl::segments(o); const std::string p = nowl::plain(v);

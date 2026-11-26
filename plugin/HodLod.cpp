@@ -403,6 +403,7 @@ struct HLState {
     std::vector<nowl::Bar> nlBars; double nlFh = NAN, nlFl = NAN; long long nlMs = -1, nlWyStamp = -2; time_t nlWyChecked = 0; std::string nlWy, nlWhy = "not run yet";
     long long svStart = 0; int svOffered = 0; std::string svWhy = "not run yet";   // (2.37.0) the spoken sweep alerts: when this chart started (CT wall s; marks up to then are never spoken), clips this chart queued
     int nrKeep = -1;   // (2.37.0) the Now row's left part: 2 gamma pill + expiry, 1 pill, 0 none (it would touch the Now line), -1 not drawn
+    std::string hbWhy;   // (2.48.0) the HOD / LOD box: where it was drawn and its text, or why not (status HODLOD_BOX line)
     int nrLvl = -1; std::string nrTag;   // (2.37.1) which gamma label form was drawn (0 full, 1 no setups, 2 the word only), its text
     std::string nlLiqText; long long nlLiqStamp = -1; time_t nlLiqChecked = 0; std::string nlLiqWhy = "not read"; int nlLiqRows = 0; bool nlLiqPhrase = false;   // (2.38.0) lsLimitProfile's level liquidity file
     // (2.39.0) the GAMMA line: the MenthorQ intraday book (parsed with the regime's HVL book, same bounded read), its verdict, the record,
@@ -2402,9 +2403,23 @@ int HodLod::draw(void)
         int l = pb.l + HL_RB_LEFT, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
         // (2.43.0) hl::nowSpot: box drawn = 4 px above it (as before); box laid out but not drawn = on its bottom edge; no box = the pane's bottom centre
         const hl::NowSpot NS = hl::nowSpot(boxLaid, boxAt, boxNotes, L.tableOk, L.gexOk, L.gexRow, (int)pane.bottom, l, r); nsForm = NS.form;
-        const int anchorB = NS.bottom;   // was anchorT - 4
-        const int cx = NS.cx;
         auto meas = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
+        // (2.48.0, Rassul 2026-11-26 08:17-08:31 CT, TopBox-mockup.html "ok build") THE HOD / LOD BOX docked on the pane's bottom edge,
+        // centred on the candles (the pane's left edge to the last bar), and the Level line right on top of it, centred the same way
+        // (11-26 08:11 "why is the levels not centeed like the news box at the top": it was centred on the hidden 2.43.0 box's spot)
+        const int cxC = ((int)pb.l + r) / 2;
+        hsb::Draw HB; S->hbWhy = "not drawn (no room)";
+        if (r - (int)pb.l >= 40) HB = hsb::layout(S->view, meas, cxC, (int)pane.bottom, (int)pb.l, r);
+        if (HB.ok && HB.t > (int)pane.top + 24) {
+            for (const hsb::Item& it : HB.items) {
+                if (it.k == 0) { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
+                else if (it.k == 1) textIn(it.l, it.r, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
+                else line(it.l, it.t, it.r, it.b, (COLOR)it.col, 1);
+            }
+            S->hbWhy = "drawn " + std::to_string(HB.l) + "," + std::to_string(HB.t) + "," + std::to_string(HB.r) + "," + std::to_string(HB.b) + " : " + HB.text;
+        } else { if (!HB.why.empty()) S->hbWhy = "not drawn: " + HB.why; HB.ok = false; }
+        const int anchorB = HB.ok ? HB.t : (int)pane.bottom;   // the Level line's bottom edge ON the box's top edge (no gap); no box = the pane's bottom
+        const int cx = cxC;
         const hl::Seg pill = hl::gammaPill(S->view); std::string ex; unsigned exC = hl::C_SLATE;
         for (size_t q = 0; q < S->view.sessSegs.size(); q++) if (S->view.sessSegs[q].s.compare(0, 6, "Expiry") == 0) { ex = hl::hlShortExpiry(S->view.sessSegs[q].s); exC = S->view.sessSegs[q].col == hl::C_AMBER ? hl::C_AMBER : hl::C_SLATE; }
         const unsigned pf = pill.col == hl::C_GREEN ? hl::C_PILL_G : (pill.col == hl::C_RED ? hl::C_PILL_R : hl::C_PILL_N);
@@ -2456,8 +2471,13 @@ int HodLod::draw(void)
                 if (gmDrawn) { stripBox.l = (std::min)(stripBox.l, gLeft); stripBox.r = (std::max)(stripBox.r, G.r); stripBox.t = (std::min)(stripBox.t, G.t); stripBox.b = (std::max)(stripBox.b, G.b); }
                 stripOk = true; }
         }
+        if (HB.ok) {   // (2.48.0) the confirm badges keep off the HOD / LOD box too
+            if (stripOk) { stripBox.l = (std::min)(stripBox.l, HB.l); stripBox.r = (std::max)(stripBox.r, HB.r); stripBox.t = (std::min)(stripBox.t, HB.t); stripBox.b = (std::max)(stripBox.b, HB.b); }
+            else { stripBox = hl::Box{ HB.l, HB.t, HB.r, HB.b }; stripOk = true; }
+        }
     }
-    S->placeLine += std::string("DISPLAY,") + hl::HL_VERSION + ",now line only (2.43.0)"
+    S->placeLine += "HODLOD_BOX,2.48.0," + S->hbWhy + "\n";
+    S->placeLine += std::string("DISPLAY,") + hl::HL_VERSION + ",level line + HOD / LOD box (2.48.0)"
                   + (hl::HL_BOX_DRAW ? std::string(",box drawn") : boxLaid ? ",box NOT drawn - laid out at " + std::to_string(boxAt.l) + " " + std::to_string(boxAt.t) + " " + std::to_string(boxAt.r) + " " + std::to_string(boxAt.b) : std::string(",box NOT drawn - no spot"))
                   + (hl::HL_OPTIONS_LINE_DRAW ? ",options line drawn" : ",options line NOT drawn (decided + recorded)") + ",now line " + (S->nlDrawn ? "drawn" : "not drawn")
                   + ",spot form " + std::to_string(nsForm) + " (0 above the drawn box / 1 on the hidden box's bottom edge / 2 pane bottom centre),spoken alerts + records unchanged\n";
@@ -2639,6 +2659,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.47.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.48.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

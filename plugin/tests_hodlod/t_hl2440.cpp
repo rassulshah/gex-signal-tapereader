@@ -15,7 +15,7 @@ static std::vector<std::string> sp(const std::string& l) { std::vector<std::stri
 static std::string slurp(const char* p) { std::ifstream in(p, std::ios::binary); std::stringstream s; s << in.rdbuf(); return s.str(); }
 static bool has(const std::string& s, const char* w) { return s.find(w) != std::string::npos; }
 int main() {
-    C(std::string(nowl::VERSION) == "1.7.0" && std::string(hl::HL_VERSION) == "2.47.0" && std::string(hlset::PLUGIN_VERSION) == "2.47.0", "NowLevels 1.7.0, lsHodLod 2.47.0 = the settings version");
+    C(std::string(nowl::VERSION) == "1.7.0" && std::string(hl::HL_VERSION) >= std::string("2.47.0") && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "NowLevels 1.7.0, lsHodLod 2.47.0 = the settings version");
     for (const char* n : { "ONH", "ONL", "LHI", "LLO", "LonHI", "AHI", "AsiaLO", "PDH", "PDL", "PFH", "PFL", "PWH", "PWL", "CWH", "CWL", "R1", "R2", "S1", "S2" }) C(nowl::major(n), std::string("major: ") + n);
     for (const char* n : { "PHH", "PHL", "2hH", "3hL", "1hL", "VAH", "VAL", "PhrH", "PhrL", "DPoc", "Open", "" }) C(!nowl::major(n), std::string("not major: ") + n);
     const double tick = 0.1; const long long D = 3878236800LL - nowl::E1904, s0 = D - 7 * 3600 + 180;

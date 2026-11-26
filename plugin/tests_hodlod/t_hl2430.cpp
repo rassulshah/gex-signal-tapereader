@@ -96,7 +96,7 @@ int main() {
 
     // [3] + [4] the host's sequence on the real layout
     {   const std::vector<nowl::Seg> segs = hisLine();
-        CHECK(nowl::plain(segs).find("TESTING: 2hH Bk / Sw") != std::string::npos && nowl::plain(segs).find("Last Bk") != std::string::npos, "his line's pieces");
+        CHECK(nowl::plain(segs).find("TESTING") != std::string::npos && nowl::plain(segs).find("2hH") != std::string::npos && nowl::plain(segs).find("LAST BK") != std::string::npos, "his line's pieces (2.47.0 chip format)");
         auto meas = [&](const std::string& s2, bool bold) { return MS(s2, 10, bold); };
         const int PW[3] = { 1530, 1100, 760 }, PH[2] = { 640, 420 };
         int cases = 0, laid = 0, onEdge = 0, centred = 0, shorter = 0, uncut = 0, cutBefore = 0;

@@ -1,5 +1,6 @@
 /********************************************************************************
- *  EventCal.cpp  --  Investor/RT RTX extension  lsEventCal  "Event Calendar"  1.0.1  (2026-11-17; 1.0.1: today only, status heartbeat)
+ *  EventCal.cpp  --  Investor/RT RTX extension  lsEventCal  "Event Calendar"  1.1.0  (2026-11-26; 1.1.0: contract line + 0DTE line, docked top left;
+ *  1.0.1: today only, status heartbeat)
  *
  *  Rassul 2026-11-17 18:09 CT: "the calendar at the top center of important events that are coming up for the market that im trading
  *  ... for crude it could include inventories. other events are like fomc etc ... after 30 min of the even it can be removed";
@@ -160,30 +161,29 @@ int EventCal::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         std::string srcWhy; const std::vector<ecal::Ev> src = ecal::source(S->file, S->mkt, now, &srcWhy);
         if (!S->file.ok && S->fileWhy != "ok" && srcWhy.find(S->fileWhy) == std::string::npos) srcWhy += " [" + S->fileWhy + "]";
         const std::vector<ecal::Row> R = ecal::select(src, S->mkt, now);
+        const ecal::ContractLine C = ecal::contractLine(S->mkt, S->sym, now);   // (1.1.0) the contract to trade + its roll day
+        const ecal::ExpiryLine X = ecal::expiryLine(S->mkt, now);              // (1.1.0) today's option expiry (0DTE)
         std::string placeWhy = "nothing to show";
-        if (!R.empty()) {
-            FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD;
-            FONT fn; fn.id = HELVETICA; fn.size = 9; fn.style = PLAIN;
-            const ecal::Layout L = ecal::layout(R, [this, &fb, &fn](const std::string& s, bool b) { setFont(b ? fb : fn); return (int)getTextWidth(s.c_str(), -1) + 1; });
+        FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD;
+        FONT fn; fn.id = HELVETICA; fn.size = 9; fn.style = PLAIN;
+        const ecal::Layout L = ecal::layout(R, [this, &fb, &fn](const std::string& s, bool b) { setFont(b ? fb : fn); return (int)getTextWidth(s.c_str(), -1) + 1; }, C, X);
+        if (L.w > 0) {
+            // (1.1.0, Rassul 2026-11-26 08:31 "move the calendar to the left of the price chart ... no black space on top of it and to
+            // the left of it") docked in the price pane's top-left corner: no gap on top or on the left
             RCT pane; pane.getPaneRect(false);
-            int right = pane.right;
-            const long n = getBarCount();
-            if (n > 0) { PNT p; p.set((int)n - 1, 0.0f, kBarRight); if (p.h > pane.left && p.h < pane.right) right = p.h; }   // his rule: only up to the last bar
-            const bdk::Box area = bdk::mk(pane.left, pane.top + 16, right, pane.bottom);   // below the IRT title row
-            S->hl.refresh(S->sym.c_str(), (long)S->spb, S->chart.c_str());
-            const bdk::Result P = bdk::place(S->hl.on, S->hl.box, L.w, L.h, area, 2, std::vector<bdk::Box>());   // 2 = top centre
-            placeWhy = P.why;
-            if (P.mode != bdk::NONE) {
-                const bdk::Box& B = P.b;
-                RCT bg; bg.set(ecC(B.l), ecC(B.t), ecC(B.r), ecC(B.b)); bg.draw(1, (COLOR)ecal::C_EDGE, (COLOR)ecal::C_BG, DRAW_OPAQUE, PAT_SOLID);
+            const int l = pane.left, t = pane.top;
+            if (pane.right - pane.left > L.w && pane.bottom - pane.top > L.h) {
+                RCT bg; bg.set(ecC(l), ecC(t), ecC(l + L.w), ecC(t + L.h)); bg.draw(1, (COLOR)ecal::C_EDGE, (COLOR)ecal::C_BG, DRAW_OPAQUE, PAT_SOLID);
+                for (const ecal::Rule& u : L.rules) { RCT r; r.set(ecC(l + u.x1), ecC(t + u.y), ecC(l + u.x2), ecC(t + u.y + 1)); r.draw(0, (COLOR)u.col, (COLOR)u.col, DRAW_OPAQUE, PAT_SOLID); }
                 for (const ecal::Cell& c : L.cells) {
                     setFont(c.bold ? fb : fn); setTextColor((COLOR)c.col);
-                    RCT r; r.set(ecC(B.l + c.x), ecC(B.t + c.y), ecC(B.l + c.x + c.w), ecC(B.t + c.y + c.h));
+                    RCT r; r.set(ecC(l + c.x), ecC(t + c.y), ecC(l + c.x + c.w), ecC(t + c.y + c.h));
                     r.drawText(c.text.c_str(), false, c.right);
                 }
-            }
+                placeWhy = "top left " + std::to_string(l) + "," + std::to_string(t) + " " + std::to_string(L.w) + "x" + std::to_string(L.h);
+            } else placeWhy = "pane too small";
         }
-        status(*S, ms, ecal::statusText(S->mkt, srcWhy, R, placeWhy));
+        status(*S, ms, ecal::statusText(S->mkt, srcWhy, R, placeWhy, C, X, S->sym));
     } catch (...) {}
     return RTX_OK;
 }
@@ -192,7 +192,7 @@ extern "C" cppExtension* CreateExtension(void) {
     EventCal* p = new EventCal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);       // on the price pane, on the instrument's scale; no hovers, no settings
-    p->setDescription("LRA Event Calendar v1.0.1 - on the price pane: today's medium / high impact scheduled events of this chart's market (the 5 PM - 5 PM CT session, at most 3) (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), at the top centre beside the HOD / LOD table. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
-    p->setVersion("1.0.1");   // = ecal::VERSION (gex-build reads this literal)
+    p->setDescription("LRA Event Calendar v1.1.0 - docked in the price pane's top-left corner: the contract to trade and its roll day (red when the chart is on the old month), today's option expiry (0DTE, amber in the last hour), then today's medium / high impact scheduled events of this chart's market (the 5 PM - 5 PM CT session, at most 3) (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), under a thin rule. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
+    p->setVersion("1.1.0");   // = ecal::VERSION (gex-build reads this literal)
     return p;
 }
