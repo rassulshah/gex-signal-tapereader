@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.29.0";   // (1.29.0, Rassul 2026-11-26 13:36 CT "make the cx levels match the levels that we currently get stats for", 13:40 "add weekly levels for cx") a Cx only at a level of the HOD / LOD stats list - PHH / PHL (PhrH / PhrL), ON / London / Asia, PD, PF, VAH / VAL - plus the weekly PWH / PWL / CWH / CWL; no hour highs / lows, no 3-hour S / R, no DPoc (off the marks since 11-19)
+static const char* const VERSION = "1.30.0";   // (1.30.0, Rassul 2026-11-26 17:19-17:21 CT "yes" to Asia 6:00 PM - 2:00 AM CT) the Asia window is (6 PM, 2 AM] (was 1 AM): formWindow / formEnd
+// was static const char* const VERSION = "1.29.0";   // (1.29.0, Rassul 2026-11-26 13:36 CT "make the cx levels match the levels that we currently get stats for", 13:40 "add weekly levels for cx") a Cx only at a level of the HOD / LOD stats list - PHH / PHL (PhrH / PhrL), ON / London / Asia, PD, PF, VAH / VAL - plus the weekly PWH / PWL / CWH / CWL; no hour highs / lows, no 3-hour S / R, no DPoc (off the marks since 11-19)
 // was static const char* const VERSION = "1.28.0";   // (1.28.0, Rassul 2026-11-26 13:06-13:16 CT "its close would not close over the level", "in any buying climax, no bar closes above the level", "no" to also checking the bars that confirm the pivot) a Cx level must be one the push FAILED to close beyond: buying climax (pivot high) - the climax candle AND the pivot candle (when the climax is the candle before it) close at or under the level; selling climax (pivot low) - both close at or above it. A close beyond = a breakout, no Cx at that level
 // was static const char* const VERSION = "1.27.0";   // (1.27.0, Rassul 2026-11-26 12:40 CT "currently cx doesn't require a level but i want to update it so that it requires a level, meaning the bar with the volume needs to be crossing a level", 12:45 "A" = every level a Cx can name) a Cx (and the live Cx?) needs a level INSIDE its candle (low <= level <= high): session, PD, PF, VAH / VAL, weekly, 3-hour S / R, PhrH / PhrL, hour highs / lows - the Cx level list (not the Bk-only hourly pivots / 4h / 3HrH). A heavy pivot candle with no level in it: no Cx (the candle before may still be the Cx if IT crosses a level)
 // was static const char* const VERSION = "1.26.0";   // (1.26.0, Rassul 2026-11-26 12:23 CT "why is this not a cmx" - ES 10:15 AM HOD, 1,150 lots = the biggest in 32: the candle was a Sw CANDIDATE (closed back under ONH / LonHI / AsiaHI) that blocked the Cx step, then fillStrength dropped the Sw for BVMax < 99, leaving no mark) run() takes noSw = the candles whose own BVMax is under SW_MIN (swWeak(), the same count fillStrength uses), and drops them as Sw candidates BEFORE the Bk and Cx steps, so the candle can still be its Bk / Cx. Nothing else changes
@@ -83,13 +84,13 @@ inline bool sessFormed(const std::string& n) {
         a = p + 1; }
     return false;
 }
-// (1.9.0) the clock window a session level is printed in (candle END, local): Asia (6 PM, 1 AM], London (2 AM, 7:30 AM], ON (5 PM, 8:30 AM],
+// (1.9.0) the clock window a session level is printed in (candle END, local): Asia (6 PM, 2 AM] (1.30.0; was 1 AM), London (2 AM, 7:30 AM], ON (5 PM, 8:30 AM],
 // the pre-open hour PHH / PHL (6:20 AM, 8:30 AM], Open (7:20 AM, 8:40 AM]; a combined name: any of its parts
 inline bool formWindow(const std::string& n, long long tEnd) {
     long long s = tEnd % 86400; if (s < 0) s += 86400; const int m = (int)(s / 60);
     size_t a = 0;
     for (;;) { const size_t p = n.find('/', a); const std::string q = n.substr(a, p == std::string::npos ? std::string::npos : p - a);
-        if ((q == "AsiaHI" || q == "AsiaLO") && (m > 18 * 60 || m <= 60)) return true;
+        if ((q == "AsiaHI" || q == "AsiaLO") && (m > 18 * 60 || m <= 120)) return true;   // (1.30.0) was m <= 60
         if ((q == "LonHI" || q == "LonLO") && m > 120 && m <= 450) return true;
         if ((q == "ONH" || q == "ONL") && (m > 17 * 60 || m <= 510)) return true;
         if ((q == "PHH" || q == "PHL") && m > 380 && m <= 510) return true;
@@ -102,7 +103,7 @@ inline bool formWindow(const std::string& n, long long tEnd) {
 inline int formEnd(const std::string& n) {
     int e = -1; size_t a = 0;
     for (;;) { const size_t p = n.find('/', a); const std::string q = n.substr(a, p == std::string::npos ? std::string::npos : p - a);
-        const int x = (q == "AsiaHI" || q == "AsiaLO") ? 60 : (q == "LonHI" || q == "LonLO") ? 450 : (q == "ONH" || q == "ONL" || q == "PHH" || q == "PHL") ? 510 : q == "Open" ? 520 : -1;
+        const int x = (q == "AsiaHI" || q == "AsiaLO") ? 120 : (q == "LonHI" || q == "LonLO") ? 450 : (q == "ONH" || q == "ONL" || q == "PHH" || q == "PHL") ? 510 : q == "Open" ? 520 : -1;
         if (x > e) e = x;
         if (p == std::string::npos) break;
         a = p + 1; }

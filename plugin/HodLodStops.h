@@ -1,4 +1,7 @@
-// HodLodStops.h 1.0.0 (2026-11-26 16:14 CT, Rassul "ok.. this looks good .. build") - the SDK-free STOPS RESTING / STOPS RUN section of
+// HodLodStops.h 1.1.0 (2026-11-26 17:21 CT, Rassul "make the updates whatever you can and build": 17:11-17:14 "indicate on a level that is drawn on a chart
+// whether it was swept already or not ... a swept badge in the center of the level", "if a level has not been swept, it can say stops. also the next line should also
+// mention if the level was swept already or not" -> chips() + status(); 17:19-17:21 Asia = 6:00 PM - 2:00 AM CT "yes" -> Asia forms at 2:00 AM (was 1:00))
+// 1.0.0 (2026-11-26 16:14 CT, Rassul "ok.. this looks good .. build") - the SDK-free STOPS RESTING / STOPS RUN section of
 // lsHodLod 2.55.0, to the right of the HOD / LOD box (Linux-tested). Requests (CT, 2026-11-26): 15:53 "a section that identifies the levels
 // that were already swept"; 16:00 "my intention is to identify highs and lows that have had their stops run"; 16:02 "switch positions so
 // resting is on top"; 16:09 "stops run should be below the divider"; 16:11 no held / back ("once it is in the stops run, it means the level
@@ -6,7 +9,7 @@
 //   Levels = the HIGHS and LOWS where stops sit (from the chart's LRA-KeyLevels file): session PhrH / PhrL, ONH / ONL, LonHI / LonLO, AsiaHI /
 //   AsiaLO; daily PDH / PDL, PFH / PFL; weekly PWH / PWL, CWH / CWL. Volume / gamma levels are left out (no stop pool behind them).
 //   RUN = a bar after the level formed traded at least 1 tick THROUGH it (high >= level + 1 tick; low <= level - 1 tick). A level formed in a
-//   window counts only after the window: Asia after 1:00 AM, London after 7:30 AM (or the open if earlier), the pre-open hour and the overnight
+//   window counts only after the window: Asia after 2:00 AM (1.1.0; was 1:00), London after 7:30 AM (or the open if earlier), the pre-open hour and the overnight
 //   from the RTH open. Prior-day and weekly levels count from the session start (5:00 PM).
 //   RESTING = the nearest 2 not run: highs above the last price, lows below it.
 //   Display: "Stops resting" (title, line), "↑" + up to 2 names, "↓" + up to 2 names; a line; "Stops run", "Highs" / "Lows" with 2 names a
@@ -17,9 +20,10 @@
 #include <functional>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace stp {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const int ROW = 16, PX = 8, GAP = 6;
 static const unsigned C_BG = 0x000B0F14, C_EDGE = 0x00444444, C_SEPV = 0x002A2F36, C_HEAD = 0x009A9A9A, C_TXT = 0x00E5E7EB,
                       C_RED = 0x00EF4444, C_GREEN = 0x0022C55E;
@@ -30,15 +34,18 @@ struct Bar { long long t = 0; double h = 0, l = 0, c = 0; };      // t = bar END
 struct Def { const char* key; const char* show; bool hi; int form; };   // form: -1 session start, -2 RTH open, -3 London end, else CT minute
 // order = session, daily, weekly (Rassul 15:18 "session levels first, then daily ... then weekly")
 static const Def DEFS[16] = {
-    { "PHH", "PhrH", true, -2 }, { "ONH", "ONH", true, -2 }, { "LonHI", "LonHI", true, -3 }, { "AsiaHI", "AsiaHI", true, 60 },
+    { "PHH", "PhrH", true, -2 }, { "ONH", "ONH", true, -2 }, { "LonHI", "LonHI", true, -3 }, { "AsiaHI", "AsiaHI", true, 120 },
     { "PDH", "PDH", true, -1 }, { "PFH", "PFH", true, -1 }, { "PWH", "PWH", true, -1 }, { "CWH", "CWH", true, -1 },
-    { "PHL", "PhrL", false, -2 }, { "ONL", "ONL", false, -2 }, { "LonLO", "LonLO", false, -3 }, { "AsiaLO", "AsiaLO", false, 60 },
+    { "PHL", "PhrL", false, -2 }, { "ONL", "ONL", false, -2 }, { "LonLO", "LonLO", false, -3 }, { "AsiaLO", "AsiaLO", false, 120 },
     { "PDL", "PDL", false, -1 }, { "PFL", "PFL", false, -1 }, { "PWL", "PWL", false, -1 }, { "CWL", "CWL", false, -1 } };
-inline int defOf(const std::string& n) { for (int i = 0; i < 16; i++) if (n == DEFS[i].key || n == DEFS[i].show) return i; return -1; }
+inline int defOf(const std::string& n0) {
+    const std::string n = n0 == "AHI" ? "AsiaHI" : n0 == "ALO" ? "AsiaLO" : n0 == "LHI" ? "LonHI" : n0 == "LLO" ? "LonLO" : n0;   // (1.1.0) the Level line's short names
+    for (int i = 0; i < 16; i++) if (n == DEFS[i].key || n == DEFS[i].show) return i;
+    return -1; }
 inline int sessMin(int mod) { return ((mod - 17 * 60) % 1440 + 1440) % 1440; }   // minutes since the 5:00 PM session start
 
 struct Lvl { std::string name; double px = 0; bool hi = true; int order = 0; bool run = false; long long runT = 0; };
-struct Out { std::vector<Lvl> runHi, runLo, restUp, restDn; std::string why; bool ok = false; };
+struct Out { std::vector<Lvl> runHi, runLo, restUp, restDn, all; std::string why; bool ok = false; };   // (1.1.0) all = every stop level, run or not
 
 // keys: the chart's key levels (names may repeat at one price); bars: this session's bars from 5:00 PM (closed + forming), oldest first;
 // openMin = the RTH open (CT minute); last = the last price
@@ -64,6 +71,7 @@ inline Out compute(const std::vector<Lv>& keys, const std::vector<Bar>& bars, in
         L.push_back(x);
     }
     std::sort(L.begin(), L.end(), [](const Lvl& a, const Lvl& b) { return a.order < b.order; });
+    O.all = L;
     for (const Lvl& x : L) if (x.run) (x.hi ? O.runHi : O.runLo).push_back(x);
     std::vector<Lvl> up, dn;
     if (std::isfinite(last)) for (const Lvl& x : L) { if (x.run) continue; if (x.hi && x.px > last) up.push_back(x); if (!x.hi && x.px < last) dn.push_back(x); }
@@ -114,5 +122,49 @@ inline Draw layout(const Out& O, const std::function<int(const std::string&, boo
     for (size_t i = 0; i < pL.size(); i++) { if (!i) text(x0, y, lL, C_GREEN, true); text(x0 + ll + GAP, y, pL[i], C_TXT, false); y += ROW; }
     D.text = std::string("resting up ") + up + " ; down " + dn + " ; run highs " + names(O.runHi) + " ; lows " + names(O.runLo);
     D.ok = true; return D;
+}
+
+// (1.1.0) a level name's state: 1 = its stops were run (swept), 0 = stops still there, -1 = not a stop level (volume / gamma / pivot) or
+// not on the chart's key-level list. A combined name ("ONH/LonHI"): the first part that is a stop level
+inline int status(const Out& O, const std::string& name) {
+    if (!O.ok) return -1;
+    size_t a = 0;
+    for (;;) { const size_t p = name.find('/', a); const std::string q = name.substr(a, p == std::string::npos ? std::string::npos : p - a);
+        const int d = defOf(q);
+        if (d >= 0) for (const Lvl& x : O.all) if (x.order == d) return x.run ? 1 : 0;
+        if (p == std::string::npos) break;
+        a = p + 1; }
+    return -1;
+}
+static const unsigned C_STOPS = 0x00F0C040, C_STOPS_B = 0x007A6420, C_SWEPT = 0x00CBD5E1, C_SWEPT_B = 0x006B7280;
+struct Box { int l = 0, t = 0, r = 0, b = 0; };
+inline bool hit(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
+// (1.1.0, Rassul 17:11-17:14, LevelSwept-mockup.html) a chip in the CENTRE of every stop level's line: gold "Stops" (not run yet) / grey
+// "Swept" (run). yOf(price) = the pane's y; [left, right] = the price area (to the last bar); [top, bottom] = the free band; avoid = the boxes
+// already drawn. A chip that would touch another chip or a box steps right, then left (56 px a step, up to 4 each way); none free = no chip.
+inline std::vector<Item> chips(const Out& O, const std::function<int(double)>& yOf, const std::function<int(const std::string&, bool)>& M,
+                               int left, int right, int top, int bottom, const std::vector<Box>& avoid, std::string* text = nullptr) {
+    std::vector<Item> out; if (!O.ok || right - left < 60) return out;
+    std::vector<Box> placed; const int cx = (left + right) / 2, H = 13, STEP = 56;
+    std::vector<Lvl> v = O.all; std::sort(v.begin(), v.end(), [](const Lvl& a, const Lvl& b) { return a.px > b.px || (a.px == b.px && a.order < b.order); });
+    for (const Lvl& x : v) {
+        const int y = yOf(x.px); if (y - H / 2 < top || y + H / 2 > bottom) continue;
+        std::string s = x.run ? "Swept" : "Stops";
+        if (x.run && x.runT > 0) { const int m = (int)(((x.runT % 86400) + 86400) % 86400 / 60), h = m / 60; char b[16]; std::snprintf(b, sizeof b, " %d:%02d", (h + 11) % 12 + 1, m % 60); s += b; }   // (1.1.0, Rassul 17:29 "add the time the level was swept to the badge") "Swept 5:45"
+        const int w = M(s, false) + 8;
+        bool done = false;
+        for (int k = 0; k <= 8 && !done; k++) {
+            const int off = k == 0 ? 0 : ((k + 1) / 2) * STEP * (k % 2 ? 1 : -1);
+            Box b; b.l = cx + off - w / 2; b.r = b.l + w; b.t = y - H / 2; b.b = b.t + H;
+            if (b.l < left || b.r > right) continue;
+            bool clash = false; for (const Box& p : placed) if (hit(b, p)) clash = true; for (const Box& p : avoid) if (hit(b, p)) clash = true;
+            if (clash) continue;
+            placed.push_back(b); done = true;
+            out.push_back(Item{ 0, b.l, b.t, b.r, b.b, "", x.run ? C_SWEPT_B : C_STOPS_B, C_BG, false });
+            out.push_back(Item{ 1, b.l, b.t, b.r, b.b, s, x.run ? C_SWEPT : C_STOPS, 0, false });
+            if (text) *text += (text->empty() ? "" : " ") + x.name + "=" + s;   // e.g. "PDH=Swept 5:45"
+        }
+    }
+    return out;
 }
 }  // namespace stp

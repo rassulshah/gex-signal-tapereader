@@ -427,8 +427,8 @@ struct HLState {
     // stamp-checked at most every 5 s
     long long rdStamp = -2; time_t rdChecked = 0; hrd::File rdf; std::string rdWhy; hrd::Out rdOut;   // (2.19.0) LRA-RangeDay-<MKT>.csv
     int calH = -1; long long calStamp = -2; std::string calWhy = "not read";   // (2.54.0) lsEventCal's box height (its status file), for the last 5 days panel
-    std::string l5Why = "not drawn"; bool hbBoxOk = false; int hbBoxT = 0;
-    std::string stWhy = "not drawn"; bool stOk = false; hl::Box stBox = { 0, 0, 0, 0 };   // (2.55.0) the Stops resting / Stops run section   // (2.54.0) the HOD / LOD box drawn this pass + its top
+    std::string l5Why = "not drawn"; bool l5Ok = false; hl::Box l5Box = { 0, 0, 0, 0 }; bool hbBoxOk = false; int hbBoxT = 0;
+    std::string stWhy = "not drawn"; bool stOk = false; hl::Box stBox = { 0, 0, 0, 0 }; stp::Out stOut; hl::Box hbBox = { 0, 0, 0, 0 }; std::string chWhy = "not drawn";   // (2.56.0) + the stop levels for the chips / Next tags   // (2.55.0) the Stops resting / Stops run section   // (2.54.0) the HOD / LOD box drawn this pass + its top
     long long swStamp = -2, swKeyStamp = -2; time_t swChecked = 0; hsw::File sw; std::vector<hsw::Lv> swKeys; std::string swWhy, swKeyWhy;
     bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
     // (2.4.0) the regime's ONE source: GammaProfile-MQ-<MKT>.csv HVL0 (stamp, at most every 5 s) and its verdict (Fresh.h)
@@ -2435,12 +2435,13 @@ int HodLod::draw(void)
             }
             S->hbWhy = "drawn " + std::to_string(HB.l) + "," + std::to_string(HB.t) + "," + std::to_string(HB.r) + "," + std::to_string(HB.b) + " : " + HB.text;
         } else { if (!HB.why.empty()) S->hbWhy = "not drawn: " + HB.why; HB.ok = false; }
-        S->hbBoxOk = HB.ok; S->hbBoxT = HB.t;
-        S->stOk = false;
+        S->hbBoxOk = HB.ok; S->hbBoxT = HB.t; S->hbBox = hl::Box{ HB.l, HB.t, HB.r, HB.b };
+        S->stOk = false; S->stOut = stp::Out();
         if (HB.ok) {   // (2.55.0, StopsBusy-mockup.html) STOPS RESTING / STOPS RUN right of the box: the highs / lows whose stops were run today
             std::vector<stp::Lv> K; for (const hsw::Lv& k : S->swKeys) K.push_back(stp::Lv{ k.name, k.px });
             std::vector<stp::Bar> SB; for (const nowl::Bar& b : S->nlBars) SB.push_back(stp::Bar{ b.t, b.h, b.l, b.c });
             const stp::Out SO = stp::compute(K, SB, S->mi >= 0 ? hl::MKTS[S->mi].open : 510, S->tick, SB.empty() ? NAN : SB.back().c);
+            S->stOut = SO;
             const stp::Draw SD = stp::layout(SO, meas, HB.r, (int)pane.bottom, HB.b - HB.t, (int)pane.top + 24, r);
             if (SD.ok) {
                 for (const stp::Item& it : SD.items) {
@@ -2476,7 +2477,14 @@ int HodLod::draw(void)
             S->gmDrawnF = true; S->gmLevel = G.level; S->gmText = G.text;
         }
         const int nowB = gml::nowBottom(G, anchorB);
-        nowl::Draw D; if (!S->nlSegs.empty() && r - l >= 40) D = nowl::layout(S->nlSegs, meas, HB.ok ? (HB.l + HB.r) / 2 : cx, nowB, l, r, 10);   // (2.55.0, Rassul 16:08 "update Vob Watch to Next and center it") centred on the box   // (2.50.0) the Level line flush left ON the box (its left edge = the box's)
+        std::vector<nowl::Seg> nlSegs2;   // (2.56.0, Rassul 17:14 "the next line should also mention if the level was swept already or not") a gold "stops" / grey "swept" after each stop level
+        for (const nowl::Seg& g : S->nlSegs) {
+            nlSegs2.push_back(g);
+            if (!g.chip) continue;
+            const int st = stp::status(S->stOut, g.s2); if (st < 0) continue;
+            nowl::Seg t; t.s = st ? "swept" : "stops"; t.col = st ? stp::C_SWEPT : stp::C_STOPS; t.part = g.part; t.drop = g.drop; nlSegs2.push_back(t);
+        }
+        nowl::Draw D; if (!nlSegs2.empty() && r - l >= 40) D = nowl::layout(nlSegs2, meas, HB.ok ? (HB.l + HB.r) / 2 : cx, nowB, l, r, 10);   // (2.55.0, Rassul 16:08 "update Vob Watch to Next and center it") centred on the box   // (2.50.0) the Level line flush left ON the box (its left edge = the box's)
         const int yB = nowB, yT = D.ok ? D.t : yB - 18;
         const int gLeft = (G.pill || G.exp) ? (std::min)(G.l, G.pill ? G.pillL : G.expL) : G.l;   // (2.39.1) the pill / 0DTE at the far left
         if (gmDrawn && !(yT > (int)pane.top + 24) && !stripOk) { stripBox = hl::Box{ gLeft, G.t, G.r, G.b }; stripOk = true; }
@@ -2517,6 +2525,7 @@ int HodLod::draw(void)
         const int top5 = (int)pane.top + (std::max)(24, S->calH > 0 ? S->calH : 0);
         const int bot5 = S->nlDrawn ? S->nlBox.t : (S->hbBoxOk ? S->hbBoxT : (int)pane.bottom);
         auto meas5 = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
+        S->l5Ok = false;
         const l5::Draw P = l5::layout(S->sw.ok ? S->sw.l5 : std::vector<l5::Day>(), meas5, (int)pane.left, top5, bot5 - 2, r5);
         if (P.ok) {
             for (const l5::Item& it : P.items) {
@@ -2524,12 +2533,31 @@ int HodLod::draw(void)
                 else if (it.k == 1) textIn(it.l, it.r, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, it.bold);
                 else line(it.l, it.t, it.r, it.b, (COLOR)it.col, 1);
             }
+            S->l5Ok = true; S->l5Box = hl::Box{ P.l, P.t, P.r, P.b };
             S->l5Why = "drawn " + std::to_string(P.l) + "," + std::to_string(P.t) + "," + std::to_string(P.r) + "," + std::to_string(P.b) + " days " + std::to_string(P.shown) + " : " + P.text;
         } else S->l5Why = "not drawn: " + P.why;
     }
+    {   // (2.56.0, LevelSwept-mockup.html) "Stops" / "Swept" chips in the centre of every stop level's line, clear of the boxes
+        int rc = priceEdge(); if (rc <= 0 || rc > pb.r) rc = pb.r;
+        std::vector<stp::Box> av;
+        if (S->hbBoxOk) av.push_back(stp::Box{ S->hbBox.l, S->hbBox.t, S->hbBox.r, S->hbBox.b });
+        if (S->stOk) av.push_back(stp::Box{ S->stBox.l, S->stBox.t, S->stBox.r, S->stBox.b });
+        if (S->nlDrawn) av.push_back(stp::Box{ S->nlBox.l, S->nlBox.t, S->nlBox.r, S->nlBox.b });
+        if (S->l5Ok) av.push_back(stp::Box{ S->l5Box.l, S->l5Box.t, S->l5Box.r, S->l5Box.b });
+        auto measC = [&](const std::string& s2, bool bold) { return textW(s2, 10, bold); };
+        auto yP = [&](double px) { return (int)getVerticalDrawPosition((float)px); };
+        std::string ct;
+        const std::vector<stp::Item> CH = stp::chips(S->stOut, yP, measC, (int)pane.left, rc, (int)pane.top + (std::max)(24, S->calH > 0 ? S->calH : 0), (int)pane.bottom, av, &ct);
+        for (const stp::Item& it : CH) {
+            if (it.k == 0) { RCT rr; rr.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rr.draw(1, (COLOR)it.col, (COLOR)it.fill, DRAW_OPAQUE, PAT_SOLID); }
+            else textIn(it.l, it.r, (it.t + it.b) / 2, it.s, (COLOR)it.col, 10, false);
+        }
+        S->chWhy = !S->stOut.ok ? "not drawn: " + S->stWhy : CH.empty() ? std::string("none on screen") : std::to_string((int)CH.size() / 2) + " chips : " + ct;
+    }
+    S->placeLine += "CHIPS," + std::string(stp::VERSION) + "," + S->chWhy + "\n";
     S->placeLine += "STOPS," + std::string(stp::VERSION) + "," + S->stWhy + "\n";
     S->placeLine += "LAST5," + std::string(l5::VERSION) + "," + S->calWhy + "," + S->l5Why + "\n";
-    S->placeLine += "HODLOD_BOX,2.55.0," + S->hbWhy + "\n";
+    S->placeLine += "HODLOD_BOX,2.56.0," + S->hbWhy + "\n";
     S->placeLine += std::string("DISPLAY,") + hl::HL_VERSION + ",level line + HOD / LOD box (2.48.0)"
                   + (hl::HL_BOX_DRAW ? std::string(",box drawn") : boxLaid ? ",box NOT drawn - laid out at " + std::to_string(boxAt.l) + " " + std::to_string(boxAt.t) + " " + std::to_string(boxAt.r) + " " + std::to_string(boxAt.b) : std::string(",box NOT drawn - no spot"))
                   + (hl::HL_OPTIONS_LINE_DRAW ? ",options line drawn" : ",options line NOT drawn (decided + recorded)") + ",now line " + (S->nlDrawn ? "drawn" : "not drawn")
@@ -2712,6 +2740,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.55.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.56.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -17,7 +17,7 @@ static std::vector<wyr::Bar> session(long long sweepVol) {
     for (int i = 0; i < 8; ++i, t += 180) { const long long p = 1000 - 5 * i; B.push_back(bar(t, p, p + 2, p - 4, p - 3, 110)); }          // falling: pivot high at 46 confirmed
     return B; }
 int main() {
-    C(std::string(lvm::VERSION) == "1.29.0", "version 1.26.0");
+    C(std::string(lvm::VERSION) == "1.30.0", "version 1.26.0");
     std::vector<wyr::Lvl> K; { wyr::Lvl z; z.name = "PDH"; z.px = 1010; z.high = true; K.push_back(z); }
     const int sw = 46;
     {   // light sweep candle: biggest volume in 46 (>= 20 for a Cx, < 99 for a Sw)

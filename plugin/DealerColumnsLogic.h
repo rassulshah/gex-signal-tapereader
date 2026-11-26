@@ -149,7 +149,7 @@ inline std::string levelWhat(const std::string& name)
     if (f == "CWH" || f == "CWL") return std::string("this week's ") + (f == "CWH" ? "high" : "low") + " set before yesterday";
     if (f == "ONH" || f == "ONL") return std::string("tonight's overnight session ") + (f == "ONH" ? "high" : "low");
     if (f == "LonHI" || f == "LonLO") return std::string("the London session's ") + (f == "LonHI" ? "high" : "low");
-    if (f == "AsiaHI" || f == "AsiaLO") return std::string("the Asia session's (6:00 PM - 1:00 AM CT) ") + (f == "AsiaHI" ? "high" : "low");
+    if (f == "AsiaHI" || f == "AsiaLO") return std::string("the Asia session's (6:00 PM - 2:00 AM CT) ") + (f == "AsiaHI" ? "high" : "low");
     if (f == "PHH" || f == "PHL" || f == "PhrH" || f == "PhrL") return std::string("the ") + (f == "PHH" || f == "PhrH" ? "high" : "low") + " of the hour before the RTH open (ES 7:30 - 8:30 AM CT)";   // (DP 2.41.0)
     if (f == "Open") return "today's RTH open (the first trade of the day session)";                                   // (DP 2.18.0)
     if (f == "DPoc") return "the previous full session's volume point of control (the price that traded the most)";

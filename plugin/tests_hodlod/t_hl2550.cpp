@@ -24,7 +24,7 @@ static std::vector<stp::Bar> bars(long long upTo) {
     return v; }
 static std::string nm(const std::vector<stp::Lvl>& v) { return stp::names(v); }
 int main() {
-    C(std::string(hl::HL_VERSION) == "2.55.0" && std::string(hlset::PLUGIN_VERSION) == "2.55.0" && std::string(stp::VERSION) == "1.0.0" && std::string(nowl::VERSION) == "1.8.0", "versions");
+    C(std::string(hl::HL_VERSION) >= "2.55.0" && std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(stp::VERSION) >= "1.0.0" && std::string(nowl::VERSION) == "1.8.0", "versions");
     std::ifstream in("es1126_keys.csv"); std::stringstream ss; ss << in.rdbuf(); std::vector<hsw::Lv> K0;
     C(hsw::parseKeys(ss.str(), 1795729660LL, 3600, K0) && K0.size() >= 15, "real key levels parsed");
     std::vector<stp::Lv> K; for (const hsw::Lv& k : K0) K.push_back(stp::Lv{ k.name, k.px });
@@ -32,13 +32,13 @@ int main() {
     std::vector<stp::Bar> B = bars(abs_(2026, 11, 26, 11, 57));
     const stp::Out O = stp::compute(K, B, 510, 0.25, B.back().c);
     C(O.ok && nm(O.runHi) == "PhrH ONH LonHI AsiaHI PDH PFH", "11:54 highs run: " + nm(O.runHi));
-    C(nm(O.runLo) == "PhrL AsiaLO", "11:54 lows run: " + nm(O.runLo));
-    C(nm(O.restUp) == "CWH PWH" && nm(O.restDn) == "LonLO ONL", "11:54 resting: " + nm(O.restUp) + " / " + nm(O.restDn));
+    C(nm(O.runLo) == "PhrL", "11:54 lows run (1.1.0 Asia to 2:00 AM: the 1:12 AM bar is inside Asia): " + nm(O.runLo));
+    C(nm(O.restUp) == "CWH PWH" && nm(O.restDn) == "LonLO AsiaLO", "11:54 resting: " + nm(O.restUp) + " / " + nm(O.restDn));
     for (const stp::Lvl& x : O.runHi) C(x.name != "DPoc" && x.name != "VAH" && x.name != "WPoc", "no volume levels");
-    // 8:00 AM (price 7244.75): PDH 5:45 PM, PFH 6:21 PM run overnight; AsiaLO run at 1:12 AM (after Asia closed); AsiaHI = 7254.75 touched, not run
+    // 8:00 AM (price 7244.75): PDH 5:45 PM, PFH 6:21 PM run overnight; AsiaHI = 7254.75 touched, not run
     B = bars(abs_(2026, 11, 26, 8, 0));
     const stp::Out O8 = stp::compute(K, B, 510, 0.25, B.back().c);
-    C(nm(O8.runHi) == "PDH PFH" && nm(O8.runLo) == "AsiaLO", "8:00 run: " + nm(O8.runHi) + " / " + nm(O8.runLo));
+    C(nm(O8.runHi) == "PDH PFH" && nm(O8.runLo) == "-", "8:00 run (no low run: London held above the Asia low): " + nm(O8.runHi) + " / " + nm(O8.runLo));
     C(has(nm(O8.restUp), "PhrH") || has(nm(O8.restUp), "ONH"), "8:00 resting above: " + nm(O8.restUp));
     for (const stp::Lvl& x : O8.runHi) if (x.name == "PDH") C(x.runT == abs_(2026, 11, 25, 17, 45), "PDH run at 5:45 PM");
     // windows: a level inside its own window is never 'run'; ONH / PhrH only from the open
@@ -61,7 +61,7 @@ int main() {
     int lines = 0; bool hiLab = false, loLab = false, upA = false; int yRest = -1, yRun = -1;
     for (const stp::Item& it : D.items) {
         if (it.k != 1) continue;
-        if (it.s == "PhrH ONH" || it.s == "LonHI AsiaHI" || it.s == "PDH PFH" || it.s == "PhrL AsiaLO") lines++;
+        if (it.s == "PhrH ONH" || it.s == "LonHI AsiaHI" || it.s == "PDH PFH" || it.s == "PhrL") lines++;
         if (it.s == "Highs") hiLab = it.col == stp::C_RED;
         if (it.s == "Lows") loLab = it.col == stp::C_GREEN;
         if (it.s == stp::UP) upA = it.col == stp::C_RED;

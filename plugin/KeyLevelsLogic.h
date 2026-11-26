@@ -7,7 +7,7 @@
 //   PWH / PWL   the Monday-Friday sessions of the previous week
 //   ONH / ONL   this session's overnight bars (17:00 -> the RTH open); shown once RTH has started
 //   LonHI/LonLO this session's London bars (END in (02:00, 07:30]); shown after 07:30
-//   AsiaHI/LO   (2.10.0) this session's Asia bars (END in (18:00, 01:00] - his IRT session #119 CT, per-market table asiaWindow); shown after 02:00
+//   AsiaHI/LO   (2.10.0) this session's Asia bars (END in (18:00, 02:00] since 2026-11-26 17:21 CT (was 01:00, his IRT session #119); per-market table asiaWindow); shown after 02:00
 //               (docs/study-methods/level-definitions-asia-week.md, reviewed 2026-10-14)
 //   PHH / PHL   (2026-11-01, Rassul 16:32-16:42 CT "add this as a key level", "prior hour high or low") the high / low of the hour
 //               before this session's RTH open (bars END in (open - 60 min, open]; ES / NQ 07:30-08:30 CT); shown once RTH has started,
@@ -37,7 +37,7 @@ struct Agg { double h = -1e300, l = 1e300; int n = 0; void add(double hi, double
 // ends where London starts); kept per market so the nightly studies can tune it.
 inline void asiaWindow(const char* m, int& startMin, int& endMin)
 {
-    startMin = 18 * 60; endMin = 1 * 60;   // (2026-10-24) his IRT Asia session #119 = 18:00-01:00 (was 02:00)
+    startMin = 18 * 60; endMin = 2 * 60;   // (2026-11-26 17:21 CT, Rassul "yes" to Asia 6:00 PM - 2:00 AM CT, the common definition up to the London open) was 1 * 60 (his IRT session #119 18:00-01:00 since 2026-10-24)
     (void)m;
 }
 // (2.10.0) the merge distance for a NEW level (AsiaHI/LO, CWH/CWL) joining an existing line: the Liquidity Profile zone
@@ -102,7 +102,7 @@ inline int profileRowTicks(const std::string& m) { (void)m; return 1; }
 struct ProfDiag { double dayCover = 0, weekCover = 0; double dpoc1 = NAN, dpoc2 = NAN, dpoc4 = NAN, wpoc1 = NAN, wpoc4 = NAN; bool dayUsed = false, weekUsed = false; };
 
 inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int openMin, int closeMin, double tick,
-                                  int asiaStartMin = 18 * 60, int asiaEndMin = 1 * 60,
+                                  int asiaStartMin = 18 * 60, int asiaEndMin = 2 * 60,
                                   const std::vector<std::vector<Vap>>* vap = nullptr, int rowTicks = 1, ProfDiag* diag = nullptr)
 {
     std::vector<Level> out;
