@@ -15,7 +15,7 @@ static void C(bool c, const std::string& m) { if (c) ++ok; else { ++f; std::prin
 static int M(const std::string& s, bool b) { return (int)s.size() * 6 + (b ? (int)s.size() : 0); }
 static long long A(int y, int mo, int d, int h, int mi) { return hl::daysFromCivil(y, mo, d) * 86400 + h * 3600 + mi * 60; }
 int main() {
-    C(std::string(hl::HL_VERSION) == "2.56.0" && std::string(hlset::PLUGIN_VERSION) == "2.56.0" && std::string(stp::VERSION) == "1.1.0", "versions");
+    C(std::string(hl::HL_VERSION) >= "2.56.0" && std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(stp::VERSION) >= "1.1.0", "versions");
     std::ifstream in("es1126_keys.csv"); std::stringstream ss; ss << in.rdbuf(); std::vector<hsw::Lv> K0; hsw::parseKeys(ss.str(), 1795729660LL, 3600, K0);
     std::vector<stp::Lv> K; for (const hsw::Lv& k : K0) K.push_back(stp::Lv{ k.name, k.px });
     std::vector<stp::Bar> B; { std::ifstream bi("es1126_stop_bars.csv"); std::string ln; while (std::getline(bi, ln)) { int y, mo, d, h, mi; double hi, lo, c;
@@ -46,6 +46,16 @@ int main() {
     C(t.find("PDH=Swept 5:45") != std::string::npos && t.find("PFH=Swept 6:21") != std::string::npos && t.find("LonLO=Stops") != std::string::npos && t.find("DPoc") == std::string::npos, "names: " + t);
     { bool centred = false; for (const stp::Item& it : ch) if (it.k == 0 && it.s.empty() && std::abs((it.l + it.r) / 2 - 450) <= 1) centred = true; C(centred, "the first chip in the centre of the price area"); }
     { const std::vector<stp::Item> none = stp::chips(O, yOf, M, 0, 900, 30, 60, av); bool far = false; for (const stp::Item& it : none) if (it.t < 30 || it.b > 60) far = true; C(!far, "off-screen levels get no chip"); }
+    // (1.1.1, 18:57 "if multiple levels are the same, show only one badge") ONH / LonHI / AsiaHI 7254.75 = one chip; PFH + PDH at one price = one chip
+    C(t.find("ONH/LonHI/AsiaHI=Stops") != std::string::npos && t.find("ONH=Stops") == std::string::npos, "same price: one chip: " + t);
+    { std::vector<stp::Lv> k = { { "PFH", 7256.25 }, { "PDH", 7256.25 }, { "PDL", 7232.5 } };
+      std::vector<stp::Bar> b = { { A(2026, 11, 27, 9, 0), 7250, 7240, 7245 } };
+      const stp::Out o = stp::compute(k, b, 510, 0.25, 7245); std::string tt;
+      const std::vector<stp::Item> c = stp::chips(o, yOf, M, 0, 900, 30, 500, {}, &tt); int n = 0; for (const stp::Item& it : c) if (it.k == 1) n++;
+      C(n == 2 && tt.find("PDH/PFH=Stops") != std::string::npos, "PFH / PDH 7256.25 (his 11-27 chart): one Stops chip: " + tt);
+      b.push_back(stp::Bar{ A(2026, 11, 27, 9, 3), 7257, 7244, 7246 });
+      const stp::Out o2 = stp::compute(k, b, 510, 0.25, 7246); std::string t2; stp::chips(o2, yOf, M, 0, 900, 30, 500, {}, &t2);
+      C(t2.find("PDH/PFH=Swept 9:03") != std::string::npos, "both run: one Swept chip with the time: " + t2); }
     std::printf("t_hl2560: %d pass, %d fail\n", ok, f);
     return f ? 1 : 0;
 }

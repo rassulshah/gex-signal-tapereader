@@ -23,7 +23,7 @@
 #include <cstdio>
 
 namespace stp {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.1.1";   // (1.1.1, Rassul 2026-11-26 18:57 CT, ES screenshot two "Stops" chips on PFH / PDH 7256.25: "if multiple levels are the same, show only one badge"; the "Stops resting" arrows printed as "â†‘" on his chart - drawn as lines now, as the Level line)
 static const int ROW = 16, PX = 8, GAP = 6;
 static const unsigned C_BG = 0x000B0F14, C_EDGE = 0x00444444, C_SEPV = 0x002A2F36, C_HEAD = 0x009A9A9A, C_TXT = 0x00E5E7EB,
                       C_RED = 0x00EF4444, C_GREEN = 0x0022C55E;
@@ -99,7 +99,7 @@ inline Draw layout(const Out& O, const std::function<int(const std::string&, boo
     const std::string tR = "Stops resting", tN = "Stops run", lH = "Highs", lL = "Lows";
     const std::vector<std::string> pH = pairs(O.runHi), pL = pairs(O.runLo);
     const std::string up = names(O.restUp), dn = names(O.restDn);
-    const int la = (std::max)(M(UP, false), M(DN, false));
+    const int la = 8;   // (1.1.1) the arrow slot (drawn arrow)
     const int ll = (std::max)(M(lH, true), M(lL, true));
     int wN = M("none yet", false); for (const std::string& s : pH) wN = (std::max)(wN, M(s, false)); for (const std::string& s : pL) wN = (std::max)(wN, M(s, false));
     const int W = PX + (std::max)((std::max)(M(tR, false), M(tN, false)), (std::max)(la + GAP + (std::max)(M(up, false), M(dn, false)), ll + GAP + wN)) + PX;
@@ -113,8 +113,13 @@ inline Draw layout(const Out& O, const std::function<int(const std::string&, boo
     auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int w = M(s, bold); D.items.push_back(Item{ 1, x, y, x + w, y + ROW, s, col, 0, bold }); return w; };
     const int x0 = left + PX; int y = D.t + 3;
     text(x0, y, tR, C_HEAD, false); y += ROW + 1; D.items.push_back(Item{ 2, x0, y, D.r - PX, y, "", C_SEPV, 0, false }); y += 2;
-    text(x0, y, UP, C_RED, false); text(x0 + la + GAP, y, up, O.restUp.empty() ? C_HEAD : C_TXT, false); y += ROW;
-    text(x0, y, DN, C_GREEN, false); text(x0 + la + GAP, y, dn, O.restDn.empty() ? C_HEAD : C_TXT, false); y += ROW;
+    auto arrow = [&](int x, int yy, int dir, unsigned col) {   // (1.1.1) a shaft + two head strokes (IRT's font has no arrow glyph)
+        const int cx = x + la / 2, t = yy + 3, b = yy + ROW - 3, h = dir > 0 ? t : b, k = dir > 0 ? 3 : -3;
+        D.items.push_back(Item{ 2, cx, t, cx, b, "", col, 0, false });
+        D.items.push_back(Item{ 2, cx, h, cx - 3, h + k, "", col, 0, false });
+        D.items.push_back(Item{ 2, cx, h, cx + 3, h + k, "", col, 0, false }); };
+    arrow(x0, y, 1, C_RED); text(x0 + la + GAP, y, up, O.restUp.empty() ? C_HEAD : C_TXT, false); y += ROW;
+    arrow(x0, y, -1, C_GREEN); text(x0 + la + GAP, y, dn, O.restDn.empty() ? C_HEAD : C_TXT, false); y += ROW;
     y += 2; D.items.push_back(Item{ 2, x0, y, D.r - PX, y, "", C_SEPV, 0, false }); y += 2;   // the line ABOVE "Stops run" (16:09)
     text(x0, y, tN, C_HEAD, false); y += ROW + 2;
     if (!nRun) { text(x0, y, "none yet", C_HEAD, false); }
@@ -147,6 +152,16 @@ inline std::vector<Item> chips(const Out& O, const std::function<int(double)>& y
     std::vector<Item> out; if (!O.ok || right - left < 60) return out;
     std::vector<Box> placed; const int cx = (left + right) / 2, H = 13, STEP = 56;
     std::vector<Lvl> v = O.all; std::sort(v.begin(), v.end(), [](const Lvl& a, const Lvl& b) { return a.px > b.px || (a.px == b.px && a.order < b.order); });
+    {   // (1.1.1) levels at the same price = ONE chip: Swept only when every one of them was run (the earliest time), else Stops
+        std::vector<Lvl> g;
+        for (const Lvl& x : v) {
+            if (!g.empty() && std::fabs(g.back().px - x.px) < 1e-7 * (std::max)(1.0, std::fabs(x.px))) {
+                Lvl& m = g.back(); m.name += "/" + x.name;
+                if (!x.run) m.run = false; else if (m.run && x.runT < m.runT) m.runT = x.runT;
+                continue; }
+            g.push_back(x); }
+        v.swap(g);
+    }
     for (const Lvl& x : v) {
         const int y = yOf(x.px); if (y - H / 2 < top || y + H / 2 > bottom) continue;
         std::string s = x.run ? "Swept" : "Stops";

@@ -64,11 +64,11 @@ int main() {
         if (it.s == "PhrH ONH" || it.s == "LonHI AsiaHI" || it.s == "PDH PFH" || it.s == "PhrL") lines++;
         if (it.s == "Highs") hiLab = it.col == stp::C_RED;
         if (it.s == "Lows") loLab = it.col == stp::C_GREEN;
-        if (it.s == stp::UP) upA = it.col == stp::C_RED;
         if (it.s == "Stops resting") yRest = it.t;
         if (it.s == "Stops run") yRun = it.t;
     }
-    C(lines == 4 && hiLab && loLab && upA, "2 names a line, red / green labels");
+    for (const stp::Item& it : D.items) if (it.k == 2 && it.col == stp::C_RED) upA = true;   // (1.1.1) the up arrow is drawn (red lines)
+    C(lines == 4 && hiLab && loLab && upA, "2 names a line, red / green labels, drawn arrows");
     C(yRest >= 0 && yRun > yRest, "resting on top, run below");
     { int yLine = -1; for (const stp::Item& it : D.items) if (it.k == 2 && it.t < yRun && it.t > yRest + stp::ROW) yLine = it.t; C(yLine > 0 && yLine < yRun, "the divider above 'Stops run'"); }
     stp::Out big = O; for (int i = 0; i < 6; i++) big.runHi.push_back(big.runHi[0]);
