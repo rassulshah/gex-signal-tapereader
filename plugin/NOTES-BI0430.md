@@ -9,7 +9,7 @@ Mockup: BI-mockup.html (ES 11-27, real bars).
 
 ## The rule (LevelMarks 1.31.0 biCands / biPick) - bullish, bearish = mirror
 1. A confirmed 3-bar High / Low ZigZag pivot LOW; its leg = from the pivot high it started from.
-2. The leg traded BELOW a major LOW level (session ON / London / Asia, PD, PF, weekly, 3h S1 / S2) for the FIRST time this session part
+2. The leg traded BELOW a major LOW level (session ON / London / Asia, PD, PF, weekly, 3h S1 / S2) for the FIRST time since it formed (1.31.2: Asia, London, pre-open included - its stops still resting)
    (since the RTH open in the day session) - the stop run; the close before it was above the level.
 3. The BI = the first GREEN candle after the pivot candle, before the next pivot, low below the pivot candle's high, that CLOSES BACK
    ABOVE that swept level; not the RTH opening candle, not a data-release candle.

@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.31.1";   // (1.31.1, Rassul 2026-11-27 10:19 CT "lets also add a rule that the high has to be above the prior bar high") a bullish BI's high is above the prior candle's high (bearish: its low below the prior low)
+static const char* const VERSION = "1.31.2";   // (1.31.2, Rassul 2026-11-27 10:29 CT "it needs to be a level that wasnt run") a BI level must be untraded since it formed (Asia / London / pre-open included), not only since the RTH open
+// was static const char* const VERSION = "1.31.1";   // (1.31.1, Rassul 2026-11-27 10:19 CT "lets also add a rule that the high has to be above the prior bar high") a bullish BI's high is above the prior candle's high (bearish: its low below the prior low)
 // was static const char* const VERSION = "1.31.0";   // (1.31.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+) + the BI: biCands() / biPick() (code 'N', "BI"); Bk / Sw / Cx / AR computed as before (the host stops drawing Sw / AR)
 // was static const char* const VERSION = "1.30.0";   // (1.30.0, Rassul 2026-11-26 17:19-17:21 CT "yes" to Asia 6:00 PM - 2:00 AM CT) the Asia window is (6 PM, 2 AM] (was 1 AM): formWindow / formEnd
 // was static const char* const VERSION = "1.29.0";   // (1.29.0, Rassul 2026-11-26 13:36 CT "make the cx levels match the levels that we currently get stats for", 13:40 "add weekly levels for cx") a Cx only at a level of the HOD / LOD stats list - PHH / PHL (PhrH / PhrL), ON / London / Asia, PD, PF, VAH / VAL - plus the weekly PWH / PWL / CWH / CWL; no hour highs / lows, no 3-hour S / R, no DPoc (off the marks since 11-19)
@@ -640,8 +641,8 @@ inline std::map<long long, SMark> arPick(const std::vector<ArCand>& cands, const
 // 09:56 "its the green one after the lod"; 09:57 "go"; 10:00 "ok" to option 1 = BVMax OR BRMax 20+ (his example: BVMax 2, BRMax 99+); mockup
 // BI-mockup.html). Bullish shown, bearish = mirror:
 //   1 a confirmed ZigZag (3-bar High / Low) pivot LOW k; its leg = the candles after the pivot high it started from, up to k;
-//   2 the leg made the FIRST trade through a major LOW level of the current session part (session ON / London / Asia, PD, PF, weekly, 3h S1 / S2 - the
-//     Sw list): the first candle through it since it formed (since the RTH open in the day session) is inside the leg, the close before it above it;
+//   2 the leg made the FIRST trade through a major LOW level (session ON / London / Asia, PD, PF, weekly, 3h S1 / S2 - the Sw list): the first candle
+//     through it since it FORMED (1.31.2: the whole session - Asia, London, pre-open, RTH; its stops still resting) is inside the leg, the close before it above it;
 //   3 the BI = the first GREEN candle after the pivot candle (the pivot candle itself never: it is the red push), before the next pivot, whose low is
 //     below the pivot candle's high, not the RTH opening candle and not a data-release candle,
 //   3b (10:08 CT "also add that the downpivot just swept a level", 10:09 "there were stops that were swept and after this there was a reversal bar
@@ -669,14 +670,16 @@ inline std::vector<BiCand> biCands(const std::vector<wyr::Bar>& B, const std::ve
         const int stop = q + 1 < piv.size() ? piv[q + 1].first : n;   // the next pivot: the up-wave's end
         std::vector<Cand> took;
         for (int f = std::max(1, a + 1); f <= k; ++f) {
-            const int ds = dayStart(B, f, openMin);
             for (const Lv& z : levelsAt(B, f, key, h3)) {
                 if (z.bkOnly || !swMajor(z.name, z.hb) || !biSideOk(z.name, d)) continue;
                 bool have = false; for (const Cand& x : took) if (x.px == z.px && x.name == z.name) have = true; if (have) continue;
                 auto thr = [&](int j) { return d > 0 ? B[(size_t)j].l < z.px : B[(size_t)j].h > z.px; };
                 if (!thr(f)) continue;
                 if (d > 0 ? !(B[(size_t)f - 1].c > z.px) : !(B[(size_t)f - 1].c < z.px)) continue;   // came from the other side
-                const int from = std::max(std::max(0, z.from), ds); bool before = false;
+                // (1.31.2, Rassul 10:29 CT "it needs to be a level that wasnt run ... if it is asia low, london shouldn't have swept it. even if it is a pd
+                // level, it should not have been swept till current time including in london and asia") nobody traded through it since it FORMED - the
+                // whole session (Asia, London, pre-open and RTH), not just since the RTH open: a level still showing "Stops" (HodLodStops)
+                const int from = std::max(0, z.from); bool before = false;
                 for (int j = from; j < f; ++j) if (thr(j)) { before = true; break; }
                 if (before) continue;   // not the first break of the level this session part
                 Cand c; c.px = z.px; c.name = z.name; c.hb = 0; c.high = d < 0; took.push_back(c); } }

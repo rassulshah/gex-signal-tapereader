@@ -54,5 +54,11 @@ int main() {
         std::vector<wyr::Bar> B2 = B; const size_t i9 = at(P.begin()->first); B2[i9].h = B2[i9 - 1].h;   // same candle, high only equal to the prior high
         const auto P5 = lvm::biPick(lvm::biCands(B2, K, lvm::rthOpenMin("ES"), 180), T, V, R, G);
         chk(!P5.count(B[i9].t), "the same candle with its high only EQUAL to the prior high is no BI"); }
+    {   // (1.31.2, 10:29 "it needs to be a level that wasnt run") a level the overnight already traded through (low 7238.50 < 7240) gives no BI,
+        // even though RTH first broke it in the 8:39 leg and the BI closed back above it
+        std::vector<wyr::Lvl> K6; wyr::Lvl z; z.px = std::llround(7240.0 * 4); z.name = "PDL"; K6.push_back(z);
+        const auto P6 = lvm::biPick(lvm::biCands(B, K6, lvm::rthOpenMin("ES"), 180), T, V, R, G);
+        bool at906 = false; for (const auto& kv : P6) if (W[at(kv.first)] == "09:06") at906 = true;
+        chk(!at906, "PDL 7240 already run overnight (low 7238.50): no BI - its stops were gone"); }
     std::printf("%s (%d failed)\n", fails ? "FAILED" : "ALL PASS", fails); return fails ? 1 : 0;
 }
