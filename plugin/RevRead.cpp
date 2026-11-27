@@ -110,9 +110,11 @@ static const bool ACC_READ_DRAWN = false;   // (0.12.0, Rassul 2026-11-17 06:03 
 static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i would also hide the book flow") hidden again; its numbers stay in the background
 // was static const bool RV_DRAW_BOOKFLOW = true;   // (0.21.5, Rassul 13:15 CT "lets go with this") drawn again, on top   // was false   // (0.17.3, Rassul 09:29 CT "can we hide bookflow for now and just keep delta + change") the Book Flow half is not drawn - delta + change take the whole pane; Book Flow is still read in the background (the read, the Wyckoff springs)
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
+static const bool TD_ON_CANDLE = false;   // (0.44.2, Rassul 2026-11-27 14:24 CT "add the dots only to the range bar instead of the candle") the thrust dot is drawn only in the Range pane (lsRangeRead); its "TD" lines are still written
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.44.1"   // (0.44.1, Rassul 2026-11-27 13:47 CT "add these requirements") LevelMarks 1.32.0: the BI also needs Thrust >= 1.20 and PIC >= 1.20
+#define RVS_VERSION "0.44.2"   // (0.44.2, Rassul 2026-11-27 14:24 CT) the thrust dot only in the Range bar, not on the candle
+// was #define RVS_VERSION "0.44.1"   // (0.44.1, Rassul 2026-11-27 13:47 CT "add these requirements") LevelMarks 1.32.0: the BI also needs Thrust >= 1.20 and PIC >= 1.20
 // was #define RVS_VERSION "0.44.0"   // (0.44.0, Rassul 2026-11-27 12:38-12:44 CT "a blue cyan dot on a green candle that has its low below the high of the down pivot and vice versa, that has its thrust and pic greater than or equal to 1.2", "in the range bar and in the candle in the middle", "1. yes 2. every 3. all 4. no repaint") ThrustDot 1.0.0: "stamp|TD|dir" lines; lsRevReadMarks draws the cyan dot in the middle of the candle body, lsRangeRead in the middle of its bar
 // was #define RVS_VERSION "0.43.2"   // (0.43.2, Rassul 2026-11-27 10:29 CT "it needs to be a level that wasnt run") LevelMarks 1.31.2: a BI level untraded since it formed (Asia / London included)
 // was #define RVS_VERSION "0.43.1"   // (0.43.1, Rassul 2026-11-27 10:19 CT) LevelMarks 1.31.1: a BI's high above the prior candle's high (bearish: low below the prior low)
@@ -147,7 +149,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.44.1");
+    p->setVersion("0.44.2");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -1300,7 +1302,7 @@ public:
                     const std::string a1 = m.code == 'Q' ? wyi::absLine1(tz) : m.code == 'S' ? std::string(m.dir > 0 ? "VOB" : "VOT") /* (0.36.0) was "Sw" */ : std::string(wyi::textOf(m.code)), a2 = m.lv, a3 = m.code == 'C' ? std::string() : m.code == 'Q' ? wyi::absLine3(tz) : m.st;   /* (0.27.0) Abs: "Abs" / "Abs/Ex?", position, P */ setFont(f1); int w = (int)getTextWidth(a1.c_str(), -1); if (!a2.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a2.c_str(), -1)); }
                     if (!a3.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a3.c_str(), -1)); }   // (0.19.2) the strength: a 3rd line, same font as the level
                     wyi::Want wt; wt.candle = (int)C.size() - 1; wt.side = wyi::sideOf(m); wt.w = w + 2 * wyi::PAD_X; wt.h = wyi::LINE1_H + (a2.empty() ? 0 : wyi::LINE2_H) + (a3.empty() ? 0 : wyi::LINE2_H); W.push_back(wt); WM.push_back(&m); l1.push_back(a1); l2.push_back(a2); l3.push_back(a3); } }
-            {   // (0.44.0, Rassul 2026-11-27 12:39 CT "put the cyan dot ... in the candle in the middle") the thrust dot: cyan, in the middle of the candle's body
+            if (TD_ON_CANDLE) {   // (0.44.2, Rassul 14:24 CT "add the dots only to the range bar instead of the candle") off; (0.44.0, 12:39 CT "put the cyan dot ... in the candle in the middle") the thrust dot: cyan, in the middle of the candle's body
                 const COLOR TD_COL = (COLOR)0x0022D3EE;   // cyan #22D3EE (0x00RRGGBB, as C_GREEN)
                 const int rr = std::max(2, std::min(4, dx * 32 / 100 + 1));
                 for (size_t q = 0; q < C.size(); ++q) { const int i = barOf[q]; const auto it = s.iMarks.find((long long)times[i]); if (it == s.iMarks.end()) continue;
