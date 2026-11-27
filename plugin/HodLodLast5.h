@@ -14,7 +14,7 @@
 #include <algorithm>
 
 namespace l5 {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // (1.0.1) the calendar height read from "PLACE,top left" or "PLACE,top centre"
 static const int MAX_DAYS = 5, MAX_NAMES = 2, ROW = 17, PX = 5, GAP = 6, SEP = 8;   // SEP = the space above and below a day separator
 static const unsigned C_BG = 0x000B0F14, C_EDGE = 0x00444444, C_SEPV = 0x002A2F36, C_HEAD = 0x009A9A9A, C_TXT = 0x00E5E7EB,
                       C_RED = 0x00EF4444, C_GREEN = 0x0022C55E, C_AMBER = 0x00F59E0B, C_TAG = 0x006B5212;
@@ -69,7 +69,7 @@ inline std::string md(const std::string& date) {   // "11/25"
 inline std::string clk(int mod) { char b[16]; const int h = (mod / 60) % 24; std::snprintf(b, sizeof b, "%d:%02d", (h + 11) % 12 + 1, mod % 60); return b; }
 // lsEventCal's status line "PLACE,top left <l>,<t> <w>x<h>" -> its height in px (-1 = not drawn / unreadable)
 inline int calHeight(const std::string& status) {
-    const std::string key = "\nPLACE,top left ";
+    const std::string key = "\nPLACE,top ";   // (2.57.2) "top left" (lsEventCal 1.1.0) or "top centre" (1.2.0, 11-27 08:40 "move the calendar to the top center")
     const size_t p = ("\n" + status).find(key); if (p == std::string::npos) return -1;
     const std::string rest = ("\n" + status).substr(p + key.size());
     const size_t x = rest.find('x'), sp = rest.find(' '), nl = rest.find('\n');

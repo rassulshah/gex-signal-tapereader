@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.57.1";   // (2.57.1, Rassul 2026-11-27 08:32 CT "where is the box on euro" - 6E: "no room (701 px wide, 684 px free)") a narrow chart gets the same box with tighter gaps; the Stops column is left out only when even that does not fit
+static const char* const HL_VERSION = "2.57.2";   // (2.57.2, 11-27 08:40 CT) the calendar moved to the top centre: its height still read (HodLodLast5 1.0.1)
+// was static const char* const HL_VERSION = "2.57.1";   // (2.57.1, Rassul 2026-11-27 08:32 CT "where is the box on euro" - 6E: "no room (701 px wide, 684 px free)") a narrow chart gets the same box with tighter gaps; the Stops column is left out only when even that does not fit
 // was static const char* const HL_VERSION = "2.57.0";   // (2.57.0, Rassul 2026-11-27 08:15-08:16 CT "the stops resting and run box needs to be a part of the hod box just like the 1st and 2nd are", "go"; StopsInBox-mockup.html) Stops resting / Stops run = a column INSIDE the HOD / LOD box after a grey divider; + the Swept chip 2nd line "5:45 \xB7 14h 15m" (8 pt, dim), "stops" / "swept" as a small dim word INSIDE the Next chip, R1 / R2 / S1 / S2 = stops (HodLodStops 1.2.0, NowLevels 1.9.0)
 // was static const char* const HL_VERSION = "2.56.1";   // (2.56.1, Rassul 18:57 CT) one Stops / Swept chip for levels at the same price; the Stops resting arrows drawn as lines (HodLodStops 1.1.1)
 // was static const char* const HL_VERSION = "2.56.0";   // (2.56.0, Rassul 2026-11-26 17:11-17:21 CT, LevelSwept-mockup.html, "make the updates whatever you can and build") gold "Stops" / grey "Swept" chips in the centre of every stop level's line (HodLodStops 1.1.0); the Next line says stops / swept after each stop level; Asia = 6:00 PM - 2:00 AM CT

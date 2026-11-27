@@ -1,5 +1,5 @@
 /********************************************************************************
- *  EventCal.cpp  --  Investor/RT RTX extension  lsEventCal  "Event Calendar"  1.1.0  (2026-11-26; 1.1.0: contract line + 0DTE line, docked top left;
+ *  EventCal.cpp  --  Investor/RT RTX extension  lsEventCal  "Event Calendar"  1.2.0  (2026-11-27; 1.2.0: top centre over the candles; 1.1.0: contract line + 0DTE line, docked top left;
  *  1.0.1: today only, status heartbeat)
  *
  *  Rassul 2026-11-17 18:09 CT: "the calendar at the top center of important events that are coming up for the market that im trading
@@ -171,7 +171,12 @@ int EventCal::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
             // (1.1.0, Rassul 2026-11-26 08:31 "move the calendar to the left of the price chart ... no black space on top of it and to
             // the left of it") docked in the price pane's top-left corner: no gap on top or on the left
             RCT pane; pane.getPaneRect(false);
-            const int l = pane.left, t = pane.top;
+            // (1.2.0, Rassul 2026-11-27 08:40 CT "move the calendar to the top center") centred over the candles (the pane's left edge to the
+            // last bar - never over the empty space right of price), on the pane's top edge
+            int edge = -1; { const long n = getBarCount(); if (n >= 2) { RTARRAY cl(barClose); if ((long)cl.count >= n) { PNT p; if (p.set((int)(n - 1), cl[(int)(n - 1)], kBarRight) == RTX_OK && p.h > 0) edge = (int)p.h; } } }
+            if (edge <= pane.left || edge > pane.right) edge = pane.right;
+            int l = (pane.left + edge) / 2 - L.w / 2; if (l < pane.left) l = pane.left; if (l + L.w > pane.right) l = pane.right - L.w;
+            const int t = pane.top;
             if (pane.right - pane.left > L.w && pane.bottom - pane.top > L.h) {
                 RCT bg; bg.set(ecC(l), ecC(t), ecC(l + L.w), ecC(t + L.h)); bg.draw(1, (COLOR)ecal::C_EDGE, (COLOR)ecal::C_BG, DRAW_OPAQUE, PAT_SOLID);
                 for (const ecal::Rule& u : L.rules) { RCT r; r.set(ecC(l + u.x1), ecC(t + u.y), ecC(l + u.x2), ecC(t + u.y + 1)); r.draw(0, (COLOR)u.col, (COLOR)u.col, DRAW_OPAQUE, PAT_SOLID); }
@@ -180,7 +185,7 @@ int EventCal::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
                     RCT r; r.set(ecC(l + c.x), ecC(t + c.y), ecC(l + c.x + c.w), ecC(t + c.y + c.h));
                     r.drawText(c.text.c_str(), false, c.right);
                 }
-                placeWhy = "top left " + std::to_string(l) + "," + std::to_string(t) + " " + std::to_string(L.w) + "x" + std::to_string(L.h);
+                placeWhy = "top centre " + std::to_string(l) + "," + std::to_string(t) + " " + std::to_string(L.w) + "x" + std::to_string(L.h);
             } else placeWhy = "pane too small";
         }
         status(*S, ms, ecal::statusText(S->mkt, srcWhy, R, placeWhy, C, X, S->sym));
@@ -192,7 +197,7 @@ extern "C" cppExtension* CreateExtension(void) {
     EventCal* p = new EventCal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);       // on the price pane, on the instrument's scale; no hovers, no settings
-    p->setDescription("LRA Event Calendar v1.1.0 - docked in the price pane's top-left corner: the contract to trade and its roll day (red when the chart is on the old month), today's option expiry (0DTE, amber in the last hour), then today's medium / high impact scheduled events of this chart's market (the 5 PM - 5 PM CT session, at most 3) (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), under a thin rule. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
-    p->setVersion("1.1.0");   // = ecal::VERSION (gex-build reads this literal)
+    p->setDescription("LRA Event Calendar v1.2.0 - at the top centre of the price pane (over the candles): the contract to trade and its roll day (red when the chart is on the old month), today's option expiry (0DTE, amber in the last hour), then today's medium / high impact scheduled events of this chart's market (the 5 PM - 5 PM CT session, at most 3) (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), under a thin rule. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
+    p->setVersion("1.2.0");   // = ecal::VERSION (gex-build reads this literal)
     return p;
 }

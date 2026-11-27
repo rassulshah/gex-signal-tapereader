@@ -20,7 +20,8 @@
 #include <vector>
 
 namespace ecal {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-27 08:40 CT "move the calendar to the top center") centred over the candles (the pane's left edge to the last bar), on the pane's top edge
+// was "1.1.0";
 static const int MAX_ROWS = 3;          // his limited space
 static const int SESSION_START = 17 * 60;   // (18:39 "i only want todays events") today = the trading session, 5:00 PM CT to 5:00 PM CT
 static const int KEEP_MIN = 30;         // shown 30 min after the release, then removed

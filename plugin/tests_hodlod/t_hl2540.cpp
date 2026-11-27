@@ -16,7 +16,7 @@ static bool has(const std::string& s, const std::string& x) { return s.find(x) !
 static int M(const std::string& s, bool b) { return (int)s.size() * 6 + (b ? (int)s.size() : 0); }
 int main() {
     C(std::string(hl::HL_VERSION) >= "2.54.0" && std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION), "versions 2.54.0 or later, matching");
-    C(std::string(hsw::VERSION) == "1.4.0" && std::string(l5::VERSION) == "1.0.0", "sweeps 1.4.0, last5 1.0.0");
+    C(std::string(hsw::VERSION) >= "1.4.0" && std::string(l5::VERSION) >= "1.0.0", "sweeps 1.4.0, last5 1.0.0");
     // the real nightly file (hodlod_levels 1.15.0, ES built 2026-11-26)
     std::ifstream in("es_sweeps_1126.csv"); std::stringstream ss; ss << in.rdbuf(); const std::string txt = ss.str();
     const hsw::File F = hsw::parse(txt, "ES");
@@ -43,6 +43,7 @@ int main() {
     C(l5::calHeight("lsEventCal 1.1.0\nVERSION,1.1.0\nMARKET,ES\nSOURCE,file\nPLACE,top left 0,0 212x34\nROW,none\n") == 34, "calendar 34 px");
     C(l5::calHeight("VERSION,1.1.0\nPLACE,nothing to show\n") == -1 && l5::calHeight("PLACE,top left 0,0 212x\n") == -1 && l5::calHeight("") == -1 && l5::calHeight("PLACE,top left 0,0 2x9999\n") == -1, "calendar not drawn / garbled = -1");
     C(l5::calHeight("PLACE,top left 0,0 212x30\r\n") == 30, "CRLF ok");
+    C(l5::calHeight("VERSION,1.2.0\nPLACE,top centre 412,15 350x30\n") == 30, "(1.0.1) top centre: 30 px");
     // layout: band 70 .. 470, pane left 0, last bar 800
     const l5::Draw P = l5::layout(F.l5, M, 0, 70, 470, 800);
     C(P.ok && P.shown == 5, "drawn, 5 days");
