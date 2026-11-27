@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.31.0";   // (1.31.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+) + the BI: biCands() / biPick() (code 'N', "BI"); Bk / Sw / Cx / AR computed as before (the host stops drawing Sw / AR)
+static const char* const VERSION = "1.31.1";   // (1.31.1, Rassul 2026-11-27 10:19 CT "lets also add a rule that the high has to be above the prior bar high") a bullish BI's high is above the prior candle's high (bearish: its low below the prior low)
+// was static const char* const VERSION = "1.31.0";   // (1.31.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+) + the BI: biCands() / biPick() (code 'N', "BI"); Bk / Sw / Cx / AR computed as before (the host stops drawing Sw / AR)
 // was static const char* const VERSION = "1.30.0";   // (1.30.0, Rassul 2026-11-26 17:19-17:21 CT "yes" to Asia 6:00 PM - 2:00 AM CT) the Asia window is (6 PM, 2 AM] (was 1 AM): formWindow / formEnd
 // was static const char* const VERSION = "1.29.0";   // (1.29.0, Rassul 2026-11-26 13:36 CT "make the cx levels match the levels that we currently get stats for", 13:40 "add weekly levels for cx") a Cx only at a level of the HOD / LOD stats list - PHH / PHL (PhrH / PhrL), ON / London / Asia, PD, PF, VAH / VAL - plus the weekly PWH / PWL / CWH / CWL; no hour highs / lows, no 3-hour S / R, no DPoc (off the marks since 11-19)
 // was static const char* const VERSION = "1.28.0";   // (1.28.0, Rassul 2026-11-26 13:06-13:16 CT "its close would not close over the level", "in any buying climax, no bar closes above the level", "no" to also checking the bars that confirm the pivot) a Cx level must be one the push FAILED to close beyond: buying climax (pivot high) - the climax candle AND the pivot candle (when the climax is the candle before it) close at or under the level; selling climax (pivot low) - both close at or above it. A close beyond = a breakout, no Cx at that level
@@ -646,6 +647,7 @@ inline std::map<long long, SMark> arPick(const std::vector<ArCand>& cands, const
 //   3b (10:08 CT "also add that the downpivot just swept a level", 10:09 "there were stops that were swept and after this there was a reversal bar
 //     called a breakin (BI) bar that closes back above the level that was swept with strength indicated from the volume or range") the pivot SWEPT the
 //     level's stops and the BI candle ITSELF closes back above it (bullish; below a high for bearish) - the BI names the best level swept that way;
+//   3c (1.31.1, 10:19 CT "the high has to be above the prior bar high") its high is above the prior candle's high (bearish: its low below the prior low);
 //   4 with its own BVMax or BRMax (stCount on volume / range ticks, as the Volume / Range panes) of BI_MIN (20) or more - the first candle that passes;
 //   one BI per pivot; label = the best-priority level the leg took out; strength line V / R (the larger).
 // Two steps like the AR: biCands() on the session's candles (colour, overlap, levels), biPick() with the chart's closed-candle counts. Pure functions of
@@ -689,6 +691,7 @@ inline std::vector<BiCand> biCands(const std::vector<wyr::Bar>& B, const std::ve
             if (d > 0 ? b.l < B[(size_t)k].l : b.h > B[(size_t)k].h) break;   // a new extreme: not this pivot's wave
             const bool colour = d > 0 ? b.c > b.o : b.c < b.o, over = d > 0 ? b.l < B[(size_t)k].h : b.h > B[(size_t)k].l;
             if (!(colour && over)) continue;
+            if (d > 0 ? !(b.h > B[(size_t)j - 1].h) : !(b.l < B[(size_t)j - 1].l)) continue;   // (1.31.1, 10:19 CT "the high has to be above the prior bar high") bearish: the low below the prior bar's low
             if (isOpenCandle(b.t, openMin, spb) || newsCandle(b.t, spb, rel)) continue;
             Cand sw; if (!swept(j, sw)) continue;
             bc.c.push_back(b.t); bc.cl.push_back(shortName(sw.name, 0, d < 0)); bc.cp.push_back(sw.px); }

@@ -48,5 +48,11 @@ int main() {
         const auto P4 = lvm::biPick(lvm::biCands(M, K4, lvm::rthOpenMin("ES"), 180), T, V, R, G2);
         bool ok4 = false; for (const auto& kv : P4) if (W[at(kv.first)] == "09:06" && kv.second.lv == "ONH" && kv.second.dir == -1) ok4 = true;
         chk(ok4, "mirror: the red candle after the HOD that swept ONH and closed back under it is a bearish BI"); }
+    {   // (1.31.1, 10:19 "the high has to be above the prior bar high") every BI's high is above the prior candle's high (bearish: low below)
+        bool hh = true; for (const auto& kv : P) { const size_t i = at(kv.first); if (i == 0 || (kv.second.dir > 0 ? !(B[i].h > B[i - 1].h) : !(B[i].l < B[i - 1].l))) hh = false; }
+        chk(hh, "every BI made a higher high than the prior candle (his example 7246.00 > 7235.50)");
+        std::vector<wyr::Bar> B2 = B; const size_t i9 = at(P.begin()->first); B2[i9].h = B2[i9 - 1].h;   // same candle, high only equal to the prior high
+        const auto P5 = lvm::biPick(lvm::biCands(B2, K, lvm::rthOpenMin("ES"), 180), T, V, R, G);
+        chk(!P5.count(B[i9].t), "the same candle with its high only EQUAL to the prior high is no BI"); }
     std::printf("%s (%d failed)\n", fails ? "FAILED" : "ALL PASS", fails); return fails ? 1 : 0;
 }

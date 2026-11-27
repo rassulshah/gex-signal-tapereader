@@ -13,7 +13,8 @@ Mockup: BI-mockup.html (ES 11-27, real bars).
    (since the RTH open in the day session) - the stop run; the close before it was above the level.
 3. The BI = the first GREEN candle after the pivot candle, before the next pivot, low below the pivot candle's high, that CLOSES BACK
    ABOVE that swept level; not the RTH opening candle, not a data-release candle.
-4. Its own BVMax or BRMax >= 20. One BI per pivot. Badge "BI" / the swept level / V or R strength.
+4. (1.31.1, 10:19 CT) Its high above the prior candle's high (bearish: low below the prior low).
+5. Its own BVMax or BRMax >= 20. One BI per pivot. Badge "BI" / the swept level / V or R strength.
 
 ## What changed
 - LevelMarks.h 1.31.0: biCands / biPick (code 'N'); Bk / Sw / Cx / AR computed as before.
@@ -28,7 +29,7 @@ Mockup: BI-mockup.html (ES 11-27, real bars).
 - BI is not yet measured per market (20+ a side).
 
 ## Tests
-t_bi131 10 pass (his ES example R99+, swept-and-closed-back rule, no BI without the close back, mirror, colour, strength, no repaint on
+t_bi131 12 pass (1.31.1: + the higher-high rule) (his ES example R99+, swept-and-closed-back rule, no BI without the close back, mirror, colour, strength, no repaint on
 prefixes); t_levelmarks 95, t_session122, t_gc1125 pass; t_ar / t_major / t_strength124: only their old version pins fail (as before);
 t_wymarks 42 + t_wymarks_bi 5 pass (t_wymarks_ar: old version pin); t_vr1170 8 pass; t_vr1100 / t_vr180 / t_vr1110: the Sw / AR-on-the-
 panes checks now fail by design (replaced by BI) + old version pins. MinGW syntax (real irtsdk.h): RevRead, RevReadMarks, VolRead,
