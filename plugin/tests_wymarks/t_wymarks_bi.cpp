@@ -9,6 +9,6 @@ int main() {
     chk(m[3847000000].size() == 1 && m[3847000000][0].code == 'N' && m[3847000000][0].lv == "ONL" && m[3847000000][0].st == "R99+", "BI read: level ONL, strength R99+");
     chk(std::string(wyi::textOf('N')) == "BI", "drawn as BI");
     chk(wyi::sideOf(m[3847000000][0]) == 1 && wyi::sideOf(m[3847000180][0]) == -1, "over a bullish BI, under a bearish one");
-    chk(std::string(wyi::VERSION) >= "2.9.0", "WyMarks 2.9.0+");
+    { int a = 0, b = 0; std::sscanf(wyi::VERSION, "%d.%d", &a, &b); chk(a > 2 || (a == 2 && b >= 9), "WyMarks 2.9.0+"); }
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", p, f); return f ? 1 : 0;
 }

@@ -14,7 +14,8 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.9.0";   // (2.9.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal"; lsRevRead 0.43.0 / LevelMarks 1.31.0): + the BI (code N, file "BI": stamp|BI|dir|level|px|strength), drawn like a Rev with its level - over a bullish candle, under a bearish one
+static const char* const VERSION = "2.10.0";   // (2.10.0, Rassul 2026-11-27 12:38-12:44 CT, the cyan thrust dot; lsRevRead 0.44.0) + code D = "TD" (stamp|TD|dir): no badge, drawn as a dot
+// was static const char* const VERSION = "2.9.0";   // (2.9.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal"; lsRevRead 0.43.0 / LevelMarks 1.31.0): + the BI (code N, file "BI": stamp|BI|dir|level|px|strength), drawn like a Rev with its level - over a bullish candle, under a bearish one
 // was static const char* const VERSION = "2.8.0";   // (2.8.0, Rassul 2026-11-24 12:51 CT "2. do the test" / "3. yes"): the Abs badge's P line always shows once known ("P0" .. "P12+"; blank only when the order feed did not see the candle); + parseTeq (lsTurn 1.6.0 turnexq file) and the Tst line-3 decision file (tl3Text / parseTl3, lsRevRead 0.28.0)
 // was static const char* const VERSION = "2.7.0";   // (2.7.0, Rassul 2026-11-24 11:12 CT "ok. build this", abs-badge-mockup.html v15): + the Abs badge (code Q: "Abs" / position / P) and its next-candle "Ex" (code E), drawn at the absorbed end; + parseTurnAbs (lsTurn's RevRead\\turnabs-<MKT>-<spb>.txt: the biggest print P and the same-candle Ex?)
 // was static const char* const VERSION = "2.6.0";   // (2.6.0, Rassul 2026-11-23 23:20 CT "go" on the live Cx?): + parseLive (the wylive file of lsRevRead 0.25.0)
@@ -28,8 +29,8 @@ static const int LINE1_H = 13, LINE2_H = 11;   // (2.0.0) a two-line tag: 13 px 
 static const size_t MAX_BYTES = 1024 * 1024;
 
 struct M { char code = 0; int dir = 0; std::string lv; long long px = 0; std::string st; };   // (2.2.0) st = the strength line ("" = none)   // code 'I' / 'B' (Bk) / 'S' (Sw) / 'C' (Cx)
-inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : s == "FT" ? 'F' : s == "Tst" ? 'T' : s == "Rev" ? 'R' : s == "AR" ? 'A' : s == "BI" ? 'N' : s == "Abs" ? 'Q' : s == "Ex" ? 'E' : 0; }   // (2.7.0) 'Q' = the Abs badge, 'E' = its next-candle Ex   // (2.5.0) 'A' = AR (the file's "A" lines - absorbed - are another letter: not a mark here)
-inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : c == 'N' ? "BI" : c == 'Q' ? "Abs" : c == 'E' ? "Ex" : ""; }
+inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : s == "FT" ? 'F' : s == "Tst" ? 'T' : s == "Rev" ? 'R' : s == "AR" ? 'A' : s == "BI" ? 'N' : s == "TD" ? 'D' : s == "Abs" ? 'Q' : s == "Ex" ? 'E' : 0; }   // (2.7.0) 'Q' = the Abs badge, 'E' = its next-candle Ex   // (2.5.0) 'A' = AR (the file's "A" lines - absorbed - are another letter: not a mark here)
+inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : c == 'N' ? "BI" : c == 'D' ? "TD" : c == 'Q' ? "Abs" : c == 'E' ? "Ex" : ""; }
 // (2.3.0) where a tag wants to sit: 0 = by the candle (over green, under red); +1 over / -1 under. FT and Rev go with the break (over for a
 // bullish one), a Tst on its pivot's side (under a bullish Tst's pivot low, over a bearish one's high) - as the BO indicator's FT / Pb / Rev
 inline int sideOf(const M& m) { return m.code == 'F' || m.code == 'R' || m.code == 'N' ? m.dir : m.code == 'T' || m.code == 'I' || m.code == 'Q' || m.code == 'E' ? -m.dir : 0; }   // (2.7.0) Abs / Ex: at the end that was absorbed (under a bullish one, over a bearish one)   // (2.4.0) I: under a bullish one, over a bearish one

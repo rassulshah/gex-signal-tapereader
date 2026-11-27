@@ -26,7 +26,8 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.18.1";   // (1.18.1, Rassul 2026-11-27 11:49 CT "the box should always be on the right") scrolled back: the read sits right of the last VISIBLE candle (host); no room there: the small box at the pane's right edge (was the left edge)
+static const char* const VERSION = "1.19.0";   // (1.19.0, Rassul 2026-11-27 12:38-12:44 CT) the cyan thrust dot (the price chart's "TD" lines) in the middle of its Range bar
+// was static const char* const VERSION = "1.18.1";   // (1.18.1, Rassul 2026-11-27 11:49 CT "the box should always be on the right") scrolled back: the read sits right of the last VISIBLE candle (host); no room there: the small box at the pane's right edge (was the left edge)
 // was static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-27 11:03-11:11 CT, Thrust-mockup.html, "build") + Thrust / PIC on the Range read, VolTH / Change on the Volume read (14 candles), gold, above BRMax / BVMax
 // was static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal") the price chart's BI ("t|BI|dir|lv|px|st") is marked "BI" on BOTH panes (in the AR's place, first after CB); the file's Sw (VOB / VOT) and AR lines are no longer marked
 // was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw code over a bar shows as VOB (bullish) / VOT (bearish)
@@ -150,12 +151,13 @@ inline void parseCk(const std::string& text, std::vector<CobIt>& out) {
 // Sw / Bk / Cx on a candle; should a file ever carry two, a Bk / Sw is never replaced by a Cx. Returns the number of Bk / Sw lines (as before); Cx lines are not counted in it.
 // (1.11.0) + "t|AR|dir||0|st": the price chart's AR candles go to *ar (candle -> +1 green / -1 red) when it is given - kept apart from out because an AR may share its
 // candle with a Bk / Sw / Cx; not counted either.
-inline int parseWy(const std::string& text, std::map<long long, Mk>& out, std::map<long long, int>* ar = nullptr) {
+inline int parseWy(const std::string& text, std::map<long long, Mk>& out, std::map<long long, int>* ar = nullptr, std::map<long long, int>* td = nullptr) {   // (1.19.0) td = the thrust dots
     if (text.compare(0, 5, "WY|1|") != 0) return -1;
     int n = 0;
     hlLines(text, [&](const std::string& l) {
         const std::vector<std::string> f = hlSplit(l, '|', 4); long long t = 0, d = 0;
         if (f.size() >= 2 && (f[1] == "Sw" || f[1] == "AR")) return;   // (1.17.0) VOB / VOT and AR: replaced by the BI
+        if (f.size() >= 3 && f[1] == "TD") { long long t2 = 0, d2 = 0; if (td && hlNum(f[0], t2) && t2 > 0 && hlNum(f[2], d2) && (d2 == 1 || d2 == -1)) (*td)[t2] = (int)d2; return; }   // (1.19.0) the thrust dot
         const bool cx = f.size() >= 2 && f[1] == "Cx", isAr = f.size() >= 2 && f[1] == "BI";   // (1.17.0) the BI takes the AR's slot
         if (f.size() < 3 || (f[1] != "Bk" && f[1] != "Sw" && !cx && !isAr) || !hlNum(f[0], t) || t <= 0 || !hlNum(f[2], d) || (d != 1 && d != -1)) return;
         if (isAr) { if (ar) (*ar)[t] = (int)d; return; }
@@ -208,6 +210,8 @@ struct Engine {
     std::map<long long, Mk> wy; int wyLines = -1;                                                         // (1.8.0) the price chart's Bk / Sw by chart time (-1 = no file); (1.10.0) and its Cx (MK_P)
     int cxAt(int i) const { if (!CX_FROM_WY || mode != VOL || i < 0 || i >= (int)T.size()) return 0; const auto w = wy.find(T[(size_t)i]); return w != wy.end() && w->second.code == MK_P ? w->second.dir : 0; }   // (1.10.0) the price chart's Cx on closed bar i: +1 at a pivot low, -1 at a pivot high, 0 none (always 0 in the Range pane)
     int wyCx() const { int k = 0; for (const auto& kv : wy) if (kv.second.code == MK_P) ++k; return k; }
+    std::map<long long, int> wyTd;   // (1.19.0) the price chart's thrust dots by chart time
+    int tdAt(int i) const { if (i < 0 || i >= (int)T.size()) return 0; const auto w = wyTd.find(T[(size_t)i]); return w != wyTd.end() ? w->second : 0; }
     std::map<long long, int> wyAr;                                                                        // (1.11.0) the price chart's AR candles by chart time: +1 green / -1 red
     int arAt(int i) const { if (i < 0 || i >= (int)T.size()) return 0; const auto w = wyAr.find(T[(size_t)i]); return w != wyAr.end() ? w->second : 0; }   // (1.11.0) the AR on closed bar i - the Range pane only (BRMax 10+ made it)
     void reset() { Oo.clear(); Vol.clear(); V.clear(); G.clear(); T.clear(); S.clear(); PR.clear(); ATR.clear(); LT.clear(); prevC = NAN; trSum = 0;
@@ -334,8 +338,8 @@ struct Engine {
 
 // ---- the drawing (SDK-free)
 struct View { int readX = -1;   /* (1.3.1) the x just right of the last candle when it is on screen: the read box goes there; -1 = the left edge */ int l = 0, t = 0, r = 800, b = 100, first = 0, last = 0, bw = 6, textH = 11; std::function<double(int)> X; std::function<int(const std::string&)> textW; };
-struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool fill = false, bold = false; };
-static const unsigned C_GREY = 0x006B6B6B;
+struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool fill = false, bold = false, oval = false; };   // (1.19.0) oval = a filled dot in [x0, x1] x [y0, y1] (fill is set too)
+static const unsigned C_GREY = 0x006B6B6B, C_TD = 0x0022D3EE;   // (1.19.0) C_TD = the thrust dot's cyan
 static const unsigned C_UP = 0x0022C55E, C_DN = 0x00EF4444, C_TXT = 0x00FFFFFF, C_BOXBG = 0x000D0D0D, C_BOXLN = 0x00888888;   // 0x00RRGGBB
 static const int BOX_W = 92, BOX_PAD = 3;
 static const unsigned C_LABEL = 0x0094A3B8, C_GOLD = 0x00F0C040;   // (1.9.0) the numbers column: grey labels, a Max of 10+ in gold
@@ -388,6 +392,8 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         unsigned col = g ? C_UP : C_DN;
         Mk mk; if (E.hlOn) { if (i < n) mk = E.markOf(i); col = mk.code ? (g ? C_UP : C_DN) : C_GREY; }   // (1.3.0) grey unless a marked bar; (1.3.3) a marked bar takes its CANDLE's colour (green up, red down), not the mark's direction
         Prim f; f.fill = true; f.x0 = x0; f.x1 = x1; f.y0 = y; f.y1 = v.b; f.col = col; P.push_back(f);
+        if (E.mode == RANGE && i < n && E.tdAt(i)) { const int rr = std::max(2, std::min(4, hw + 1)), xm = (int)std::lround(x), ym = (y + v.b) / 2;   // (1.19.0, Rassul 12:39 CT "put the cyan dot in the range bar") the thrust dot in the middle of the bar
+            Prim d; d.fill = true; d.oval = true; d.x0 = xm - rr; d.x1 = xm + rr; d.y0 = ym - rr; d.y1 = ym + rr; d.col = C_TD; P.push_back(d); }
         int yTop = y - 1;                                                                // texts stack upward from the bar's top
         auto put = [&](const std::string& s, unsigned c, bool bold) {
             const int w = v.textW ? v.textW(s) : (int)s.size() * 6;

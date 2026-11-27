@@ -97,6 +97,7 @@
 #include <iterator>
 #include "LevelMarks.h"
 #include "HtfSr.h"             // (0.24.0) the 3-hour S / R walk (SDK-free) for LevelMarks 1.14.0
+#include "ThrustDot.h"         // (0.44.0) the cyan thrust dot (SDK-free, tests_levelmarks/t_td100)
 #include "EventCalLogic.h"     // (0.22.1) the scheduled releases (lsEventCal's list) - no Sw on a release candle        // (0.19.0) Bk / Sw / Cx + one level each, for the price candles (SDK-free, tests_levelmarks)
 #include <sstream>
 #include <string>
@@ -111,7 +112,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.43.2"   // (0.43.2, Rassul 2026-11-27 10:29 CT "it needs to be a level that wasnt run") LevelMarks 1.31.2: a BI level untraded since it formed (Asia / London included)
+#define RVS_VERSION "0.44.0"   // (0.44.0, Rassul 2026-11-27 12:38-12:44 CT "a blue cyan dot on a green candle that has its low below the high of the down pivot and vice versa, that has its thrust and pic greater than or equal to 1.2", "in the range bar and in the candle in the middle", "1. yes 2. every 3. all 4. no repaint") ThrustDot 1.0.0: "stamp|TD|dir" lines; lsRevReadMarks draws the cyan dot in the middle of the candle body, lsRangeRead in the middle of its bar
+// was #define RVS_VERSION "0.43.2"   // (0.43.2, Rassul 2026-11-27 10:29 CT "it needs to be a level that wasnt run") LevelMarks 1.31.2: a BI level untraded since it formed (Asia / London included)
 // was #define RVS_VERSION "0.43.1"   // (0.43.1, Rassul 2026-11-27 10:19 CT) LevelMarks 1.31.1: a BI's high above the prior candle's high (bearish: low below the prior low)
 // was #define RVS_VERSION "0.43.0"   // (0.43.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+; BI-mockup.html) LevelMarks 1.31.0 / WyMarks 2.9.0: + the BI badge (BI / level / V or R strength); VOB / VOT and AR not drawn
 // was #define RVS_VERSION "0.42.0"   // (0.42.0, Rassul 2026-11-26 17:21 CT) LevelMarks 1.30.0: Asia 6:00 PM - 2:00 AM CT (was 1:00 AM)
@@ -144,7 +146,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.43.2");
+    p->setVersion("0.44.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -323,7 +325,7 @@ public:
         std::map<long long, std::pair<int, int> > bsv; bool bsvDirty = false; long long bsvMs = -1; std::string bsvKey;   // (0.31.0) the buy / sell verdict + trapped side of each closed candle, for the Volume read's overall call (RevRead\\bsv-<MKT>-<spb>.txt)
         wyr::Out wyMore; std::map<long long, std::vector<wyr::SMk> > wyBC;   // (0.21.0) T / P / X of the session (WyRead 1.8.0 more(); drawn per showMore) and the B / C strip letters (the Bk / Cx candle marks)
         std::pair<long long, int> cxLive = std::make_pair(0LL, 0);   // (0.25.0) the live Cx? of the running leg (LevelMarks liveCx): stamp, side
-        std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::vector<lvm::SMark> > lvSeq; std::map<long long, lvm::AbsMk> absMk;   /* (0.27.0) the Abs badges (LevelMarks absMarks) */ std::map<long long, std::pair<int, int> > teq; std::string teqSig; std::map<long long, std::string> tl3; bool tl3Loaded = false, tl3Dirty = false; std::string tl3Path;   /* (0.28.0) lsTurn's Ex? per candle + the Tst line-3 decisions */   /* (0.20.0) FT / Tst / Rev after a Bk */ std::map<long long, std::pair<std::string, long long> > iLv; std::map<long long, std::string> iSt; std::map<long long, int> iSw;   /* (0.21.2) the I's under a Sw (stamp -> dir): written flagged, not drawn */   /* (0.19.2) the I's strength */ std::vector<std::pair<long long, std::string> > lvKey;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
+        std::map<long long, int> tdDone, tdMk;   /* (0.44.0) the thrust dots: every decided candle (0 = none) and the dots */ std::map<long long, lvm::Mark> lvMarks; std::map<long long, std::vector<lvm::SMark> > lvSeq; std::map<long long, lvm::AbsMk> absMk;   /* (0.27.0) the Abs badges (LevelMarks absMarks) */ std::map<long long, std::pair<int, int> > teq; std::string teqSig; std::map<long long, std::string> tl3; bool tl3Loaded = false, tl3Dirty = false; std::string tl3Path;   /* (0.28.0) lsTurn's Ex? per candle + the Tst line-3 decisions */   /* (0.20.0) FT / Tst / Rev after a Bk */ std::map<long long, std::pair<std::string, long long> > iLv; std::map<long long, std::string> iSt; std::map<long long, int> iSw;   /* (0.21.2) the I's under a Sw (stamp -> dir): written flagged, not drawn */   /* (0.19.2) the I's strength */ std::vector<std::pair<long long, std::string> > lvKey;   // (0.19.0) the candle marks (Bk / Sw / Cx) with their level, and the level each I reclaimed (short name, px in ticks)   // (0.17.0) the Wyckoff strip of the session, rebuilt when a candle closes or a Book Flow record arrives
         // (0.7.0) the six checks
         rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
         int pvDir = 0; long long pvTp = 0, pvExt = 0, pvW = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000; long long mPostMs = -100000; int mPosts = 0;   // (0.14.0) fact M: the forming candle's market orders
@@ -715,7 +717,10 @@ public:
                     wyr::Out moreAll;   // (0.21.0) T / P / X, each session read by itself (decided on closed candles)
                     std::map<long long, lvm::Mark> lvAll; std::map<long long, std::pair<std::string, long long> > iLvAll;   // (0.19.0)
                     std::map<long long, std::vector<lvm::SMark> > seqAll;   // (0.20.0) FT / Tst / Rev after a Bk
-                    std::map<long long, lvm::AbsMk> absAll;   // (0.27.0) the Abs badges + the next-candle Ex
+                    std::map<long long, lvm::AbsMk> absAll; std::map<long long, int> tdAll;   /* (0.44.0) */ tdot::Chart tdX;
+                    try { RTARRAY th0(barHigh), tl0(barLow), to0(barOpen), tc0(barClose); const int nC = (int)count - 1;   /* (0.44.0) the chart's closed candles for Thrust / PIC */
+                        if (nC > 0 && th0.count >= nC && tl0.count >= nC && to0.count >= nC && tc0.count >= nC) for (int i = 0; i < nC; ++i) { tdX.T.push_back((long long)times[i]); tdX.O.push_back((double)to0[i]); tdX.H.push_back((double)th0[i]); tdX.L.push_back((double)tl0[i]); tdX.C.push_back((double)tc0[i]); }
+                        if (!std::is_sorted(tdX.T.begin(), tdX.T.end())) tdX = tdot::Chart(); } catch (...) { tdX = tdot::Chart(); }   // (0.27.0) the Abs badges + the next-candle Ex
                     std::vector<lvm::ArCand> arAll; std::vector<lvm::BiCand> biAll;   /* (0.43.0) the BI candidates (LevelMarks 1.31.0), picked with the strength lines */   // (0.23.0) the AR candidates of every Cx (each session by itself); picked after the strength lines
                     // (0.18.4) the key / volume levels the I can reclaim (WyRead 1.1.0): the level files as they stand now - for the CURRENT session only
                     // (older sessions had other levels; they use their own pivot lows / highs); the moving VWAP and the HBO line are not reclaim levels
@@ -790,6 +795,7 @@ public:
                             for (const auto& kv : l3) if (!e.tl3.count(kv.first)) { e.tl3[kv.first] = kv.second; e.tl3Dirty = true; } }
                         { const std::map<long long, lvm::AbsMk> am = lvm::absMarks(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), !e.mkt.empty() ? e.mkt : rvh::marketOf(S.market), WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr, &preV); for (const auto& kv : am) absAll[kv.first] = kv.second; }   // (0.27.0) the Abs badge (LevelMarks 1.18.0)
                         { const std::vector<lvm::ArCand> ac = lvm::arCands(WB, lm); arAll.insert(arAll.end(), ac.begin(), ac.end()); }
+                        { std::vector<long long> dec; const std::map<long long, int> td = tdot::dots(WB, tdX, &e.tdDone, &dec); for (long long t : dec) { const auto q = td.find(t); e.tdDone[t] = q != td.end() ? q->second : 0; } for (const auto& kv : td) tdAll[kv.first] = kv.second; }   // (0.44.0) the thrust dots, decided once per closed candle (no repaint)
                         { const std::vector<lvm::BiCand> bc = lvm::biCands(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), lvm::rthOpenMin(!e.mkt.empty() ? e.mkt : rvh::marketOf(S.market)), (long long)S.spb, &relNow, WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr); biAll.insert(biAll.end(), bc.begin(), bc.end()); }   // (0.43.0) the BI (Break In): pivot + first break of a major level + colour + overlap here, BVMax / BRMax 20+ below   // (0.23.0) the AR after a Cx: colour + overlap here, BRMax below
                         dg += " lv " + std::to_string(lm.size()) + " keys " + std::to_string(seg == 0 ? lvNow.size() : 0) + (seg == 0 ? " 3h " + std::to_string(h3Now) : std::string()); } catch (const std::exception& ex) { dg += std::string(" lv ERR ") + ex.what(); } catch (...) { dg += " lv ERR"; }
                     e.lmDiag = (seg == 0 ? std::string() : e.lmDiag + "; ") + dg;
@@ -831,7 +837,7 @@ public:
                     e.wyMore.marks.swap(moreAll.marks); e.wyMore.reads.swap(moreAll.reads);
                     {   e.wyBC.clear(); for (const auto& kv : lvAll) if (kv.second.code == 'B' || kv.second.code == 'C') { wyr::SMk x; x.lab = kv.second.code == 'B' ? "B" : "C"; x.dir = kv.second.dir; e.wyBC[kv.first].push_back(x); }
                         for (const auto& kv : all.marks) for (const wyr::Mark& m : kv.second) if (m.k == 'I') { wyr::SMk x; x.lab = "I"; x.dir = m.dir; e.wyBC[kv.first].push_back(x); } }   // (0.21.2) + the shown I's   // (0.21.0) B / C, replaced below by the published (frozen) file lines when they are written
-                    e.wyBars = nBars; e.wy.marks.swap(all.marks); e.wy.reads.swap(all.reads); e.lvMarks.swap(lvAll); e.iLv.swap(iLvAll); e.lvSeq.swap(seqAll); e.absMk.swap(absAll); e.iSw.swap(iSwAll);
+                    e.wyBars = nBars; e.wy.marks.swap(all.marks); e.wy.reads.swap(all.reads); e.lvMarks.swap(lvAll); e.iLv.swap(iLvAll); e.lvSeq.swap(seqAll); e.absMk.swap(absAll); e.tdMk.swap(tdAll); if (e.tdDone.size() > 20000) e.tdDone.clear(); e.iSw.swap(iSwAll);
                     // (0.17.5, Rassul 13:08 CT "yes, just like the mockup" - the I letters on the SDMO pane too) the session's letters are published
                     // once per closed candle to lsFlexLevels\RevRead\wy-<MKT>-<secs>.txt (candle stamp|letter|dir); lsSDMO draws the I's from it, so the
                     // two panes always agree (and the nightly scores every letter from it)
@@ -851,6 +857,7 @@ public:
                                 txt += std::to_string(kv.first) + "|" + lvm::seqText(m.code) + "|" + std::to_string(m.dir);
                                 if (m.code == 'T') { const auto q3 = e.tl3.find(kv.first); txt += "|" + m.lv + "|0|" + (q3 != e.tl3.end() ? q3->second : std::string()); }   /* (0.28.0) line 3 = A+E / E / A! / blank (was the retrace %) */ else if (m.code == 'N') txt += "|" + m.lv + "|" + std::to_string(m.px) + "|" + m.st;   /* (0.43.0) BI: level, its price, strength (6 fields) */ else if (m.code == 'R' || m.code == 'A') txt += "||0|" + m.st;   // (0.23.0) AR: as a Rev - no level, its strength
                                 txt += "\n"; }
+                            for (const auto& kv : e.tdMk) txt += std::to_string(kv.first) + "|TD|" + std::to_string(kv.second) + "\n";   // (0.44.0) the thrust dot: 3 fields
                             // (0.27.0) the Abs badge: "stamp|Abs|dir|<Top 21% / Low 21% or empty>|<level px>|<level short name>"; its next-candle Ex: "stamp|Ex|dir"
                             for (const auto& kv : e.absMk) { txt += std::to_string(kv.first) + "|Abs|" + std::to_string(kv.second.dir) + "|" + lvm::absPos(kv.second) + "|" + std::to_string(kv.second.lvPx) + "|" + kv.second.lv + "\n";
                                 if (kv.second.ex && kv.second.exT > 0) txt += std::to_string(kv.second.exT) + "|Ex|" + std::to_string(kv.second.dir) + "\n"; }
@@ -1287,11 +1294,18 @@ public:
                         W.push_back(wt); WM.push_back(&s.liveM); l1.push_back("Cx?"); l2.push_back(std::string()); l3.push_back(std::string()); } }
                 if (it == s.iMarks.end()) continue;
                 for (const wyi::M& m : it->second) {
-                    if (m.code == 'S' || m.code == 'A') continue;   // (0.43.0, Rassul 2026-11-27 09:50 CT "consolidate AR and Vob (t) into a new BI") VOB / VOT and AR are still written (the nightly scores them) but no longer drawn - the BI replaces them
+                    if (m.code == 'S' || m.code == 'A' || m.code == 'D') continue;   /* (0.44.0) D = the thrust dot, drawn below as a dot */   // (0.43.0, Rassul 2026-11-27 09:50 CT "consolidate AR and Vob (t) into a new BI") VOB / VOT and AR are still written (the nightly scores them) but no longer drawn - the BI replaces them
                     const wyi::TurnAbs* tz = nullptr; if (m.code == 'Q') { const auto tq = s.tabs.find((long long)times[i]); if (tq != s.tabs.end() && tq->second.dir == m.dir) tz = &tq->second; }   // (0.27.0)
                     const std::string a1 = m.code == 'Q' ? wyi::absLine1(tz) : m.code == 'S' ? std::string(m.dir > 0 ? "VOB" : "VOT") /* (0.36.0) was "Sw" */ : std::string(wyi::textOf(m.code)), a2 = m.lv, a3 = m.code == 'C' ? std::string() : m.code == 'Q' ? wyi::absLine3(tz) : m.st;   /* (0.27.0) Abs: "Abs" / "Abs/Ex?", position, P */ setFont(f1); int w = (int)getTextWidth(a1.c_str(), -1); if (!a2.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a2.c_str(), -1)); }
                     if (!a3.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a3.c_str(), -1)); }   // (0.19.2) the strength: a 3rd line, same font as the level
                     wyi::Want wt; wt.candle = (int)C.size() - 1; wt.side = wyi::sideOf(m); wt.w = w + 2 * wyi::PAD_X; wt.h = wyi::LINE1_H + (a2.empty() ? 0 : wyi::LINE2_H) + (a3.empty() ? 0 : wyi::LINE2_H); W.push_back(wt); WM.push_back(&m); l1.push_back(a1); l2.push_back(a2); l3.push_back(a3); } }
+            {   // (0.44.0, Rassul 2026-11-27 12:39 CT "put the cyan dot ... in the candle in the middle") the thrust dot: cyan, in the middle of the candle's body
+                const COLOR TD_COL = (COLOR)0x0022D3EE;   // cyan #22D3EE (0x00RRGGBB, as C_GREEN)
+                const int rr = std::max(2, std::min(4, dx * 32 / 100 + 1));
+                for (size_t q = 0; q < C.size(); ++q) { const int i = barOf[q]; const auto it = s.iMarks.find((long long)times[i]); if (it == s.iMarks.end()) continue;
+                    bool has = false; for (const wyi::M& m : it->second) if (m.code == 'D') has = true; if (!has) continue;
+                    const int ym = (int)getVerticalDrawPosition((float)(((double)op[i] + (double)cl[i]) / 2.0)); const int xm = C[q].x;
+                    setPen(TD_COL, 1, P_SOLID); CBRUSH bb(TD_COL, PAT_SOLID); bb.set(); RCT o; o.set((short)(xm - rr), (short)(ym - rr), (short)(xm + rr + 1), (short)(ym + rr + 1)); o.drawOval(DRAW_OPAQUE); } }
             if (W.empty()) return RTX_OK;
             // (0.19.0, Rassul 10:51 CT "remember placement of other signals like cmx so you have to coordinate everything") the BO indicator's letters
             // as drawn (SignalBoard 'L': candle, side, px from the extreme to the letter's outer edge) are taken boxes: our tags go around them
