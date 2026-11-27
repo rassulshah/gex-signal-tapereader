@@ -241,7 +241,7 @@ int main() { (void)&fnv; (void)&itemsText;
         CHECK(H3.offer("ES", L(2026, 11, 19, 9, 0), L(2026, 11, 19, 9, 42) + 5, svx::parseSw(w12, L(2026, 11, 19, 9, 0), L(2026, 11, 19, 16, 0)), 510, 900, col) == 1 && H3.q.back().text == "ES, sweep, PDL, up", "a V12 9:42 PDL sweep (green candle) speaks: ES, sweep, PDL, up"); }
 
     std::printf("[6] versions\n");
-    CHECK(std::string(hl::HL_VERSION) == "2.46.1" && std::string(hlset::PLUGIN_VERSION) == "2.37.2", "2.37.1 (version strings updated in 2.37.1)");
+    CHECK(std::string(hl::HL_VERSION) == "2.56.1" && std::string(hlset::PLUGIN_VERSION) == "2.37.2", "2.37.1 (version strings updated in 2.37.1)");
     {   const std::string s = rd("../HodLod.cpp");
         CHECK(s.find("p->setVersion(\"2.37.2\")") != std::string::npos && s.find(" *  2.37.0 (2026-11-19") != std::string::npos, "setVersion 2.37.1 + header comment 2.37.0 still there");
         CHECK(s.find("#pragma comment(lib, \"winmm.lib\")") != std::string::npos && s.find("#include <mmsystem.h>") != std::string::npos, "winmm pragma + mmsystem.h");

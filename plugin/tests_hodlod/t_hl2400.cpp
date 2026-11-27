@@ -157,7 +157,7 @@ int main() { (void)&itemsText; (void)&fnv;
         {   // the SWROW lines in the planOn view are the sweep rows exactly
             hl::View v = planView(0, REAL); std::string sw; for (int sd = 0; sd < 2; sd++) for (const hl::View::SwRow& r : sd ? v.swLo : v.swHi) sw += std::string("SWROW|") + (sd ? "LOD" : "HOD") + "|" + r.name + "|" + r.px + "|" + r.pct + "|" + (r.elig ? "1" : "0") + "\n";
             CHECK(!v.swHi.empty() && !v.swLo.empty() && sw.find("SWROW|HOD|") == 0 && sw.find("SWROW|LOD|") != std::string::npos, "a plan view keeps its sweep rows for SWROW"); }
-        CHECK(std::string(hl::HL_VERSION) == "2.46.1" && std::string(hlset::PLUGIN_VERSION) == "2.40.0" && h.find("p->setVersion(\"2.40.0\")") != std::string::npos && st.find("\"2.40.0\"") != std::string::npos, "versions 2.40.0 everywhere");
+        CHECK(std::string(hl::HL_VERSION) == "2.56.1" && std::string(hlset::PLUGIN_VERSION) == "2.40.0" && h.find("p->setVersion(\"2.40.0\")") != std::string::npos && st.find("\"2.40.0\"") != std::string::npos, "versions 2.40.0 everywhere");
         CHECK(std::string(tpl::VERSION) == "1.0.0" && lg.find("TODAY PLAN") != std::string::npos, "TodayPlan 1.0.0");
         { size_t a = gb.find("call :one HodLod "); const std::string l = a == std::string::npos ? std::string() : gb.substr(a, gb.find('\n', a) - a);
           CHECK(l.find(" TodayPlan.h") != std::string::npos && l.find(" GammaLine.h") != std::string::npos, "gex-build HodLod line lists TodayPlan.h"); }
