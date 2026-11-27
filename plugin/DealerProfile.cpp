@@ -163,7 +163,8 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.71.1";   // (2.71.1, Rassul 2026-11-26 17:19-17:21 CT "yes": AsiaHI / AsiaLO from the Asia session 6:00 PM - 2:00 AM CT, KeyLevelsLogic asiaWindow; was 1:00 AM)
+static const char* DP_VERSION = "2.72.0";   // (2.72.0, Rassul 2026-11-27 10:41 CT "also draw the line for asia high and low") AsiaHI / AsiaLO are full key levels again: their line across the chart (2 px key line) and an unfaded badge; Open / DPoc / VAH / VAL stay faint (no line)
+// was static const char* DP_VERSION = "2.71.1";   // (2.71.1, Rassul 2026-11-26 17:19-17:21 CT "yes": AsiaHI / AsiaLO from the Asia session 6:00 PM - 2:00 AM CT, KeyLevelsLogic asiaWindow; was 1:00 AM)
 // was static const char* DP_VERSION = "2.71.0";   // (2.71.0, Rassul 2026-11-25 "hide the limit side on the right and keep the levels on the left displayed", 2026-11-26 01:42 CT "did you implement ... hiding the right side of the liquidity profile"): DP_LIQ_COL = false - the LIQUIDITY column (the king / liquidity rows, its header) is not drawn and the published Levels width is the Key Levels column alone (170 px); the header "LP v2.71.0" moves to the top of the Key Levels column; the book is still read, the king still decided and its facts / records / files still written (only the drawing is muted, MuteGuard), the level lines and their liquidity marks on the price chart unchanged
 // was static const char* DP_VERSION = "2.70.0";   // (2.70.0, Rassul 2026-11-24 13:53 CT "there are too many levels on the limit profile , remeive the gamma levels. list the key levels", 14:0x CT picked "Volume VAH/VAL/DPoc/WPoc, Asia AsiaHI / AsiaLO, Prior hour PhrH / PhrL"): CR0 / PS0 (gamma), WPoc is no longer a row, dim lines or level-liquidity watches (dpKeepLevel; a merged name keeps its other parts, "Open/PhrH" -> "Open"); 13:57 CT "keep certain levels faded like asia and open. dpoc. dont draw their lines": Asia / Open / DPoc rows are faded with no line across the chart (dpFaint); 14:07 CT "keep vah val also but fade them": VAH / VAL the same. 14:01 CT "remove the vwap badge": no VWAP row. Full: PW / PF / PD / ON / London highs and lows, the 3h R1 / R2 / S1 / S2
 // was static const char* DP_VERSION = "2.69.1";   // (2.69.1, Rassul 2026-11-22 19:41 CT "the R1 R2 and S1 and S2 levels should be colored. R should be red and S should be green", 20:22 "A" on now-line-mockup.html picture 2) a level line across the chart whose row carries R1 / R2 is RED, S1 / S2 GREEN (hsr::rsSide / rsColour) - same fade and width as before; the badges keep their colours; a row that is only R / S still leaves its line to lsCobSignal / lsHtfSR (now red / green there too)
@@ -280,7 +281,7 @@ static std::string dpKeepLevel(const std::string& nm)
 static bool dpFaint(const std::string& nm)
 {
     std::string u; for (char x : nm) if (std::isalnum((unsigned char)x)) u += (char)std::toupper((unsigned char)x);
-    return u.compare(0, 4, "ASIA") == 0 || u == "OPEN" || u == "DPOC" || u == "VAH" || u == "VAL";   // (14:07 CT "keep vah val also but fade them and they dont get a level drawn")
+    return /* (2.72.0, 10:41 CT "also draw the line for asia high and low") Asia no longer faint */ u == "OPEN" || u == "DPOC" || u == "VAH" || u == "VAL";   // (14:07 CT "keep vah val also but fade them and they dont get a level drawn")
 }
 static bool dpRowFaint(const lvc::Row& R) { if (R.chips.empty()) return false; for (const lvc::Chip& C : R.chips) if (!dpFaint(C.text)) return false; return true; }
 static const float DP_FAINT_FADE = 0.55f;
@@ -3154,6 +3155,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.71.1");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.72.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
