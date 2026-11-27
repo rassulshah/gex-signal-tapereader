@@ -21,6 +21,7 @@
 // Pure function of the closed candles and the levels: the same candles give the same marks (no repaint).
 #pragma once
 #include "WyRead.h"
+#include "ThrustDot.h"   // (1.32.0) Thrust / PIC for the BI
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -31,7 +32,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.31.2";   // (1.31.2, Rassul 2026-11-27 10:29 CT "it needs to be a level that wasnt run") a BI level must be untraded since it formed (Asia / London / pre-open included), not only since the RTH open
+static const char* const VERSION = "1.32.0";   // (1.32.0, Rassul 2026-11-27 13:47 CT "is there a requirement that the Th >= 1.2 as well as the pic ?", "add these requirements") the BI also needs Thrust >= 1.20 AND PIC >= 1.20 (14 candles, ThrustDot thPic) on top of BVMax / BRMax 20+
+// was static const char* const VERSION = "1.31.2";   // (1.31.2, Rassul 2026-11-27 10:29 CT "it needs to be a level that wasnt run") a BI level must be untraded since it formed (Asia / London / pre-open included), not only since the RTH open
 // was static const char* const VERSION = "1.31.1";   // (1.31.1, Rassul 2026-11-27 10:19 CT "lets also add a rule that the high has to be above the prior bar high") a bullish BI's high is above the prior candle's high (bearish: its low below the prior low)
 // was static const char* const VERSION = "1.31.0";   // (1.31.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+) + the BI: biCands() / biPick() (code 'N', "BI"); Bk / Sw / Cx / AR computed as before (the host stops drawing Sw / AR)
 // was static const char* const VERSION = "1.30.0";   // (1.30.0, Rassul 2026-11-26 17:19-17:21 CT "yes" to Asia 6:00 PM - 2:00 AM CT) the Asia window is (6 PM, 2 AM] (was 1 AM): formWindow / formEnd
@@ -649,6 +651,7 @@ inline std::map<long long, SMark> arPick(const std::vector<ArCand>& cands, const
 //     called a breakin (BI) bar that closes back above the level that was swept with strength indicated from the volume or range") the pivot SWEPT the
 //     level's stops and the BI candle ITSELF closes back above it (bullish; below a high for bearish) - the BI names the best level swept that way;
 //   3c (1.31.1, 10:19 CT "the high has to be above the prior bar high") its high is above the prior candle's high (bearish: its low below the prior low);
+//   4b (1.32.0, 13:47 CT "add these requirements") Thrust >= 1.20 AND PIC >= 1.20 (range / ATR(14), |close change| / its 14-candle average);
 //   4 with its own BVMax or BRMax (stCount on volume / range ticks, as the Volume / Range panes) of BI_MIN (20) or more - the first candle that passes;
 //   one BI per pivot; label = the best-priority level the leg took out; strength line V / R (the larger).
 // Two steps like the AR: biCands() on the session's candles (colour, overlap, levels), biPick() with the chart's closed-candle counts. Pure functions of
@@ -702,11 +705,13 @@ inline std::vector<BiCand> biCands(const std::vector<wyr::Bar>& B, const std::ve
     return out;
 }
 // candle stamp -> SMark 'N' (BI): the first candidate of each pivot with BVMax or BRMax >= BI_MIN; lv / px = the level the leg took out, st = V / R line
-inline std::map<long long, SMark> biPick(const std::vector<BiCand>& cands, const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G) {
+inline std::map<long long, SMark> biPick(const std::vector<BiCand>& cands, const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G, const tdot::Chart* X = nullptr) {   // (1.32.0) X = the chart's candles for Thrust / PIC (null = the 1.31 rule)
     std::map<long long, SMark> out; if (R.size() != T.size() || G.size() != T.size() || V.size() != T.size()) return out;
     for (const BiCand& a : cands) for (size_t q = 0; q < a.c.size(); ++q) { const long long t = a.c[q];
         const auto it = std::lower_bound(T.begin(), T.end(), t); if (it == T.end() || *it != t) continue; const int i = (int)(it - T.begin());
         if (strengthN(V, R, G, i, i) < BI_MIN) continue;
+        if (X) { double th = 0, pc = 0; const auto kt = std::lower_bound(X->T.begin(), X->T.end(), t);   // (1.32.0, Rassul 13:47 CT "add these requirements") Thrust >= 1.20 AND PIC >= 1.20 too
+            if (kt == X->T.end() || *kt != t || !tdot::thPic(*X, (int)(kt - X->T.begin()), th, pc) || th < tdot::MIN_X || pc < tdot::MIN_X) continue; }
         if (!out.count(t)) { SMark s; s.code = 'N'; s.dir = a.dir; s.lv = q < a.cl.size() ? a.cl[q] : a.lv; s.px = q < a.cp.size() ? a.cp[q] : a.px; s.bkT = a.pivT; s.st = strength(V, R, G, i, i); out[t] = s; }
         break; }
     return out;

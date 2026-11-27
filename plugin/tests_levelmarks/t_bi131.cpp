@@ -60,5 +60,12 @@ int main() {
         const auto P6 = lvm::biPick(lvm::biCands(B, K6, lvm::rthOpenMin("ES"), 180), T, V, R, G);
         bool at906 = false; for (const auto& kv : P6) if (W[at(kv.first)] == "09:06") at906 = true;
         chk(!at906, "PDL 7240 already run overnight (low 7238.50): no BI - its stops were gone"); }
+    {   // (1.32.0, 13:47 "add these requirements") with the chart's candles the BI also needs Thrust >= 1.20 AND PIC >= 1.20
+        tdot::Chart X; for (const auto& b : B) { X.T.push_back(b.t); X.O.push_back(b.o / 4.0); X.H.push_back(b.h / 4.0); X.L.push_back(b.l / 4.0); X.C.push_back(b.c / 4.0); }
+        const auto P7 = lvm::biPick(C, T, V, R, G, &X); bool k906 = false; for (const auto& kv : P7) if (W[at(kv.first)] == "09:06") k906 = true;
+        chk(k906, "1.32.0: 9:09 still a BI (Thrust 1.34, PIC 2.62)");
+        tdot::Chart X2 = X; const size_t i9 = at(P.begin()->first); X2.H[i9] = X2.L[i9] + 2.0;   // the same candle with a 2-point range: Thrust under 1.20
+        const auto P8 = lvm::biPick(C, T, V, R, G, &X2); chk(!P8.count(B[i9].t), "1.32.0: the same candle with Thrust under 1.20 is no BI");
+        bool all = true; for (const auto& kv : P7) { double th, pc; if (!tdot::thPic(X, (int)at(kv.first), th, pc) || th < 1.2 || pc < 1.2) all = false; } chk(all, "1.32.0: every BI has Thrust and PIC >= 1.20"); }
     std::printf("%s (%d failed)\n", fails ? "FAILED" : "ALL PASS", fails); return fails ? 1 : 0;
 }

@@ -112,7 +112,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.44.0"   // (0.44.0, Rassul 2026-11-27 12:38-12:44 CT "a blue cyan dot on a green candle that has its low below the high of the down pivot and vice versa, that has its thrust and pic greater than or equal to 1.2", "in the range bar and in the candle in the middle", "1. yes 2. every 3. all 4. no repaint") ThrustDot 1.0.0: "stamp|TD|dir" lines; lsRevReadMarks draws the cyan dot in the middle of the candle body, lsRangeRead in the middle of its bar
+#define RVS_VERSION "0.44.1"   // (0.44.1, Rassul 2026-11-27 13:47 CT "add these requirements") LevelMarks 1.32.0: the BI also needs Thrust >= 1.20 and PIC >= 1.20
+// was #define RVS_VERSION "0.44.0"   // (0.44.0, Rassul 2026-11-27 12:38-12:44 CT "a blue cyan dot on a green candle that has its low below the high of the down pivot and vice versa, that has its thrust and pic greater than or equal to 1.2", "in the range bar and in the candle in the middle", "1. yes 2. every 3. all 4. no repaint") ThrustDot 1.0.0: "stamp|TD|dir" lines; lsRevReadMarks draws the cyan dot in the middle of the candle body, lsRangeRead in the middle of its bar
 // was #define RVS_VERSION "0.43.2"   // (0.43.2, Rassul 2026-11-27 10:29 CT "it needs to be a level that wasnt run") LevelMarks 1.31.2: a BI level untraded since it formed (Asia / London included)
 // was #define RVS_VERSION "0.43.1"   // (0.43.1, Rassul 2026-11-27 10:19 CT) LevelMarks 1.31.1: a BI's high above the prior candle's high (bearish: low below the prior low)
 // was #define RVS_VERSION "0.43.0"   // (0.43.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+; BI-mockup.html) LevelMarks 1.31.0 / WyMarks 2.9.0: + the BI badge (BI / level / V or R strength); VOB / VOT and AR not drawn
@@ -146,7 +147,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.44.0");
+    p->setVersion("0.44.1");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -815,7 +816,7 @@ public:
                             if (std::is_sorted(T.begin(), T.end())) { lvm::fillStrength(lvAll, T, V, R, G); e.lmDiag += " | after strength " + std::to_string(lvAll.size());
                                 for (auto& kv : seqAll) for (lvm::SMark& m : kv.second) if (m.code == 'R') m.st = lvm::strengthAt(T, V, R, G, kv.first);   // (0.20.0) the Rev's strength line
                                 { const std::map<long long, lvm::SMark> ar = lvm::arPick(arAll, lvAll, T, V, R, G); for (const auto& kv : ar) seqAll[kv.first].push_back(kv.second); }
-                                { const std::map<long long, lvm::SMark> bi = lvm::biPick(biAll, T, V, R, G); for (const auto& kv : bi) seqAll[kv.first].push_back(kv.second); }   // (0.43.0) the BI: the first candidate of each pivot with BVMax or BRMax 20+   // (0.23.0) the AR: the first candidate with BRMax 10+, with its strength line
+                                { const std::map<long long, lvm::SMark> bi = lvm::biPick(biAll, T, V, R, G, tdX.T.empty() ? nullptr : &tdX);   /* (0.44.1) + Thrust / PIC 1.20 */ for (const auto& kv : bi) seqAll[kv.first].push_back(kv.second); }   // (0.43.0) the BI: the first candidate of each pivot with BVMax or BRMax 20+   // (0.23.0) the AR: the first candidate with BRMax 10+, with its strength line
                                 for (const auto& kv : all.marks) for (const wyr::Mark& m : kv.second) if (m.k == 'I') { const std::string st = lvm::strengthAt(T, V, R, G, kv.first); if (!st.empty()) iStAll[kv.first] = st; }
                                 // (0.21.3, Rassul 10:37 CT "we should have a 20 threshold just like sweeps") an I whose own candle's BVMax / BRMax is under 20 is not kept
                                 for (auto it = all.marks.begin(); it != all.marks.end(); ) { const auto ti = std::lower_bound(T.begin(), T.end(), it->first);
