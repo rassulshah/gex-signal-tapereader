@@ -26,7 +26,8 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-27 11:03-11:11 CT, Thrust-mockup.html, "build") + Thrust / PIC on the Range read, VolTH / Change on the Volume read (14 candles), gold, above BRMax / BVMax
+static const char* const VERSION = "1.18.1";   // (1.18.1, Rassul 2026-11-27 11:49 CT "the box should always be on the right") scrolled back: the read sits right of the last VISIBLE candle (host); no room there: the small box at the pane's right edge (was the left edge)
+// was static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-27 11:03-11:11 CT, Thrust-mockup.html, "build") + Thrust / PIC on the Range read, VolTH / Change on the Volume read (14 candles), gold, above BRMax / BVMax
 // was static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal") the price chart's BI ("t|BI|dir|lv|px|st") is marked "BI" on BOTH panes (in the AR's place, first after CB); the file's Sw (VOB / VOT) and AR lines are no longer marked
 // was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw code over a bar shows as VOB (bullish) / VOT (bearish)
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-24 21:23-22:39 CT "everything else is a go" on reads-conclude-mockup.html v30) the Volume read concludes: title = the overall call of the three panes (lsTurn vread + lsRevRead bsv files), effort vs result with price agreement, large orders, who led, sliced / pulled (VRRead 1.6.0)
@@ -372,15 +373,15 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
 {
     std::vector<Prim> P; const int n = (int)E.V.size(), W = v.r - v.l, H = v.b - v.t; if (W < 40 || H < 12 || !v.X) return P;
     const bool box = W >= BOX_W + 60; const bool right = box && v.readX >= 0 && v.readX + BOX_W + 2 <= v.r;   // (1.3.1, Rassul 2026-11-16 10:58 CT "move others reads to the right") right of the last candle when there is room
-    const int bxL = right ? v.readX : v.l + 2, bx1 = bxL + BOX_W; const bool lbox = box && !right;       // lbox: the box is at the left edge - bars start right of it
+    const int bxL = right ? v.readX : v.r - 2 - BOX_W, bx1 = bxL + BOX_W; const bool lbox = box && !right;   /* (1.18.1, Rassul 2026-11-27 11:49 CT "the box should always be on the right") no room right of the last candle: the box sits at the RIGHT edge of the pane and the bars under it are not drawn (was the left edge) */
     const int th = std::max(8, v.textH), top = v.t + (E.hlOn ? 2 : 1) * th + 2;          // room for the number (and, 1.3.0, the code) over the tallest bar
     const double fv = form ? E.valueOf(*form) : 0.0;
     const int a = std::max(0, v.first), z = std::min(n - 1 + (form ? 1 : 0), v.last);
     auto valAt = [&](int i) { return i < n ? E.V[(size_t)i] : fv; };
-    double mx = 0; for (int i = a; i <= z; ++i) { if (lbox && v.X(i) - v.bw / 2.0 < bx1 + 1) continue; mx = std::max(mx, valAt(i)); }
+    double mx = 0; for (int i = a; i <= z; ++i) { if (lbox && v.X(i) + v.bw / 2.0 > bxL - 1) continue; mx = std::max(mx, valAt(i)); }
     const int hw = std::max(1, (int)(v.bw * 0.8) / 2);
     if (mx > 0 && v.b - top >= 4) for (int i = a; i <= z; ++i) {
-        const double x = v.X(i); const int x0 = (int)std::lround(x) - hw, x1 = (int)std::lround(x) + hw; if (x0 < v.l || x1 > v.r || (lbox && x0 < bx1 + 1)) continue;
+        const double x = v.X(i); const int x0 = (int)std::lround(x) - hw, x1 = (int)std::lround(x) + hw; if (x0 < v.l || x1 > v.r || (lbox && x1 > bxL - 1)) continue;
         const double val = valAt(i); if (!(val > 0)) continue;
         const bool g = i < n ? E.G[(size_t)i] != 0 : (form->c >= form->o);
         const int y = v.b - std::max(1, (int)std::lround(val / mx * (v.b - top)));
@@ -392,7 +393,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
             const int w = v.textW ? v.textW(s) : (int)s.size() * 6;
             Prim t; t.text = s; t.col = c; t.bold = bold; t.x0 = (int)std::lround(x - w / 2.0); t.x1 = t.x0 + w; t.y1 = yTop; t.y0 = t.y1 - th;
             if (t.y0 < v.t) { t.y0 = v.t; t.y1 = v.t + th; }
-            bool ok = t.x0 >= (lbox ? bx1 + 1 : v.l) && t.x1 <= v.r;
+            bool ok = t.x0 >= v.l && t.x1 <= (lbox ? bxL - 1 : v.r);
             for (int up = 0; ok && up < 3; ++up) {                                       // never over another text: one row up (twice at most), else not drawn
                 bool clash = false; for (const Prim& q : P) if (!q.fill && q.x0 < t.x1 + 2 && t.x0 < q.x1 + 2 && q.y0 < t.y1 && t.y0 < q.y1) { clash = true; break; }
                 if (!clash) break;
