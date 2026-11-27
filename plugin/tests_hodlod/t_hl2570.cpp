@@ -14,7 +14,7 @@ static void C(bool c, const std::string& m) { if (c) ++ok; else { ++f; std::prin
 static int M(const std::string& s, bool b) { return (int)s.size() * 6 + (b ? (int)s.size() : 0); }
 static long long A(int y, int mo, int d, int h, int mi) { return hl::daysFromCivil(y, mo, d) * 86400 + h * 3600 + mi * 60; }
 int main() {
-    C(std::string(hl::HL_VERSION) == "2.57.0" && std::string(hlset::PLUGIN_VERSION) == "2.57.0" && std::string(stp::VERSION) == "1.2.0" && std::string(nowl::VERSION) == "1.9.0", "versions");
+    C(std::string(hl::HL_VERSION) >= "2.57.0" && std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(stp::VERSION) == "1.2.0" && std::string(nowl::VERSION) == "1.9.0", "versions");
     std::vector<stp::Lv> k = { { "PDH", 7214 }, { "PFH", 7224 }, { "AsiaHI", 7254.75 }, { "LonLO", 7213.75 }, { "PDL", 6982.5 } };
     std::vector<stp::Bar> b = { { A(2026, 11, 25, 17, 45), 7215, 7200, 7210 }, { A(2026, 11, 25, 18, 21), 7225, 7210, 7220 }, { A(2026, 11, 26, 8, 0), 7246, 7240, 7244.75 } };
     const stp::Out O = stp::compute(k, b, 510, 0.25, 7244.75);
@@ -56,6 +56,10 @@ int main() {
     for (const nowl::Item& it : L.items) if (it.k == 0 && it.fill != nowl::C_BG) chipR = it.r;
     C(tag && L.r - L.l > L0.r - L0.l, "the tag: 8 pt, dim, the line widens for it");
     C(tagR > 0 && chipR >= tagR, "the tag sits INSIDE the chip");
+    // (2.57.1, 11-27 08:32 "where is the box on euro": 701 px wide, 684 free) a narrow chart: the same box, tighter gaps
+    { const int full = H0.r - H0.l; const hsb::Draw N = hsb::layout(v, M, 0, 600, 0, full - 10);
+      C(N.ok && N.r - N.l < full && N.r <= full - 10, "10 px short: the compact box fits (" + std::to_string(N.r - N.l) + " of " + std::to_string(full) + ")");
+      const hsb::Draw X = hsb::layout(v, M, 0, 600, 0, full / 2); C(!X.ok && X.why.find("compact") != std::string::npos, "far too narrow: no box, says why: " + X.why); }
     std::printf("t_hl2570: %d pass, %d fail\n", ok, f);
     return f ? 1 : 0;
 }

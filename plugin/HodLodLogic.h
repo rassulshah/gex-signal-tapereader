@@ -57,7 +57,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.57.0";   // (2.57.0, Rassul 2026-11-27 08:15-08:16 CT "the stops resting and run box needs to be a part of the hod box just like the 1st and 2nd are", "go"; StopsInBox-mockup.html) Stops resting / Stops run = a column INSIDE the HOD / LOD box after a grey divider; + the Swept chip 2nd line "5:45 \xB7 14h 15m" (8 pt, dim), "stops" / "swept" as a small dim word INSIDE the Next chip, R1 / R2 / S1 / S2 = stops (HodLodStops 1.2.0, NowLevels 1.9.0)
+static const char* const HL_VERSION = "2.57.1";   // (2.57.1, Rassul 2026-11-27 08:32 CT "where is the box on euro" - 6E: "no room (701 px wide, 684 px free)") a narrow chart gets the same box with tighter gaps; the Stops column is left out only when even that does not fit
+// was static const char* const HL_VERSION = "2.57.0";   // (2.57.0, Rassul 2026-11-27 08:15-08:16 CT "the stops resting and run box needs to be a part of the hod box just like the 1st and 2nd are", "go"; StopsInBox-mockup.html) Stops resting / Stops run = a column INSIDE the HOD / LOD box after a grey divider; + the Swept chip 2nd line "5:45 \xB7 14h 15m" (8 pt, dim), "stops" / "swept" as a small dim word INSIDE the Next chip, R1 / R2 / S1 / S2 = stops (HodLodStops 1.2.0, NowLevels 1.9.0)
 // was static const char* const HL_VERSION = "2.56.1";   // (2.56.1, Rassul 18:57 CT) one Stops / Swept chip for levels at the same price; the Stops resting arrows drawn as lines (HodLodStops 1.1.1)
 // was static const char* const HL_VERSION = "2.56.0";   // (2.56.0, Rassul 2026-11-26 17:11-17:21 CT, LevelSwept-mockup.html, "make the updates whatever you can and build") gold "Stops" / grey "Swept" chips in the centre of every stop level's line (HodLodStops 1.1.0); the Next line says stops / swept after each stop level; Asia = 6:00 PM - 2:00 AM CT
 // was static const char* const HL_VERSION = "2.55.0";   // (2.55.0, Rassul 2026-11-26 16:05-16:14 CT, StopsBusy-mockup.html, "this looks good .. build") the box: 1st / 2nd stacked left, "extreme in by" as "9:00 61%" rows over the swept table on shared columns, swept columns PRE-HR ON PD PF then DPoc VA; Stops resting / Stops run right of the box (HodLodStops.h); the Level line "Next", centred on the box
@@ -3202,8 +3203,8 @@ inline std::vector<Run> exp2Runs(const hl::View& v) {
     return r;
 }
 // M(text, bold) = pixel width at the box font; cx = the candles' centre; bottom = the pane's bottom edge; [left, right] = the room
-inline Draw layout(const hl::View& v, const std::function<int(const std::string&, bool)>& M, int cx, int bottom, int left, int right, int extraW = 0, int minH = 0) {   // (2.57.0) extraW / minH: room for a column the host draws inside the box at its right (the Stops section), after a grey divider
-    Draw D; const int ROW = 18, PX = 6, GAP = 10, PADC = 14;   // (2.48.1, 08:58 "create some space ... in the 1st and 2nd") taller rows, 14 px each side of the 1st / 2nd columns
+inline Draw layout(const hl::View& v, const std::function<int(const std::string&, bool)>& M, int cx, int bottom, int left, int right, int extraW = 0, int minH = 0, bool compact = false) {   // (2.57.1) compact: tighter gaps, tried when the normal box does not fit (EU 11-27: 701 px wide, 684 free - no box)   // (2.57.0) extraW / minH: room for a column the host draws inside the box at its right (the Stops section), after a grey divider
+    Draw D; const int ROW = 18, PX = 6, GAP = compact ? 6 : 10, PADC = compact ? 8 : 14;   // (2.48.1, 08:58 "create some space ... in the 1st and 2nd") taller rows, 14 px each side of the 1st / 2nd columns
     const std::vector<Run> e1 = runsOf(v.E[hl::K_1ST]), e2 = exp2Runs(v), a1 = actRuns(v.A[hl::K_1ST]), a2 = actRuns(v.A[hl::K_2ND]);
     auto w = [&](const std::vector<Run>& r) { int s = 0; for (const Run& x : r) s += M(x.s, x.bold); return s; };
     // (2.50.0) the stats in TWO ROWS: "1st" = by the open + 30 / 60 / 90 / 120 min (TIME2) + after; "2nd" = by the open + 3.5 h hourly + last 30
@@ -3249,8 +3250,8 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
         std::stable_sort(swCols.begin(), swCols.end(), [&](const std::string& a, const std::string& b) { return rank(a) < rank(b); });
     }
     const int NCOL = (int)(std::max)((size_t)NC, swCols.size());
-    const int TG = 4, SWG = 14;   // time -> % gap; gap between the columns
-    const int rl = (std::max)((std::max)(M(la1, true), M(la2, true)), nSw ? (std::max)(M(swL[0], true), M(swL[1], true)) : 0) + 12;   // the right block's label column
+    const int TG = compact ? 3 : 4, SWG = compact ? 7 : 14;   // time -> % gap; gap between the columns
+    const int rl = (std::max)((std::max)(M(la1, true), M(la2, true)), nSw ? (std::max)(M(swL[0], true), M(swL[1], true)) : 0) + (compact ? 6 : 12);   // the right block's label column
     std::vector<int> cw((size_t)NCOL, 0);
     for (int q = 0; q < NCOL; q++) {
         if (q < (int)t1.size()) cw[(size_t)q] = (std::max)(cw[(size_t)q], M(t1[(size_t)q], false) + TG + M(p1[(size_t)q], true));
@@ -3264,7 +3265,9 @@ inline Draw layout(const hl::View& v, const std::function<int(const std::string&
     const int RULE = 5;
     const int Hl = 6 * ROW + RULE, Hr = 3 * ROW + (nSw ? RULE + (nSw + 1) * ROW : 0);
     const int W = PX + leftW + PADC + 1 + GAP + rightW + PX + (extraW > 0 ? extraW : 0), H = (std::max)(4 + (std::max)(Hl, Hr), minH);
-    if (right - left < W) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
+    if (right - left < W) {
+        if (!compact) return layout(v, M, cx, bottom, left, right, extraW, minH, true);   // (2.57.1) a narrow chart: the same box with tighter gaps
+        D.why = "no room (" + std::to_string(W) + " px wide" + (compact ? " compact" : "") + ", " + std::to_string(right - left) + " px free)"; return D; }
     int l = cx - W / 2; if (l < left) l = left; if (l + W > right) l = right - W;
     D.l = l; D.r = l + W; D.b = bottom; D.t = bottom - H;
     D.items.push_back(Item{ 0, D.l, D.t, D.r, D.b, "", C_EDGE, C_BG, false });
