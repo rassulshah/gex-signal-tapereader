@@ -31,7 +31,8 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.30.0";   // (1.30.0, Rassul 2026-11-26 17:19-17:21 CT "yes" to Asia 6:00 PM - 2:00 AM CT) the Asia window is (6 PM, 2 AM] (was 1 AM): formWindow / formEnd
+static const char* const VERSION = "1.31.0";   // (1.31.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+) + the BI: biCands() / biPick() (code 'N', "BI"); Bk / Sw / Cx / AR computed as before (the host stops drawing Sw / AR)
+// was static const char* const VERSION = "1.30.0";   // (1.30.0, Rassul 2026-11-26 17:19-17:21 CT "yes" to Asia 6:00 PM - 2:00 AM CT) the Asia window is (6 PM, 2 AM] (was 1 AM): formWindow / formEnd
 // was static const char* const VERSION = "1.29.0";   // (1.29.0, Rassul 2026-11-26 13:36 CT "make the cx levels match the levels that we currently get stats for", 13:40 "add weekly levels for cx") a Cx only at a level of the HOD / LOD stats list - PHH / PHL (PhrH / PhrL), ON / London / Asia, PD, PF, VAH / VAL - plus the weekly PWH / PWL / CWH / CWL; no hour highs / lows, no 3-hour S / R, no DPoc (off the marks since 11-19)
 // was static const char* const VERSION = "1.28.0";   // (1.28.0, Rassul 2026-11-26 13:06-13:16 CT "its close would not close over the level", "in any buying climax, no bar closes above the level", "no" to also checking the bars that confirm the pivot) a Cx level must be one the push FAILED to close beyond: buying climax (pivot high) - the climax candle AND the pivot candle (when the climax is the candle before it) close at or under the level; selling climax (pivot low) - both close at or above it. A close beyond = a breakout, no Cx at that level
 // was static const char* const VERSION = "1.27.0";   // (1.27.0, Rassul 2026-11-26 12:40 CT "currently cx doesn't require a level but i want to update it so that it requires a level, meaning the bar with the volume needs to be crossing a level", 12:45 "A" = every level a Cx can name) a Cx (and the live Cx?) needs a level INSIDE its candle (low <= level <= high): session, PD, PF, VAH / VAL, weekly, 3-hour S / R, PhrH / PhrL, hour highs / lows - the Cx level list (not the Bk-only hourly pivots / 4h / 3HrH). A heavy pivot candle with no level in it: no Cx (the candle before may still be the Cx if IT crosses a level)
@@ -456,7 +457,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
 //        its range must be bigger (rule 7) - the PB Rev candle rules.
 // Pure function of the closed candles and the Bk marks: no repaint.
 struct SMark { char code = 0; int dir = 0; std::string lv; long long px = 0; int pct = 0; long long bkT = 0; std::string st; };   // st = the Rev's strength line (filled by the host, as fillStrength)   // 'F' FT / 'T' Tst / 'R' Rev
-inline const char* seqText(char c) { return c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : ""; }   // (1.13.0) 'A' = the AR (arPick), written and drawn like a Rev: code + strength
+inline const char* seqText(char c) { return c == 'F' ? "FT" : c == 'T' ? "Tst" : c == 'R' ? "Rev" : c == 'A' ? "AR" : c == 'N' ? "BI" : ""; }   // (1.31.0) 'N' = the BI   // (1.13.0) 'A' = the AR (arPick), written and drawn like a Rev: code + strength
 inline std::map<long long, std::vector<SMark> > seq(const std::vector<wyr::Bar>& B, const std::map<long long, Mark>& marks) {
     std::map<long long, std::vector<SMark> > out; const int n = (int)B.size(); if (n < 6) return out;
     std::map<long long, int> at; for (int i = 0; i < n; ++i) at[B[(size_t)i].t] = i;
@@ -629,6 +630,79 @@ inline std::map<long long, SMark> arPick(const std::vector<ArCand>& cands, const
                 if (s.st.empty() && ax >= 0) { char b2[16]; std::snprintf(b2, sizeof b2, "%.1fx", (double)ax / 1000.0); s.st = b2; }
                 out[t] = s; }
             break; } }
+    return out;
+}
+
+// ---- (1.31.0) THE BI (Break In) - replaces the AR and the VOB / VOT on the chart (Rassul 2026-11-27 09:50 CT "i want to consolidate AR and Vob (t)
+// into a new BI (Break In) signal. the requirement for this signals is that it has bvmax of at least 20 and its low is below the high of the dnpivot and
+// vice versa and it is coming from a pivot that has taken out a key level"; 09:55 his example ES 11-27 (LOD 9:06 AM after AsiaLO / ONL / PDL-S1 / VAL);
+// 09:56 "its the green one after the lod"; 09:57 "go"; 10:00 "ok" to option 1 = BVMax OR BRMax 20+ (his example: BVMax 2, BRMax 99+); mockup
+// BI-mockup.html). Bullish shown, bearish = mirror:
+//   1 a confirmed ZigZag (3-bar High / Low) pivot LOW k; its leg = the candles after the pivot high it started from, up to k;
+//   2 the leg made the FIRST trade through a major LOW level of the current session part (session ON / London / Asia, PD, PF, weekly, 3h S1 / S2 - the
+//     Sw list): the first candle through it since it formed (since the RTH open in the day session) is inside the leg, the close before it above it;
+//   3 the BI = the first GREEN candle after the pivot candle (the pivot candle itself never: it is the red push), before the next pivot, whose low is
+//     below the pivot candle's high, not the RTH opening candle and not a data-release candle,
+//   3b (10:08 CT "also add that the downpivot just swept a level", 10:09 "there were stops that were swept and after this there was a reversal bar
+//     called a breakin (BI) bar that closes back above the level that was swept with strength indicated from the volume or range") the pivot SWEPT the
+//     level's stops and the BI candle ITSELF closes back above it (bullish; below a high for bearish) - the BI names the best level swept that way;
+//   4 with its own BVMax or BRMax (stCount on volume / range ticks, as the Volume / Range panes) of BI_MIN (20) or more - the first candle that passes;
+//   one BI per pivot; label = the best-priority level the leg took out; strength line V / R (the larger).
+// Two steps like the AR: biCands() on the session's candles (colour, overlap, levels), biPick() with the chart's closed-candle counts. Pure functions of
+// closed candles; the pivot rule may move a BI while the pivot forms (his 2026-10-17 exception), never after.
+static const int BI_MIN = 20;
+struct BiCand { long long pivT = 0; int dir = 0; std::string lv; long long px = 0; std::vector<long long> c; std::vector<std::string> cl; std::vector<long long> cp; };   // cl / cp (10:08) = per candidate: the level its pivot SWEPT (reclaimed by then)
+inline bool biSideOk(const std::string& name, int dir) {   // a low level names a bullish BI, a high a bearish one (a merged name: any part of that side)
+    std::string t; for (size_t k = 0; k <= name.size(); ++k) { const char c = k < name.size() ? name[k] : '/';
+        if (c == '/') { if (!t.empty() && levelSide(t, false, 0) == (dir > 0 ? -1 : 1)) return true; t.clear(); } else t += c; }
+    return false; }
+inline std::vector<BiCand> biCands(const std::vector<wyr::Bar>& B, const std::vector<wyr::Lvl>& key, int openMin = -1, long long spb = 0, const std::vector<long long>* rel = nullptr, const std::vector<H3>* h3 = nullptr) {
+    std::vector<BiCand> out; const int n = (int)B.size(); if (n < 6) return out;
+    std::vector<std::pair<int, int> > piv;   // pivot candle, side (+1 low / -1 high), in order of confirmation - as run() / arCands()
+    { const std::vector<wyr::Leg> LG = wyr::legs(B); int prevA = -1;
+      for (int i = 0; i < n; ++i) { const int a = LG[(size_t)i].a; if (a != prevA && i > 0) { bool seen = false; for (const auto& p : piv) if (p.first == a) seen = true; if (!seen) piv.push_back(std::make_pair(a, LG[(size_t)i].dir == 1 ? 1 : -1)); } prevA = a; } }
+    for (size_t q = 0; q < piv.size(); ++q) {
+        const int k = piv[q].first, d = piv[q].second; if (k < 1 || k >= n) continue;
+        int a = 0; for (size_t r = q; r-- > 0; ) if (piv[r].second != d && piv[r].first < k) { a = piv[r].first; break; }   // the leg's start pivot
+        const int stop = q + 1 < piv.size() ? piv[q + 1].first : n;   // the next pivot: the up-wave's end
+        std::vector<Cand> took;
+        for (int f = std::max(1, a + 1); f <= k; ++f) {
+            const int ds = dayStart(B, f, openMin);
+            for (const Lv& z : levelsAt(B, f, key, h3)) {
+                if (z.bkOnly || !swMajor(z.name, z.hb) || !biSideOk(z.name, d)) continue;
+                bool have = false; for (const Cand& x : took) if (x.px == z.px && x.name == z.name) have = true; if (have) continue;
+                auto thr = [&](int j) { return d > 0 ? B[(size_t)j].l < z.px : B[(size_t)j].h > z.px; };
+                if (!thr(f)) continue;
+                if (d > 0 ? !(B[(size_t)f - 1].c > z.px) : !(B[(size_t)f - 1].c < z.px)) continue;   // came from the other side
+                const int from = std::max(std::max(0, z.from), ds); bool before = false;
+                for (int j = from; j < f; ++j) if (thr(j)) { before = true; break; }
+                if (before) continue;   // not the first break of the level this session part
+                Cand c; c.px = z.px; c.name = z.name; c.hb = 0; c.high = d < 0; took.push_back(c); } }
+        if (took.empty()) continue;
+        std::stable_sort(took.begin(), took.end(), [&](const Cand& x, const Cand& y) { const int px = pri(x.name, 0), py = pri(y.name, 0); if (px != py) return px < py; return d > 0 ? x.px < y.px : x.px > y.px; });
+        BiCand bc; bc.pivT = B[(size_t)k].t; bc.dir = d; bc.px = took[0].px; bc.lv = shortName(took[0].name, 0, d < 0);
+        // (10:08 CT "also add that the downpivot just swept a level") the pivot SWEPT the level: its extreme went through it (rule 2) AND a close from the
+        // pivot candle up to the BI candle is back on the original side (above a low); the BI names the best such level
+        // (10:09 CT "a reversal bar called a breakin (BI) bar that closes back above the level that was swept") the BI candle ITSELF closes back above it
+        auto swept = [&](int j, Cand& o) { for (const Cand& z : took) if (d > 0 ? B[(size_t)j].c > z.px : B[(size_t)j].c < z.px) { o = z; return true; } return false; };
+        for (int j = k + 1; j < n && j <= stop; ++j) { const wyr::Bar& b = B[(size_t)j];
+            if (d > 0 ? b.l < B[(size_t)k].l : b.h > B[(size_t)k].h) break;   // a new extreme: not this pivot's wave
+            const bool colour = d > 0 ? b.c > b.o : b.c < b.o, over = d > 0 ? b.l < B[(size_t)k].h : b.h > B[(size_t)k].l;
+            if (!(colour && over)) continue;
+            if (isOpenCandle(b.t, openMin, spb) || newsCandle(b.t, spb, rel)) continue;
+            Cand sw; if (!swept(j, sw)) continue;
+            bc.c.push_back(b.t); bc.cl.push_back(shortName(sw.name, 0, d < 0)); bc.cp.push_back(sw.px); }
+        if (!bc.c.empty()) out.push_back(bc); }
+    return out;
+}
+// candle stamp -> SMark 'N' (BI): the first candidate of each pivot with BVMax or BRMax >= BI_MIN; lv / px = the level the leg took out, st = V / R line
+inline std::map<long long, SMark> biPick(const std::vector<BiCand>& cands, const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G) {
+    std::map<long long, SMark> out; if (R.size() != T.size() || G.size() != T.size() || V.size() != T.size()) return out;
+    for (const BiCand& a : cands) for (size_t q = 0; q < a.c.size(); ++q) { const long long t = a.c[q];
+        const auto it = std::lower_bound(T.begin(), T.end(), t); if (it == T.end() || *it != t) continue; const int i = (int)(it - T.begin());
+        if (strengthN(V, R, G, i, i) < BI_MIN) continue;
+        if (!out.count(t)) { SMark s; s.code = 'N'; s.dir = a.dir; s.lv = q < a.cl.size() ? a.cl[q] : a.lv; s.px = q < a.cp.size() ? a.cp[q] : a.px; s.bkT = a.pivT; s.st = strength(V, R, G, i, i); out[t] = s; }
+        break; }
     return out;
 }
 

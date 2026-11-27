@@ -26,7 +26,8 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw code over a bar shows as VOB (bullish) / VOT (bearish)
+static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal") the price chart's BI ("t|BI|dir|lv|px|st") is marked "BI" on BOTH panes (in the AR's place, first after CB); the file's Sw (VOB / VOT) and AR lines are no longer marked
+// was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw code over a bar shows as VOB (bullish) / VOT (bearish)
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-24 21:23-22:39 CT "everything else is a go" on reads-conclude-mockup.html v30) the Volume read concludes: title = the overall call of the three panes (lsTurn vread + lsRevRead bsv files), effort vs result with price agreement, large orders, who led, sliced / pulled (VRRead 1.6.0)
 // was static const char* const VERSION = "1.14.0";   // (1.14.0, Rassul 2026-11-24 20:46 / 20:54) the Volume read: a grey column with the volume-model question of each line (VRRead 1.5.0); full questions when the read has room, short ones when narrow, none under 150 px
 // was static const char* const VERSION = "1.13.0";   // (1.13.0, Rassul 2026-11-24 20:00 CT "Go") the Volume read's biggest orders with their Big Lot tier (VRRead 1.4.0, BigTier.h): Engine.mkt, Ctx.mkt / rth
@@ -94,7 +95,7 @@ static const int SHOW_MIN_LV = 10;  // (1.8.0, Rassul 18:19 CT "switch to 10") .
 static const int LV_MIN = 5, PV_MIN = 20, BIG_MIN = 50, LV_COOL = 10, CT_BACK = 40, CT_FWD = 60;   // (1.3.0) the mark thresholds
 enum MkCode { MK_NONE = 0, MK_BO, MK_BIG, MK_P, MK_CT, MK_REV, MK_AR, MK_SW, MK_BK, MK_SR, MK_CB };   // (1.11.0) MK_AR; MK_CB stays the last code (arrays are sized MK_CB + 1)
 struct Mk { int code = 0, dir = 0; };
-inline const char* mkText(int c) { switch (c) { case MK_P: return "Cx"; case MK_CT: return "Ct"; case MK_REV: return "Rev"; case MK_AR: return "AR"; case MK_SW: return "Sw"; case MK_BK: return "Bk"; case MK_SR: return "SR"; case MK_CB: return "CB"; default: return ""; } }
+inline const char* mkText(int c) { switch (c) { case MK_P: return "Cx"; case MK_CT: return "Ct"; case MK_REV: return "Rev"; case MK_AR: return "BI"; case MK_SW: return "Sw"; case MK_BK: return "Bk"; case MK_SR: return "SR"; case MK_CB: return "CB"; default: return ""; } }
 struct CobIt { long long t = 0, cbT = 0, srT = 0; int side = 0; };
 inline long long lvFloorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 inline long long lvCivil(long long y, unsigned m, unsigned d) { y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
@@ -152,7 +153,8 @@ inline int parseWy(const std::string& text, std::map<long long, Mk>& out, std::m
     int n = 0;
     hlLines(text, [&](const std::string& l) {
         const std::vector<std::string> f = hlSplit(l, '|', 4); long long t = 0, d = 0;
-        const bool cx = f.size() >= 2 && f[1] == "Cx", isAr = f.size() >= 2 && f[1] == "AR";
+        if (f.size() >= 2 && (f[1] == "Sw" || f[1] == "AR")) return;   // (1.17.0) VOB / VOT and AR: replaced by the BI
+        const bool cx = f.size() >= 2 && f[1] == "Cx", isAr = f.size() >= 2 && f[1] == "BI";   // (1.17.0) the BI takes the AR's slot
         if (f.size() < 3 || (f[1] != "Bk" && f[1] != "Sw" && !cx && !isAr) || !hlNum(f[0], t) || t <= 0 || !hlNum(f[2], d) || (d != 1 && d != -1)) return;
         if (isAr) { if (ar) (*ar)[t] = (int)d; return; }
         if (cx) { if (!out.count(t)) { Mk m; m.code = MK_P; m.dir = (int)d; out[t] = m; } return; }
@@ -205,7 +207,7 @@ struct Engine {
     int cxAt(int i) const { if (!CX_FROM_WY || mode != VOL || i < 0 || i >= (int)T.size()) return 0; const auto w = wy.find(T[(size_t)i]); return w != wy.end() && w->second.code == MK_P ? w->second.dir : 0; }   // (1.10.0) the price chart's Cx on closed bar i: +1 at a pivot low, -1 at a pivot high, 0 none (always 0 in the Range pane)
     int wyCx() const { int k = 0; for (const auto& kv : wy) if (kv.second.code == MK_P) ++k; return k; }
     std::map<long long, int> wyAr;                                                                        // (1.11.0) the price chart's AR candles by chart time: +1 green / -1 red
-    int arAt(int i) const { if (mode != RANGE || i < 0 || i >= (int)T.size()) return 0; const auto w = wyAr.find(T[(size_t)i]); return w != wyAr.end() ? w->second : 0; }   // (1.11.0) the AR on closed bar i - the Range pane only (BRMax 10+ made it)
+    int arAt(int i) const { if (i < 0 || i >= (int)T.size()) return 0; const auto w = wyAr.find(T[(size_t)i]); return w != wyAr.end() ? w->second : 0; }   // (1.11.0) the AR on closed bar i - the Range pane only (BRMax 10+ made it)
     void reset() { Oo.clear(); Vol.clear(); V.clear(); G.clear(); T.clear(); S.clear(); PR.clear(); ATR.clear(); LT.clear(); prevC = NAN; trSum = 0;
         Hh.clear(); Ll.clear(); Cc.clear(); lvC.clear(); lvD.clear(); htf.clear(); hw.reset(); hsn = hsr::Snap(); lvDone = 0; lvLast.clear(); cbAt.clear(); srAt.clear(); ctAt.clear(); cobN = -1; }
     bool deadBar(int i) const { return Hh[(size_t)i] == 0 && Ll[(size_t)i] == 0 && Cc[(size_t)i] == 0; }
@@ -277,13 +279,13 @@ struct Engine {
         Mk m; if (!hlOn || i < 0 || i >= (int)T.size()) return m;
         int d = 0;
         if ((d = byTime(cbAt, i)) != 0) { m.code = MK_CB; m.dir = d; return m; }
+        if ((d = arAt(i)) != 0) { m.code = MK_AR; m.dir = d; return m; }                                 // (1.17.0) the price chart's BI, both panes, before Bk / Cx
         if (LV_FROM_WY) { const auto w = wy.find(T[(size_t)i]); if (w != wy.end() && w->second.code != MK_P) return w->second; }   // (1.8.0) the price chart's Bk / Sw (wins over an SR on the same bar); (1.10.0) its Cx keeps the Cx place below
         if ((d = byTime(srAt, i)) != 0) { m.code = MK_SR; m.dir = d; return m; }
         if (!LV_FROM_WY && i < (int)lvC.size() && lvC[(size_t)i]) { m.code = lvC[(size_t)i]; m.dir = lvD[(size_t)i]; return m; }
         /* (1.3.5) no Rev mark: a bar is coloured only because its volume / range is significant */
         if ((d = byTime(ctAt, i)) != 0) { m.code = MK_CT; m.dir = d; return m; }
         if ((d = cxAt(i)) != 0) { m.code = MK_P; m.dir = d; return m; }                                  // (1.10.0) the price chart's Cx (Volume pane only)
-        if ((d = arAt(i)) != 0) { m.code = MK_AR; m.dir = d; return m; }                                 // (1.11.0) the price chart's AR (Range pane only)
         if (S[(size_t)i].mx() >= BIG_MIN) { m.code = MK_BIG; m.dir = S[(size_t)i].green ? 1 : -1; return m; }
         if (mode == RANGE && (d = highlight(i)) != 0) { m.code = MK_BO; m.dir = d; return m; }
         return m;

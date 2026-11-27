@@ -111,7 +111,8 @@ static const bool RV_DRAW_BOOKFLOW = false;   // (0.29.0, Rassul 19:33 CT "i wou
 static const bool STORY_TOP_LINE = false;   // (0.18.3, Rassul 2026-11-18 20:34 CT "there is a read in the signal strip for reversal that needs to be removed": when the story / Rev checks do not fit right of the last candle they are NOT written across the top (over the letter strip) any more
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.42.0"   // (0.42.0, Rassul 2026-11-26 17:21 CT) LevelMarks 1.30.0: Asia 6:00 PM - 2:00 AM CT (was 1:00 AM)
+#define RVS_VERSION "0.43.0"   // (0.43.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal", "its the green one after the lod", "go", "ok" = BVMax or BRMax 20+; BI-mockup.html) LevelMarks 1.31.0 / WyMarks 2.9.0: + the BI badge (BI / level / V or R strength); VOB / VOT and AR not drawn
+// was #define RVS_VERSION "0.42.0"   // (0.42.0, Rassul 2026-11-26 17:21 CT) LevelMarks 1.30.0: Asia 6:00 PM - 2:00 AM CT (was 1:00 AM)
 // was #define RVS_VERSION "0.41.0"   // (0.41.0, Rassul 2026-11-26 13:36-13:40 CT) LevelMarks 1.29.0: a Cx only at the HOD / LOD stats levels + weekly levels
 // was #define RVS_VERSION "0.40.0"   // (0.40.0, Rassul 2026-11-26 13:06-13:16 CT) LevelMarks 1.28.0: a Cx only at a level the climax (and the pivot candle after it) did NOT close beyond
 // was #define RVS_VERSION "0.39.0"   // (0.39.0, Rassul 2026-11-26 12:40 / 12:45 CT "cx ... requires a level", "A") LevelMarks 1.27.0: a Cx / Cx? only when a level is inside its candle
@@ -141,7 +142,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.42.0");
+    p->setVersion("0.43.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -713,7 +714,7 @@ public:
                     std::map<long long, lvm::Mark> lvAll; std::map<long long, std::pair<std::string, long long> > iLvAll;   // (0.19.0)
                     std::map<long long, std::vector<lvm::SMark> > seqAll;   // (0.20.0) FT / Tst / Rev after a Bk
                     std::map<long long, lvm::AbsMk> absAll;   // (0.27.0) the Abs badges + the next-candle Ex
-                    std::vector<lvm::ArCand> arAll;   // (0.23.0) the AR candidates of every Cx (each session by itself); picked after the strength lines
+                    std::vector<lvm::ArCand> arAll; std::vector<lvm::BiCand> biAll;   /* (0.43.0) the BI candidates (LevelMarks 1.31.0), picked with the strength lines */   // (0.23.0) the AR candidates of every Cx (each session by itself); picked after the strength lines
                     // (0.18.4) the key / volume levels the I can reclaim (WyRead 1.1.0): the level files as they stand now - for the CURRENT session only
                     // (older sessions had other levels; they use their own pivot lows / highs); the moving VWAP and the HBO line are not reclaim levels
                     // (0.21.4, Rassul 2026-11-20 11:54 CT "would this have been a sweep" - NG 8:03 Sw ONH not drawn: no order feed on NG, so no engine and no levels)
@@ -786,7 +787,8 @@ public:
                             const std::map<long long, std::string> l3 = lvm::tstL3(WB, sq, &e.teq, &preV, &preR, &preQ, seg > 0);
                             for (const auto& kv : l3) if (!e.tl3.count(kv.first)) { e.tl3[kv.first] = kv.second; e.tl3Dirty = true; } }
                         { const std::map<long long, lvm::AbsMk> am = lvm::absMarks(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), !e.mkt.empty() ? e.mkt : rvh::marketOf(S.market), WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr, &preV); for (const auto& kv : am) absAll[kv.first] = kv.second; }   // (0.27.0) the Abs badge (LevelMarks 1.18.0)
-                        { const std::vector<lvm::ArCand> ac = lvm::arCands(WB, lm); arAll.insert(arAll.end(), ac.begin(), ac.end()); }   // (0.23.0) the AR after a Cx: colour + overlap here, BRMax below
+                        { const std::vector<lvm::ArCand> ac = lvm::arCands(WB, lm); arAll.insert(arAll.end(), ac.begin(), ac.end()); }
+                        { const std::vector<lvm::BiCand> bc = lvm::biCands(WB, seg == 0 ? lvNow : std::vector<wyr::Lvl>(), lvm::rthOpenMin(!e.mkt.empty() ? e.mkt : rvh::marketOf(S.market)), (long long)S.spb, &relNow, WH.size() == WB.size() && !h3All.empty() ? &WH : nullptr); biAll.insert(biAll.end(), bc.begin(), bc.end()); }   // (0.43.0) the BI (Break In): pivot + first break of a major level + colour + overlap here, BVMax / BRMax 20+ below   // (0.23.0) the AR after a Cx: colour + overlap here, BRMax below
                         dg += " lv " + std::to_string(lm.size()) + " keys " + std::to_string(seg == 0 ? lvNow.size() : 0) + (seg == 0 ? " 3h " + std::to_string(h3Now) : std::string()); } catch (const std::exception& ex) { dg += std::string(" lv ERR ") + ex.what(); } catch (...) { dg += " lv ERR"; }
                     e.lmDiag = (seg == 0 ? std::string() : e.lmDiag + "; ") + dg;
                     { SegR r; r.seg = seg; r.nm = sessName(segEnd); r.t0 = (long long)times[first]; r.t1 = (long long)times[segEnd]; segs.push_back(r); }   // (0.20.3)
@@ -804,7 +806,8 @@ public:
                                 R[(size_t)i] = lvm::rangeTicks((double)sh[i], (double)sl[i], S.tick); G[(size_t)i] = (double)sc[i] >= (double)so[i] ? 1 : 0; }
                             if (std::is_sorted(T.begin(), T.end())) { lvm::fillStrength(lvAll, T, V, R, G); e.lmDiag += " | after strength " + std::to_string(lvAll.size());
                                 for (auto& kv : seqAll) for (lvm::SMark& m : kv.second) if (m.code == 'R') m.st = lvm::strengthAt(T, V, R, G, kv.first);   // (0.20.0) the Rev's strength line
-                                { const std::map<long long, lvm::SMark> ar = lvm::arPick(arAll, lvAll, T, V, R, G); for (const auto& kv : ar) seqAll[kv.first].push_back(kv.second); }   // (0.23.0) the AR: the first candidate with BRMax 10+, with its strength line
+                                { const std::map<long long, lvm::SMark> ar = lvm::arPick(arAll, lvAll, T, V, R, G); for (const auto& kv : ar) seqAll[kv.first].push_back(kv.second); }
+                                { const std::map<long long, lvm::SMark> bi = lvm::biPick(biAll, T, V, R, G); for (const auto& kv : bi) seqAll[kv.first].push_back(kv.second); }   // (0.43.0) the BI: the first candidate of each pivot with BVMax or BRMax 20+   // (0.23.0) the AR: the first candidate with BRMax 10+, with its strength line
                                 for (const auto& kv : all.marks) for (const wyr::Mark& m : kv.second) if (m.k == 'I') { const std::string st = lvm::strengthAt(T, V, R, G, kv.first); if (!st.empty()) iStAll[kv.first] = st; }
                                 // (0.21.3, Rassul 10:37 CT "we should have a 20 threshold just like sweeps") an I whose own candle's BVMax / BRMax is under 20 is not kept
                                 for (auto it = all.marks.begin(); it != all.marks.end(); ) { const auto ti = std::lower_bound(T.begin(), T.end(), it->first);
@@ -844,7 +847,7 @@ public:
                             for (const auto& kv : e.lvMarks) txt += std::to_string(kv.first) + "|" + lvm::codeText(kv.second.code) + "|" + std::to_string(kv.second.dir) + "|" + kv.second.lv + "|" + std::to_string(kv.second.px) + "|" + kv.second.st + "\n";   // (0.19.0) Bk / Sw / Cx; (0.19.2) + the strength (6th field, may be empty)
                             for (const auto& kv : e.lvSeq) for (const lvm::SMark& m : kv.second) {   // (0.20.0) FT: 3 fields; Tst: level + its % (no dashed line: px 0); Rev: + its strength
                                 txt += std::to_string(kv.first) + "|" + lvm::seqText(m.code) + "|" + std::to_string(m.dir);
-                                if (m.code == 'T') { const auto q3 = e.tl3.find(kv.first); txt += "|" + m.lv + "|0|" + (q3 != e.tl3.end() ? q3->second : std::string()); }   /* (0.28.0) line 3 = A+E / E / A! / blank (was the retrace %) */ else if (m.code == 'R' || m.code == 'A') txt += "||0|" + m.st;   // (0.23.0) AR: as a Rev - no level, its strength
+                                if (m.code == 'T') { const auto q3 = e.tl3.find(kv.first); txt += "|" + m.lv + "|0|" + (q3 != e.tl3.end() ? q3->second : std::string()); }   /* (0.28.0) line 3 = A+E / E / A! / blank (was the retrace %) */ else if (m.code == 'N') txt += "|" + m.lv + "|" + std::to_string(m.px) + "|" + m.st;   /* (0.43.0) BI: level, its price, strength (6 fields) */ else if (m.code == 'R' || m.code == 'A') txt += "||0|" + m.st;   // (0.23.0) AR: as a Rev - no level, its strength
                                 txt += "\n"; }
                             // (0.27.0) the Abs badge: "stamp|Abs|dir|<Top 21% / Low 21% or empty>|<level px>|<level short name>"; its next-candle Ex: "stamp|Ex|dir"
                             for (const auto& kv : e.absMk) { txt += std::to_string(kv.first) + "|Abs|" + std::to_string(kv.second.dir) + "|" + lvm::absPos(kv.second) + "|" + std::to_string(kv.second.lvPx) + "|" + kv.second.lv + "\n";
@@ -1282,6 +1285,7 @@ public:
                         W.push_back(wt); WM.push_back(&s.liveM); l1.push_back("Cx?"); l2.push_back(std::string()); l3.push_back(std::string()); } }
                 if (it == s.iMarks.end()) continue;
                 for (const wyi::M& m : it->second) {
+                    if (m.code == 'S' || m.code == 'A') continue;   // (0.43.0, Rassul 2026-11-27 09:50 CT "consolidate AR and Vob (t) into a new BI") VOB / VOT and AR are still written (the nightly scores them) but no longer drawn - the BI replaces them
                     const wyi::TurnAbs* tz = nullptr; if (m.code == 'Q') { const auto tq = s.tabs.find((long long)times[i]); if (tq != s.tabs.end() && tq->second.dir == m.dir) tz = &tq->second; }   // (0.27.0)
                     const std::string a1 = m.code == 'Q' ? wyi::absLine1(tz) : m.code == 'S' ? std::string(m.dir > 0 ? "VOB" : "VOT") /* (0.36.0) was "Sw" */ : std::string(wyi::textOf(m.code)), a2 = m.lv, a3 = m.code == 'C' ? std::string() : m.code == 'Q' ? wyi::absLine3(tz) : m.st;   /* (0.27.0) Abs: "Abs" / "Abs/Ex?", position, P */ setFont(f1); int w = (int)getTextWidth(a1.c_str(), -1); if (!a2.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a2.c_str(), -1)); }
                     if (!a3.empty()) { setFont(f2); w = std::max(w, (int)getTextWidth(a3.c_str(), -1)); }   // (0.19.2) the strength: a 3rd line, same font as the level
