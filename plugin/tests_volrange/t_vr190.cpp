@@ -38,7 +38,7 @@ int main() {
                 C(mv && mv->col == (want >= 10 ? vrr::C_GOLD : vrr::C_TXT), "Max gold from 10, else white");
                 if (mode == vrr::VOL) C(mv && mv->text == "15" && mv->col == vrr::C_GOLD, "NQ 5:39 PM: BVMax 15 in gold");
                 const vrr::Prim* g = findText(P, pr + "G"); const vrr::Prim* r = findText(P, pr + "R"); const vrr::Prim* a = findText(P, pr);
-                C(g && r && a, "all four rows");
+                C((g || r) && a, "all four rows (1.18.0: the candle's own colour row G or R)"); { const vrr::Prim* th = findText(P, mode == vrr::VOL ? "VolTH" : "Thrust"); const vrr::Prim* pc = findText(P, mode == vrr::VOL ? "Change" : "PIC"); C(th && pc, "1.18.0: Thrust + PIC (VolTH + Change) rows on top, all 5 number rows fit the 66 px pane"); C(th && mx && th->y0 < mx->y0, "1.18.0: above the Max row"); }
                 if (g && r && a) { C(a->y0 > mx->y0 && g->y0 > a->y0 && r->y0 > g->y0, "order: Max, consecutive, green, red");
                     const vrr::Prim* gv = rightOf(P, g); const vrr::Prim* rv = rightOf(P, r);
                     C(gv && gv->col == vrr::C_UP && gv->text != "-", "green candle: the G row is green with its count");

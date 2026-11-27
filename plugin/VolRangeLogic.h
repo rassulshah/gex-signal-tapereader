@@ -26,7 +26,8 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal") the price chart's BI ("t|BI|dir|lv|px|st") is marked "BI" on BOTH panes (in the AR's place, first after CB); the file's Sw (VOB / VOT) and AR lines are no longer marked
+static const char* const VERSION = "1.18.0";   // (1.18.0, Rassul 2026-11-27 11:03-11:11 CT, Thrust-mockup.html, "build") + Thrust / PIC on the Range read, VolTH / Change on the Volume read (14 candles), gold, above BRMax / BVMax
+// was static const char* const VERSION = "1.17.0";   // (1.17.0, Rassul 2026-11-27 09:50-10:00 CT "consolidate AR and Vob (t) into a new BI (Break In) signal") the price chart's BI ("t|BI|dir|lv|px|st") is marked "BI" on BOTH panes (in the AR's place, first after CB); the file's Sw (VOB / VOT) and AR lines are no longer marked
 // was static const char* const VERSION = "1.16.0";   // (1.16.0, Rassul 2026-11-25 14:28-14:29 CT "relabel sweep to VOB (volume off the bottom) and VOT (Volume off the top)") the Sw code over a bar shows as VOB (bullish) / VOT (bearish)
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, Rassul 2026-11-24 21:23-22:39 CT "everything else is a go" on reads-conclude-mockup.html v30) the Volume read concludes: title = the overall call of the three panes (lsTurn vread + lsRevRead bsv files), effort vs result with price agreement, large orders, who led, sliced / pulled (VRRead 1.6.0)
 // was static const char* const VERSION = "1.14.0";   // (1.14.0, Rassul 2026-11-24 20:46 / 20:54) the Volume read: a grey column with the volume-model question of each line (VRRead 1.5.0); full questions when the read has room, short ones when narrow, none under 150 px
@@ -340,6 +341,33 @@ static const unsigned C_LABEL = 0x0094A3B8, C_GOLD = 0x00F0C040;   // (1.9.0) th
 
 // E = the closed bars; form / haveForm = the forming bar (drawn as a bar, never numbered); v.first / v.last = visible bar indexes
 // (the forming bar's index = E.V.size())
+// (1.18.0, Rassul 2026-11-27 11:03-11:11 CT "a stat that measures the HLR/ATR ... called thrust ... in the range infobox above BRMAX", "also add this for
+// volume which is VO/VMA ... above BVMAX", "up to 2 decimals", "next to thrust i also want a close value (CL-CL.1) / avg difference in closes", "it needs
+// to be ABS value", "lets add this for vol as well abs(vo-vo.1) / average differences in vol", "PIC for progress in the close", "VolTH for vol Thrust",
+// "instead of 20, lets use 14 for both the range and vol. build"; mockup Thrust-mockup.html). Candle k = closed bar index (k == n: the forming bar f):
+//   Thrust = (high - low) / ATR(14)              ATR = the average true range of the 14 candles BEFORE k
+//   PIC    = |close - prior close| / the average |close - prior close| of the 14 candles before k   (progress in close)
+//   VolTH  = volume / VMA(14)                    VMA = the average volume of the 14 candles before k
+//   Change = |volume - prior volume| / the average |volume - prior volume| of the 14 candles before k
+// Dead (empty) candles are skipped; fewer than 14 usable candles before k = "-". Text "1.72x" (2 decimals).
+static const int TH_N = 14;
+struct ThStat { double a = NAN, b = NAN; };   // Range: a = Thrust, b = PIC; Volume: a = VolTH, b = Change
+inline ThStat thStat(const Engine& E, int k, const Bar* f) {
+    ThStat o; const int n = (int)E.Cc.size(); if (k < 0 || k > n || (k == n && !f) || (int)E.Vol.size() != n) return o;
+    const double h = k == n ? f->h : E.Hh[(size_t)k], l = k == n ? f->l : E.Ll[(size_t)k], c = k == n ? f->c : E.Cc[(size_t)k], vo = k == n ? f->v : E.Vol[(size_t)k];
+    std::vector<int> J; for (int j = k - 1; j >= 1 && (int)J.size() < TH_N + 1; --j) if (!E.deadBar(j)) J.push_back(j);   // newest first: J[0] = the prior candle
+    if ((int)J.size() < TH_N + 1) return o;
+    double tr = 0, dc = 0, vm = 0, dv = 0;
+    for (int q = 0; q < TH_N; ++q) { const int j = J[(size_t)q], p = J[(size_t)q + 1];
+        const double pc = E.Cc[(size_t)p]; tr += std::max(E.Hh[(size_t)j] - E.Ll[(size_t)j], std::max(std::fabs(E.Hh[(size_t)j] - pc), std::fabs(E.Ll[(size_t)j] - pc)));
+        dc += std::fabs(E.Cc[(size_t)j] - pc); vm += E.Vol[(size_t)j]; dv += std::fabs(E.Vol[(size_t)j] - E.Vol[(size_t)p]); }
+    tr /= TH_N; dc /= TH_N; vm /= TH_N; dv /= TH_N;
+    const double pcK = E.Cc[(size_t)J[0]], pvK = E.Vol[(size_t)J[0]];
+    if (E.mode == VOL) { if (vm > 0) o.a = vo / vm; if (dv > 0) o.b = std::fabs(vo - pvK) / dv; }
+    else { if (tr > 0) o.a = (h - l) / tr; if (dc > 0) o.b = std::fabs(c - pcK) / dc; }
+    return o;
+}
+inline std::string thText(double x) { if (!std::isfinite(x) || x < 0) return "-"; char b[24]; std::snprintf(b, sizeof b, "%.2fx", std::min(x, 999.99)); return b; }
 inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form, int pick = -1)
 {
     std::vector<Prim> P; const int n = (int)E.V.size(), W = v.r - v.l, H = v.b - v.t; if (W < 40 || H < 12 || !v.X) return P;
@@ -404,14 +432,21 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         if (o.ok) { const std::string pr = E.mode == VOL ? "BV" : "BR"; const bool dead = !onForm && E.deadBar(at);
             auto row = [](const std::string& l, const std::string& a, int c) { vrd::Row r; r.lab = l; r.a = a; r.ca = c; return r; };
             o.rows.clear();
+            {   const ThStat ts = dead ? ThStat() : thStat(E, onForm ? n : at, onForm ? form : nullptr);   // (1.18.0) Thrust + PIC / VolTH + Change on top, gold
+                const bool vm = E.mode == VOL;
+                // two rows (a "PIC 2.62x" cell beside Thrust made the numbers column too wide for a ~300 px read - it vanished at 284 px)
+                o.rows.push_back(row(vm ? "VolTH" : "Thrust", thText(ts.a), std::isfinite(ts.a) ? 3 : 2));
+                o.rows.push_back(row(vm ? "Change" : "PIC", thText(ts.b), std::isfinite(ts.b) ? 3 : 2)); }
             o.rows.push_back(row(pr + "Max", dead ? "-" : fm(s.mx()), dead ? 2 : (s.mx() >= SHOW_MIN_LV ? 3 : 0)));
             o.rows.push_back(row(pr, dead ? "-" : fm(s.all), dead ? 2 : 0));
-            o.rows.push_back(row(pr + "G", !dead && s.green ? fm(s.same) : "-", !dead && s.green ? 1 : 2));
-            o.rows.push_back(row(pr + "R", !dead && !s.green ? fm(s.same) : "-", !dead && !s.green ? -1 : 2)); }   // (1.6.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no numbers
+            // (1.18.0) the pane fits 4 rows (66 px): the new Thrust row would push BRR / BVR out, so the candle's OWN colour row is shown alone - a green
+            // candle "BRG <n>", a red one "BRR <n>" (the other colour's row was always "-"); nothing is lost
+            o.rows.push_back(s.green ? row(pr + "G", !dead ? fm(s.same) : "-", !dead ? 1 : 2) : row(pr + "R", !dead ? fm(s.same) : "-", !dead ? -1 : 2)); }   // (1.6.0, Rassul 21:15-21:17 CT "more human readable and simplified", "lets do this") three plain lines, no numbers
         if (o.ok) {   // (1.5.0, Rassul 2026-11-17 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have
             // the data points") LEFT: the verdict line, then plain-English sentences word-wrapped (most important first); RIGHT: the numbers
             auto tw = [&](const std::string& q) { return v.textW ? v.textW(q) : (int)q.size() * 6; };
-            const int rh = th + 2, y0 = v.t + 1, fit = (H - 2) / rh;
+            int rh = th + 2; if ((H - 2) / rh < (int)o.rows.size() && (H - 2) / (th + 1) >= (int)o.rows.size()) rh = th + 1;   /* (1.18.0) 1 px tighter when that is what fits the 5 number rows */
+            const int y0 = v.t + 1, fit = (H - 2) / rh;
             const unsigned vc = o.verdict == 1 ? C_UP : o.verdict == -1 ? C_DN : o.verdict == 2 ? C_TXT : C_BOXLN;
             const int headW = tw(o.head) + (o.why.empty() ? 0 : 6 + tw(o.why));
             int wk = 0, wa2 = 0, wb2 = 0; for (const vrd::Row& r : o.rows) { wk = std::max(wk, tw(r.lab)); wa2 = std::max(wa2, tw(r.a)); wb2 = std::max(wb2, tw(r.b)); }
@@ -454,7 +489,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         }
     }
     if (box && !newRead) {                                                              // the 1.2.0 read box (a narrow pane / the chart scrolled back): the last CLOSED bar
-        const int rows = 4, rh = std::max(8, std::min(th + 1, (H - 2 * BOX_PAD) / rows)); const int bh = rows * rh + 2 * BOX_PAD;
+        const int rows = 6, rh = std::max(8, std::min(th + 1, (H - 2 * BOX_PAD) / rows));   /* (1.18.0) 6 rows: + Thrust / PIC (VolTH / Change) */ const int bh = rows * rh + 2 * BOX_PAD;
         const int x0 = bxL, y0 = v.t + std::max(0, (H - bh) / 2), x1 = bx1, y1 = std::min(v.b, y0 + bh);
         Prim bg; bg.fill = true; bg.x0 = x0; bg.y0 = y0; bg.x1 = x1; bg.y1 = y1; bg.col = C_BOXBG; P.push_back(bg);
         const int E4[4][4] = { {x0, y0, x1, y0}, {x0, y1, x1, y1}, {x0, y0, x0, y1}, {x1, y0, x1, y1} };
@@ -464,10 +499,12 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         const bool onForm = pick == n && form != nullptr; const int at = pick >= 0 && pick < n ? pick : n - 1;
         const bool have = onForm || at >= 0; const Stat s = onForm ? E.forming(*form) : at >= 0 ? E.S[(size_t)at] : Stat();
         struct Row { std::string k, val; unsigned col; };
-        const Row R[4] = { { pre + "Max", have ? fm(s.mx()) : "-", s.green ? C_UP : C_DN }, { pre, have ? fm(s.all) : "-", C_TXT },
+        const ThStat ts = have ? thStat(E, onForm ? n : at, onForm ? form : nullptr) : ThStat();   // (1.18.0)
+        const Row R[6] = { { vol ? "VolTH" : "Thrust", thText(ts.a), C_GOLD }, { vol ? "Change" : "PIC", thText(ts.b), C_GOLD },
+                           { pre + "Max", have ? fm(s.mx()) : "-", s.green ? C_UP : C_DN }, { pre, have ? fm(s.all) : "-", C_TXT },
                            { pre + "G", have && s.green ? fm(s.same) : "-", C_UP }, { pre + "R", have && !s.green ? fm(s.same) : "-", C_DN } };
         auto tw = [&](const std::string& q) { return v.textW ? v.textW(q) : (int)q.size() * 6; };
-        for (int k = 0; k < 4; ++k) {
+        for (int k = 0; k < 6; ++k) {
             const int y = y0 + BOX_PAD + k * rh; if (y + rh > y1) break;
             Prim a2; a2.text = R[k].k; a2.col = C_TXT; a2.x0 = x0 + 5; a2.x1 = a2.x0 + tw(R[k].k); a2.y0 = y; a2.y1 = y + rh; P.push_back(a2);
             Prim b2; b2.bold = true; b2.text = R[k].val; b2.col = R[k].col; b2.x1 = x1 - 5; b2.x0 = b2.x1 - tw(R[k].val); b2.y0 = y; b2.y1 = y + rh; P.push_back(b2);
