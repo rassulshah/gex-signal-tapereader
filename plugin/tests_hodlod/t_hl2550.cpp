@@ -24,7 +24,7 @@ static std::vector<stp::Bar> bars(long long upTo) {
     return v; }
 static std::string nm(const std::vector<stp::Lvl>& v) { return stp::names(v); }
 int main() {
-    C(std::string(hl::HL_VERSION) >= "2.55.0" && std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(stp::VERSION) >= "1.0.0" && std::string(nowl::VERSION) == "1.8.0", "versions");
+    C(std::string(hl::HL_VERSION) >= "2.55.0" && std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(stp::VERSION) >= "1.0.0" && std::string(nowl::VERSION) >= "1.8.0", "versions");
     std::ifstream in("es1126_keys.csv"); std::stringstream ss; ss << in.rdbuf(); std::vector<hsw::Lv> K0;
     C(hsw::parseKeys(ss.str(), 1795729660LL, 3600, K0) && K0.size() >= 15, "real key levels parsed");
     std::vector<stp::Lv> K; for (const hsw::Lv& k : K0) K.push_back(stp::Lv{ k.name, k.px });

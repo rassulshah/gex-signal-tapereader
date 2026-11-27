@@ -25,7 +25,7 @@ int main() {
     C(stp::status(O, "LonLO") == 0 && stp::status(O, "LLO") == 0 && stp::status(O, "ONL") == 0 && stp::status(O, "PDL") == 0, "LonLO / ONL / PDL: stops (short name LLO too)");
     C(stp::status(O, "AsiaLO") == 0 && stp::status(O, "ALO") == 0, "AsiaLO: stops - Asia to 2:00 AM, the 1:12 AM bar is inside the window, London stayed above");
     C(stp::status(O, "ONH/LonHI/AsiaHI") == 0 && stp::status(O, "AHI") == 0, "combined name / AHI: stops");
-    C(stp::status(O, "DPoc") == -1 && stp::status(O, "R2") == -1 && stp::status(O, "VAH") == -1, "volume / pivot levels: no tag");
+    C(stp::status(O, "DPoc") == -1 && stp::status(O, "VAH") == -1 && stp::status(O, "R2") == 0, "volume levels: no tag; (1.2.0) R2 = stops");
     C(stp::status(stp::Out(), "PDH") == -1, "no data: no tag");
     // Asia window: a bar at 1:30 AM is still Asia (no run); at 2:03 AM it counts
     { std::vector<stp::Lv> k = { { "AsiaLO", 100.0 } };

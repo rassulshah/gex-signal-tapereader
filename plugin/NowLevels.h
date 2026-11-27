@@ -46,7 +46,8 @@
 
 namespace nowl {
 
-static const char* const VERSION = "1.8.0";   // (1.8.0 = lsHodLod 2.55.0, Rassul 16:08 CT) the gold "VOB(T) WATCH" word reads "Next"; the host centres the line on the HOD / LOD box
+static const char* const VERSION = "1.9.0";   // (1.9.0 = lsHodLod 2.57.0, Rassul 2026-11-26 19:09 CT "if pdl has stops show it like PDL stops but put stops dimmer smaller", 11-27 08:16 "go") a chip can carry a small dim tag after its name (Seg.tag, drawn at 8 pt)
+// was "1.8.0";   // (1.8.0 = lsHodLod 2.55.0, Rassul 16:08 CT) the gold "VOB(T) WATCH" word reads "Next"; the host centres the line on the HOD / LOD box
 // was "1.7.0";   // (1.7.0 = lsHodLod 2.47.0, Rassul 2026-11-26 02:30-02:32 CT "make the level line look better . make it look nice", "add it ... i'll go with your recommendation", mockup Level-Line-mockup.html option A) LEVEL CHIPS: the label "VOB(T) WATCH" in gold text (no block), each watched level its own chip - a low below price green (a VOB can form there), a high above red (a VOT) - "Bk / VOB(T)" dropped; the state words (TESTING / VOB / VOT / BREAK / WATCH BkTst Rev) stay filled badges with the level in a chip after them; NEXT / LAST BK as grey labels, the arrow green / red, the level white. Same rules and content
 // was "1.6.1";   // (1.6.1 = lsHodLod 2.46.1, Rassul 2026-11-25 16:46-17:00 CT "high volume rejection from an attempted break of a level", both sides (LevelMarks 1.25.0)) VOB(T) WATCH names the nearest untouched major levels above and below again, any kind (1.5.1's highs-above / lows-below filter is off: NL_SIDE_FILTER); TESTING reads "Bk / VOB(T)"
 // was "1.6.0";   // (1.6.0 = lsHodLod 2.46.0, Rassul 2026-11-25 14:28-14:29 CT "i want to relabel sweep  to VOB  (volume off the bottom) and VOT (Volume off the top)", "yes   VOB(T) WATCH    .   for the  voice just use the letters"; mockup vob-vot-mockup.html) a sweep is named VOB (bullish, off a low) / VOT (bearish, off a high) on the line: "VOB: CWL", "VOB(T) WATCH: ...", "TESTING: ONL Bk / VOB"
@@ -73,7 +74,7 @@ static const unsigned C_GREY = 0x0094A3B8, C_GOLD = 0x00F0C040, C_GREEN = 0x0022
 
 // one piece of the line: s, then an arrow (+1 up / -1 down, drawn with pen strokes - IRT's drawText is cp1252, no arrow glyphs), then s2;
 // sep = the thin vertical separator between parts; badge = a filled box (fill) with black bold text
-struct Seg { std::string s, s2; int arrow = 0; unsigned col = C_WHITE; bool bold = false; bool badge = false; bool sep = false; unsigned fill = 0; int part = 0; int drop = 0; bool chip = false; unsigned bcol = 0; };   // (1.7.0) chip = one level in its own outlined box (fill + border bcol)   // drop: 0 keep, 2 the Last Bk part, 3 (1.3.0) the liquidity phrase (dropped first)
+struct Seg { std::string s, s2; int arrow = 0; unsigned col = C_WHITE; bool bold = false; bool badge = false; bool sep = false; unsigned fill = 0; int part = 0; int drop = 0; bool chip = false; unsigned bcol = 0; std::string tag; unsigned tagCol = 0; };   // (1.9.0) tag = a small dim word after a chip's name ("stops" / "swept")   // (1.7.0) chip = one level in its own outlined box (fill + border bcol)   // drop: 0 keep, 2 the Last Bk part, 3 (1.3.0) the liquidity phrase (dropped first)
 // (1.3.0) one row of lsLimitProfile's level liquidity file: "L|name|level_tick|B or O|state|shown|since_ct_s|conf"
 struct LiqRow { std::string name; bool bid = true; std::string st; bool shown = false; long long since = 0; };
 struct Liq { bool ok = false; std::vector<LiqRow> rows; std::string why = "no file"; };
@@ -455,14 +456,17 @@ inline std::string plain(const std::vector<Seg>& v) {
 
 // the drawing, SDK-free: the host measures text (meas(s, bold)) and draws the items in order. One line centred on cx with its bottom at
 // yBottom, inside [xMin, xMax]; the Last Bk part drops first, then pieces drop off the right end (never a dangling separator) until it fits.
-struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; unsigned col = 0, fill = 0; bool bold = false, arw = false; std::string s; };   // k: 0 filled box (col = border), 1 text (measured box l..r, row t..b), 2 line (arw = an arrow stroke)
+struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; unsigned col = 0, fill = 0; bool bold = false, arw = false; std::string s; int fs = 0; };   // (1.9.0) fs: 0 = the line's font, else this size   // k: 0 filled box (col = border), 1 text (measured box l..r, row t..b), 2 line (arw = an arrow stroke)
 struct Draw { bool ok = false; int l = 0, t = 0, r = 0, b = 0; int level = 0; int pieces = 0, shown = 0; std::vector<Item> items; };
 static const int ARW = 9, ASP = 4, GAP = 5, PADX = 5, SEPW = 13;   // (1.3.1) ARW = the arrow's ink width with the 2-px pen; ASP = clear space each side
+static const int TAG_FS = 8, TAG_GAP = 3;   // (1.9.0) the chip tag: 8 pt, 3 px after the name
+template <class M> inline int tagW(const std::string& s, M meas) { return (meas(s, false) * TAG_FS + 9) / 10; }   // meas is at the 10-pt line font
 template <class M> inline int segW(const std::vector<Seg>& v, size_t q, M meas) {
     const Seg& g = v[q]; if (g.sep) return SEPW;
     int w = 0; if (!g.s.empty()) w += meas(g.s, g.bold);
     if (g.arrow) w += ASP + ARW + ASP;
     if (!g.s2.empty()) w += (g.arrow ? 0 : (w ? 4 : 0)) + meas(g.s2, g.bold);
+    if (!g.tag.empty()) w += TAG_GAP + tagW(g.tag, meas);   // (1.9.0)
     return w + (badgeFirst(v, q) ? PADX : 0) + (badgeLast(v, q) ? PADX : 0) + (g.chip ? 2 * PADX : 0);
 }
 template <class M> inline Draw layout(const std::vector<Seg>& all, M meas, int cx, int yBottom, int xMin, int xMax, int fs) {
@@ -494,7 +498,8 @@ template <class M> inline Draw layout(const std::vector<Seg>& all, M meas, int c
             Item a2 = a1; a2.l = ax - 3; a2.t = ym + d; a2.r = ax; a2.b = ym + 4 * d; D.items.push_back(a2);
             Item a3 = a2; a3.l = ax + 3; D.items.push_back(a3);
             xx += ASP + ARW + ASP; }
-        if (!g.s2.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold; T.s = g.s2; T.r = xx + meas(g.s2, g.bold); D.items.push_back(T); }
+        if (!g.s2.empty()) { Item T; T.k = 1; T.l = xx; T.t = t; T.b = b; T.col = g.col; T.bold = g.bold; T.s = g.s2; T.r = xx + meas(g.s2, g.bold); D.items.push_back(T); xx = T.r; }
+        if (!g.tag.empty()) { Item T; T.k = 1; T.l = xx + TAG_GAP; T.t = t + 1; T.b = b; T.col = g.tagCol; T.bold = false; T.s = g.tag; T.fs = TAG_FS; T.r = T.l + tagW(g.tag, meas); D.items.push_back(T); }   // (1.9.0)
     }
     return D;
 }

@@ -23,7 +23,8 @@
 #include <cstdio>
 
 namespace stp {
-static const char* const VERSION = "1.1.1";   // (1.1.1, Rassul 2026-11-26 18:57 CT, ES screenshot two "Stops" chips on PFH / PDH 7256.25: "if multiple levels are the same, show only one badge"; the "Stops resting" arrows printed as "â†‘" on his chart - drawn as lines now, as the Level line)
+static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-26 19:01-19:10 CT + 11-27 08:15-08:16 "go": a Swept chip has a 2nd smaller line "5:45 \xB7 14h 15m" (time run \xB7 how long ago); R1 / R2 / S1 / S2 = stops on the Next line; the section can draw INSIDE the HOD / LOD box ("needs to be a part of the hod box"))
+// was "1.1.1";   // (1.1.1, Rassul 2026-11-26 18:57 CT, ES screenshot two "Stops" chips on PFH / PDH 7256.25: "if multiple levels are the same, show only one badge"; the "Stops resting" arrows printed as "â†‘" on his chart - drawn as lines now, as the Level line)
 static const int ROW = 16, PX = 8, GAP = 6;
 static const unsigned C_BG = 0x000B0F14, C_EDGE = 0x00444444, C_SEPV = 0x002A2F36, C_HEAD = 0x009A9A9A, C_TXT = 0x00E5E7EB,
                       C_RED = 0x00EF4444, C_GREEN = 0x0022C55E;
@@ -82,7 +83,7 @@ inline Out compute(const std::vector<Lv>& keys, const std::vector<Bar>& bars, in
     O.ok = true; return O;
 }
 
-struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; std::string s; unsigned col = 0, fill = 0; bool bold = false; };   // k 0 box, 1 text, 2 line
+struct Item { int k = 0; int l = 0, t = 0, r = 0, b = 0; std::string s; unsigned col = 0, fill = 0; bool bold = false; int fs = 10; };   // (1.2.0) fs = font size   // k 0 box, 1 text, 2 line
 struct Draw { bool ok = false; int l = 0, t = 0, r = 0, b = 0; std::vector<Item> items; std::string text, why; };
 
 inline std::vector<std::string> pairs(const std::vector<Lvl>& v) {
@@ -94,7 +95,7 @@ inline std::string names(const std::vector<Lvl>& v) { std::string s; for (const 
 
 // left = the HOD / LOD box's right edge (shared border); bottom = the pane's bottom; minH = the box's height (at least); top = the highest
 // the section may reach; right = the last bar
-inline Draw layout(const Out& O, const std::function<int(const std::string&, bool)>& M, int left, int bottom, int minH, int top, int right) {
+inline Draw layout(const Out& O, const std::function<int(const std::string&, bool)>& M, int left, int bottom, int minH, int top, int right, bool inBox = false) {   // (1.2.0) inBox: no border of its own (a column of the HOD / LOD box, which draws the frame)
     Draw D; if (!O.ok) { D.why = O.why.empty() ? "no data" : O.why; return D; }
     const std::string tR = "Stops resting", tN = "Stops run", lH = "Highs", lL = "Lows";
     const std::vector<std::string> pH = pairs(O.runHi), pL = pairs(O.runLo);
@@ -108,8 +109,8 @@ inline Draw layout(const Out& O, const std::function<int(const std::string&, boo
     const int H = (std::max)(Hc, minH);
     if (left + W > right) { D.why = "no room (" + std::to_string(W) + " px wide, " + std::to_string(right - left) + " px free)"; return D; }
     if (bottom - H < top) { D.why = "no room (" + std::to_string(H) + " px tall)"; return D; }
-    D.l = left - 1; D.r = left + W; D.b = bottom; D.t = bottom - H;
-    D.items.push_back(Item{ 0, D.l, D.t, D.r, D.b, "", C_EDGE, C_BG, false });
+    D.l = inBox ? left - PX : left - 1; D.r = left + W; D.b = bottom; D.t = bottom - H;
+    if (!inBox) D.items.push_back(Item{ 0, D.l, D.t, D.r, D.b, "", C_EDGE, C_BG, false });
     auto text = [&](int x, int y, const std::string& s, unsigned col, bool bold) { const int w = M(s, bold); D.items.push_back(Item{ 1, x, y, x + w, y + ROW, s, col, 0, bold }); return w; };
     const int x0 = left + PX; int y = D.t + 3;
     text(x0, y, tR, C_HEAD, false); y += ROW + 1; D.items.push_back(Item{ 2, x0, y, D.r - PX, y, "", C_SEPV, 0, false }); y += 2;
@@ -133,6 +134,7 @@ inline Draw layout(const Out& O, const std::function<int(const std::string&, boo
 // not on the chart's key-level list. A combined name ("ONH/LonHI"): the first part that is a stop level
 inline int status(const Out& O, const std::string& name) {
     if (!O.ok) return -1;
+    if (name.size() == 2 && (name[0] == 'R' || name[0] == 'S') && name[1] >= '1' && name[1] <= '9') return 0;   // (1.2.0, Rassul 19:10 "what about R2" - option 1) a standing 3-hour pivot high / low: its stops are still there (the line moves on once run)
     size_t a = 0;
     for (;;) { const size_t p = name.find('/', a); const std::string q = name.substr(a, p == std::string::npos ? std::string::npos : p - a);
         const int d = defOf(q);
@@ -141,6 +143,7 @@ inline int status(const Out& O, const std::string& name) {
         a = p + 1; }
     return -1;
 }
+static const unsigned C_SWEPT2 = 0x009AA4B2;   // (1.2.0) the dim 2nd line
 static const unsigned C_STOPS = 0x00F0C040, C_STOPS_B = 0x007A6420, C_SWEPT = 0x00CBD5E1, C_SWEPT_B = 0x006B7280;
 struct Box { int l = 0, t = 0, r = 0, b = 0; };
 inline bool hit(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
@@ -148,7 +151,7 @@ inline bool hit(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a
 // "Swept" (run). yOf(price) = the pane's y; [left, right] = the price area (to the last bar); [top, bottom] = the free band; avoid = the boxes
 // already drawn. A chip that would touch another chip or a box steps right, then left (56 px a step, up to 4 each way); none free = no chip.
 inline std::vector<Item> chips(const Out& O, const std::function<int(double)>& yOf, const std::function<int(const std::string&, bool)>& M,
-                               int left, int right, int top, int bottom, const std::vector<Box>& avoid, std::string* text = nullptr) {
+                               int left, int right, int top, int bottom, const std::vector<Box>& avoid, std::string* text = nullptr, long long nowT = 0) {   // (1.2.0) nowT = the last bar's time, for "how long ago"
     std::vector<Item> out; if (!O.ok || right - left < 60) return out;
     std::vector<Box> placed; const int cx = (left + right) / 2, H = 13, STEP = 56;
     std::vector<Lvl> v = O.all; std::sort(v.begin(), v.end(), [](const Lvl& a, const Lvl& b) { return a.px > b.px || (a.px == b.px && a.order < b.order); });
@@ -164,20 +167,25 @@ inline std::vector<Item> chips(const Out& O, const std::function<int(double)>& y
     }
     for (const Lvl& x : v) {
         const int y = yOf(x.px); if (y - H / 2 < top || y + H / 2 > bottom) continue;
-        std::string s = x.run ? "Swept" : "Stops";
-        if (x.run && x.runT > 0) { const int m = (int)(((x.runT % 86400) + 86400) % 86400 / 60), h = m / 60; char b[16]; std::snprintf(b, sizeof b, " %d:%02d", (h + 11) % 12 + 1, m % 60); s += b; }   // (1.1.0, Rassul 17:29 "add the time the level was swept to the badge") "Swept 5:45"
-        const int w = M(s, false) + 8;
+        const std::string s = x.run ? "Swept" : "Stops";
+        std::string s2;   // (1.2.0, 19:01 "put the time on a second line", 19:04 "make the 2nd line font smaller") "5:45 \xB7 14h 15m"
+        if (x.run && x.runT > 0) {
+            const int m = (int)(((x.runT % 86400) + 86400) % 86400 / 60), h = m / 60; char b[48]; std::snprintf(b, sizeof b, "%d:%02d", (h + 11) % 12 + 1, m % 60); s2 = b;
+            if (nowT >= x.runT) { const long long e = (nowT - x.runT) / 60; if (e >= 60) std::snprintf(b, sizeof b, " \xB7 %lldh %lldm", e / 60, e % 60); else std::snprintf(b, sizeof b, " \xB7 %lldm", e); s2 += b; } }
+        const int H2 = s2.empty() ? H : H + 9;
+        const int w = (std::max)(M(s, false), (M(s2, false) * 8 + 9) / 10) + 8;
         bool done = false;
         for (int k = 0; k <= 8 && !done; k++) {
             const int off = k == 0 ? 0 : ((k + 1) / 2) * STEP * (k % 2 ? 1 : -1);
-            Box b; b.l = cx + off - w / 2; b.r = b.l + w; b.t = y - H / 2; b.b = b.t + H;
+            Box b; b.l = cx + off - w / 2; b.r = b.l + w; b.t = y - H / 2; b.b = b.t + H2;
             if (b.l < left || b.r > right) continue;
             bool clash = false; for (const Box& p : placed) if (hit(b, p)) clash = true; for (const Box& p : avoid) if (hit(b, p)) clash = true;
             if (clash) continue;
             placed.push_back(b); done = true;
             out.push_back(Item{ 0, b.l, b.t, b.r, b.b, "", x.run ? C_SWEPT_B : C_STOPS_B, C_BG, false });
-            out.push_back(Item{ 1, b.l, b.t, b.r, b.b, s, x.run ? C_SWEPT : C_STOPS, 0, false });
-            if (text) *text += (text->empty() ? "" : " ") + x.name + "=" + s;   // e.g. "PDH=Swept 5:45"
+            out.push_back(Item{ 1, b.l, b.t, b.r, b.t + H, s, x.run ? C_SWEPT : C_STOPS, 0, false, 10 });
+            if (!s2.empty()) out.push_back(Item{ 1, b.l, b.t + H - 2, b.r, b.b, s2, C_SWEPT2, 0, false, 8 });
+            if (text) *text += (text->empty() ? "" : " ") + x.name + "=" + s + (s2.empty() ? std::string() : " " + s2);   // e.g. "PDH=Swept 5:45"
         }
     }
     return out;
