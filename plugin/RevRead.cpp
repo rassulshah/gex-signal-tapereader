@@ -114,7 +114,8 @@ static const bool RV_DRAW_STRIP = false;  // (0.45.0, Rassul 2026-11-27 15:12 CT
 static const bool TD_ON_CANDLE = false;   // (0.44.2, Rassul 2026-11-27 14:24 CT "add the dots only to the range bar instead of the candle") the thrust dot is drawn only in the Range pane (lsRangeRead); its "TD" lines are still written
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.46.3"   // (0.46.3, Rassul 22:22 CT: SR only on a reversal candle off a pivot that ended a move - PressRead 1.0.7)
+#define RVS_VERSION "0.46.4"   // (0.46.4, Rassul 22:49 CT "yes go": the SR mark needs a Strong+ stop run (1.5x+ its typical) - PressRead 1.0.11)
+// was #define RVS_VERSION "0.46.3"   // (0.46.3, Rassul 22:22 CT: SR only on a reversal candle off a pivot that ended a move - PressRead 1.0.7)
 // was #define RVS_VERSION "0.46.2"   // (0.46.2, Rassul 22:19 CT "didn't you find a stop run between 10 and 10:30?": when two ratio labels touch, the one carrying SR stays)
 // was #define RVS_VERSION "0.46.1"   // (0.46.1, Rassul 2026-11-27 22:18 CT "get rid of the A, its making things messy": A not drawn (still computed); 12 px kept over the labels for SR)
 static const bool RV_DRAW_A = false;   // (0.46.1) the A (absorption) marks over the bars - off (Rassul 22:18 CT)
@@ -160,7 +161,7 @@ static const bool RV_DRAW_A = false;   // (0.46.1) the A (absorption) marks over
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.46.3");
+    p->setVersion("0.46.4");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }

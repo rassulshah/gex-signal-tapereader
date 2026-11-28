@@ -22,10 +22,11 @@
 #include <vector>
 
 namespace prd {
-static const char* const VERSION = "1.0.7";   // 1.0.7 (22:22 CT): SR pivot must end a move (low under the 2 lows before), SR candle closes in its direction; 1.0.6 1.0.6 (22:03 CT): SR only on the first bar since the down / up pivot whose low is below the pivot candle's high (mirror); 1.0.5 1.0.5 (2026-11-27 21:58 CT): each kind of stop run vs its own typical run ("1.1x typical"), Moderate+ only, local 2+ ticks past; Tags (SR / A marks); LocalTable; 1.0.4 1.0.4 (2026-11-27 20:19 CT "call Context: Stop Run instead"): the label is "Stop Run: ", so the text drops the words "stop run"; 1.0.3 1.0.3 (2026-11-27 20:17 CT): context = opposite-side stop runs only (lows for a bullish read, highs for bearish); flip effect = the price move; 1.0.2: 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
+static const char* const VERSION = "1.0.11";   // 1.0.11 (22:49 CT "yes go"): SR mark only for Strong+ runs (1.5x+ their typical); the Stop Run line still shows Moderate+; 1.0.10 1.0.10 (22:37 CT): a red bullish-absorption candle is confirmed by a close above its high (not any green candle); 1.0.9 1.0.9 (22:35 CT): A confirmed by its own green close, else the first green candle of the next 2 (no new low first); 1.0.8 1.0.8 (22:30 CT): A = an absorption at the pivot, confirmed by a close beyond the candle in the next 2, one per pivot; 1.0.7 1.0.7 (22:22 CT): SR pivot must end a move (low under the 2 lows before), SR candle closes in its direction; 1.0.6 1.0.6 (22:03 CT): SR only on the first bar since the down / up pivot whose low is below the pivot candle's high (mirror); 1.0.5 1.0.5 (2026-11-27 21:58 CT): each kind of stop run vs its own typical run ("1.1x typical"), Moderate+ only, local 2+ ticks past; Tags (SR / A marks); LocalTable; 1.0.4 1.0.4 (2026-11-27 20:19 CT "call Context: Stop Run instead"): the label is "Stop Run: ", so the text drops the words "stop run"; 1.0.3 1.0.3 (2026-11-27 20:17 CT): context = opposite-side stop runs only (lows for a bullish read, highs for bearish); flip effect = the price move; 1.0.2: 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
 static const int NORM_N = 14;
 static const double LABEL_X = 1.9;
-static const double KEY_TYP0 = 1.7;   // the usual key-level stop-run burst when a session has fewer than 5 runs so far
+static const double KEY_TYP0 = 1.7;
+static const double SR_MIN_REL = 1.5;   // (1.0.11) the SR mark needs a Strong+ run (1.5x its typical): 7-market check 11-11..11-27, 1,345 pivots - Strong+ held ~75%, Moderate 64.5%, no run 60%   // the usual key-level stop-run burst when a session has fewer than 5 runs so far
 
 struct Cdl {                       // one closed candle as the pane sees it
     bool ok = false; double o = 0, h = 0, l = 0, c = 0; long long buy = 0, sell = 0;
@@ -196,7 +197,7 @@ inline LocalTable localTable(const std::vector<Cdl>& C, const std::vector<long l
 // each kind is measured against ITS OWN typical run (key-level runs vs the key-level runs before, local vs local) and the number shown is that
 // ratio ("1.1x typical"); a run needs Moderate+ (0.75x its typical or more) - a key run also passes lsSR's full test (burst 1.5x+), a local run
 // 2+ ticks past the swing with a known burst; rec = price closed back across the run's level by candle i (SR mark only then).
-struct Ctx { bool ok = false; std::string text; int col = 0; bool rec = false; int side = 0; int k = -1; };   // k = the run candle
+struct Ctx { bool ok = false; std::string text; int col = 0; bool rec = false; int side = 0; int k = -1; double rel = 0; };   // k = the run candle
 template <class Clock>
 inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, const LocalTable& T, Clock clock, int dir, double tick) {
     Ctx out; if (i < 0 || i >= (int)C.size() || dir == 0 || T.lo.size() != C.size()) return out; const int want = dir > 0 ? -1 : 1;
@@ -209,7 +210,7 @@ inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys
         if (r.end == keys[(size_t)k] && r.side == want && r.x >= 1.5 && r.x / kTyp >= 0.75 && (!best || r.x > best->x)) { best = &r; bk = k; }
     if (best) {
         const double rel = best->x / kTyp; const int sd = best->side;
-        out.ok = true; out.side = sd; out.k = bk; out.rec = reclaimed(C, bk, i, sd, best->px);
+        out.ok = true; out.side = sd; out.k = bk; out.rel = rel; out.rec = reclaimed(C, bk, i, sd, best->px);
         out.text = srWord(rel) + (sd < 0 ? " below " : " above ") + levelName(best->lvl) + " at " + clock(bk) + ", " + fx(rel, 1) + "x typical";
         out.col = out.rec ? (sd < 0 ? 1 : -1) : (sd < 0 ? -1 : 1); return out;
     }
@@ -218,12 +219,44 @@ inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys
         const double x = want < 0 ? T.xlo[(size_t)k] : T.xhi[(size_t)k]; if (x <= 0) continue;
         const double typ = T.typ[(size_t)k] > 0 ? T.typ[(size_t)k] : 1.0, rel = x / typ; if (rel < 0.75) continue;
         const double past = L.side < 0 ? L.px - C[(size_t)k].l : C[(size_t)k].h - L.px; if (past < 2 * tick - 1e-9) continue;
-        out.ok = true; out.side = L.side; out.k = k; out.rec = reclaimed(C, k, i, L.side, L.px);
+        out.ok = true; out.side = L.side; out.k = k; out.rel = rel; out.rec = reclaimed(C, k, i, L.side, L.px);
         out.text = srWord(rel) + " local" + (L.side < 0 ? " below the " : " above the ") + clock(L.p) + (L.side < 0 ? " low" : " high")
             + " at " + clock(k) + ", " + fx(rel, 1) + "x typical";
         out.col = out.rec ? (L.side < 0 ? 1 : -1) : (L.side < 0 ? -1 : 1); return out;
     }
     return out;
+}
+
+// A on candle i (bullish; bearish = mirror) - Rassul 22:30 CT "add the other signals, first lets start with A. similar logic, pivot bar etc":
+// the read of candle i is an ABSORPTION by the bids (sellers' hits 1.5x+ absorbed - bids building or bid icebergs), the DOWN PIVOT = the lowest
+// candle of i-2..i ended a down move (its low under the lows of the 2 candles before it), candle i's low is below the pivot candle's high
+// (at the turn), a candle of the next 2 closes above candle i's high (confirmed - the A is decided then and never changes), and no candle from
+// the pivot to i-1 already had an A (one A per pivot). conf = the candle that confirmed it (the A shows from that candle's close on).
+inline int absorbSide(const std::vector<Cdl>& C, int i) {   // +1 bids absorbed sellers, -1 offers absorbed buyers, 0 no absorption read
+    const Read r = read(metrics(C, i)); if (!r.ok || r.cause.find("absorbing") == std::string::npos) return 0; return r.ec != 0 ? r.ec : r.cc; }
+inline bool aBasic(const std::vector<Cdl>& C, int i, int dir, int* pivot, int* conf) {
+    if (i < 2 || i >= (int)C.size() || !C[(size_t)i].ok || absorbSide(C, i) != dir) return false;
+    int p = -1; for (int j = i - 2; j <= i; ++j) if (C[(size_t)j].ok && (p < 0 || (dir > 0 ? C[(size_t)j].l < C[(size_t)p].l : C[(size_t)j].h > C[(size_t)p].h))) p = j;
+    if (p < 0) return false;
+    for (int j = p - 1, n = 0; j >= 0 && n < 2; --j) { if (!C[(size_t)j].ok) continue; ++n; if (dir > 0 ? C[(size_t)j].l <= C[(size_t)p].l : C[(size_t)j].h >= C[(size_t)p].h) return false; }
+    if (dir > 0 ? !(C[(size_t)i].l < C[(size_t)p].h) : !(C[(size_t)i].h > C[(size_t)p].l)) return false;
+    // 1.0.9 (Rassul 22:35 CT "if the candle is green you would show the A, if it is red, wait for a green candle and then show the A"):
+    // confirmed by the candle itself when it closes up (green); a red one by a close ABOVE ITS HIGH in the next 2 (Rassul 22:37 CT correction:
+    // "requiring a candle close above the high to confirm absorbtion on a prior red candle") - and price must not trade below the pivot low
+    // before it (mirror for bearish)
+    int cf = -1;
+    for (int j = i; j <= i + 2 && j < (int)C.size(); ++j) { const Cdl& q = C[(size_t)j]; if (!q.ok) continue;
+        if (j > i && (dir > 0 ? q.l < C[(size_t)p].l : q.h > C[(size_t)p].h)) break;
+        if (j == i ? (dir > 0 ? q.c > q.o : q.c < q.o) : (dir > 0 ? q.c > C[(size_t)i].h : q.c < C[(size_t)i].l)) { cf = j; break; } }   // 1.0.10: a red one needs a close above its high
+    if (cf < 0) return false;
+    if (pivot) *pivot = p;
+    if (conf) *conf = cf;
+    return true;
+}
+inline bool aMark(const std::vector<Cdl>& C, int i, int dir, int last) {   // last = the newest closed candle (the confirmation must be closed)
+    int p = -1, cf = -1; if (!aBasic(C, i, dir, &p, &cf) || cf > last) return false;
+    for (int j = std::max(0, p); j < i; ++j) { int pj = -1, cj = -1; if (aBasic(C, j, dir, &pj, &cj) && cj <= last && pj == p) return false; }
+    return true;
 }
 
 // The marks over a candle's ratios (Rassul 21:39 CT "add an SR on top of the ratio", 21:58 "add an A for absorbtion signals on bars where
@@ -232,7 +265,7 @@ inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys
 // the two bar heights' ratios for candle i (0 = no bar), with the passive side's sign
 struct BarPair { double agg = 0; int aSide = 0; double pas = 0; int pSide = 0; };
 inline BarPair bars(const std::vector<Cdl>& C, int i) { BarPair b; const Metrics m = metrics(C, i); if (!m.ok) return b; b.agg = m.dr; b.aSide = m.d >= 0 ? 1 : -1; if (m.pi) { b.pas = m.bs; b.pSide = m.imb >= 0 ? 1 : -1; } return b; }
-struct Tags { bool srUp = false, srDn = false; int a = 0; };
+struct Tags { bool srUp = false, srDn = false; int a = 0; };   // a = +1 / -1 an A (aMark) on the candle
 // SR on candle i for a bullish ratio (dir +1; bearish = mirror) - Rassul 22:03 CT "the bar low should be below the high of the dn pivot and only
 // one SR on a bar since the dn pivot": a reclaimed stop run of lows (this candle or the 3 before), the candle has a green ratio label (1.9x+),
 // the DOWN PIVOT = the lowest candle from the run candle to i, the candle's low is below that pivot candle's high (still at the turn), and no
@@ -242,7 +275,7 @@ inline bool srBasic(const std::vector<Cdl>& C, const std::vector<long long>& key
     if (i < 0 || i >= (int)C.size() || !C[(size_t)i].ok) return false;
     const BarPair bp = bars(C, i);
     const bool lab = (bp.agg >= LABEL_X && bp.aSide == dir) || (bp.pas >= LABEL_X && bp.pSide == dir); if (!lab) return false;
-    const Ctx x = context(C, keys, i, runs, T, clock, dir, tick); if (!x.ok || !x.rec || x.k < 0) return false;
+    const Ctx x = context(C, keys, i, runs, T, clock, dir, tick); if (!x.ok || !x.rec || x.k < 0 || x.rel < SR_MIN_REL) return false;
     int p = x.k; for (int j = x.k; j <= i; ++j) if (C[(size_t)j].ok && (dir > 0 ? C[(size_t)j].l < C[(size_t)p].l : C[(size_t)j].h > C[(size_t)p].h)) p = j;
     if (pivot) *pivot = p;
     // 1.0.7 (Rassul 22:22 CT "the point of the stop run is to distinguish the reversals ... coming from the pivot"): the pivot must END a move
@@ -263,8 +296,8 @@ inline bool srMark(const std::vector<Cdl>& C, const std::vector<long long>& keys
 // absorbing the buyers = -1), 0 none. Closed candles only.
 template <class Clock>
 inline Tags tags(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, const LocalTable& T, Clock clock, double tick) {
-    Tags g; const Metrics m = metrics(C, i); const Read r = read(m);
-    if (r.ok && r.cause.find("absorbing") != std::string::npos) g.a = r.ec != 0 ? r.ec : r.cc;
+    Tags g; const int last = (int)C.size() - 1;   // C holds closed candles only
+    g.a = aMark(C, i, 1, last) ? 1 : aMark(C, i, -1, last) ? -1 : 0;
     g.srUp = srMark(C, keys, i, runs, T, clock, tick, 1); g.srDn = srMark(C, keys, i, runs, T, clock, tick, -1); return g;
 }
 
