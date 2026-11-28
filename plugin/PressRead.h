@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace prd {
-static const char* const VERSION = "1.0.2";   // 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
+static const char* const VERSION = "1.0.4";   // 1.0.4 (2026-11-27 20:19 CT "call Context: Stop Run instead"): the label is "Stop Run: ", so the text drops the words "stop run"; 1.0.3 1.0.3 (2026-11-27 20:17 CT): context = opposite-side stop runs only (lows for a bullish read, highs for bearish); flip effect = the price move; 1.0.2: 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
 static const int NORM_N = 14;
 static const double LABEL_X = 1.9;
 
@@ -55,13 +55,14 @@ struct Metrics {
     bool pi = false; double bs = 0; long long imb = 0;      // book ratio and its sign (imb = nb - na)
     double ix = 0; long long iceLots = 0; bool iceOk = false;   // icebergs on the side hit vs normal
     long long nb = 0, na = 0;
+    double cpos = 0.5;                                     // where the candle closed in its range (0 = low, 1 = high)
 };
 
 // the candle i vs the NORM_N candles before it (gaps skipped, at most 40 back); needs 5+ to be ok
 inline Metrics metrics(const std::vector<Cdl>& C, int i) {
     Metrics m; if (i < 1 || i >= (int)C.size() || !C[(size_t)i].ok || !C[(size_t)i - 1].ok) return m;
     const Cdl& x = C[(size_t)i];
-    m.d = x.d(); m.pd = C[(size_t)i - 1].d(); m.chg = m.d - m.pd; m.mv = x.c - x.o;
+    m.d = x.d(); m.pd = C[(size_t)i - 1].d(); m.chg = m.d - m.pd; m.mv = x.c - x.o; m.cpos = x.h > x.l ? (x.c - x.l) / (x.h - x.l) : 0.5;
     double sD = 0, sC = 0, sR = 0; int nD = 0, nC = 0;
     double sB = 0; int nB = 0; double sI = 0; int nI = 0; const bool hitBids = m.d < 0;
     for (int k = i - 1; k >= 0 && k >= i - 40 && nD < NORM_N; --k) { const Cdl& a = C[(size_t)k]; if (!a.ok) continue;
@@ -105,7 +106,14 @@ inline Read read(const Metrics& m) {
         else { r.effect = mag(kx) + (asd < 0 ? " bullish" : " bearish") + " absorption"; r.ec = asd < 0 ? 1 : -1; }
         return r;
     }
-    if (k == FLIP) { r.cause = att + " took over: delta " + grp(m.pd, true) + " to " + grp(m.d, true); r.effect = mag(kx) + (m.d > 0 ? " flip up" : " flip down"); r.cc = r.ec = m.d > 0 ? 1 : -1; return r; }
+    if (k == FLIP) {   // (Rassul 2026-11-27 20:14 CT: the effect must be what PRICE did, not the flip again; no lot numbers)
+        const std::string w = mag(kx); r.cause = (w.empty() ? std::string("Delta") : w + " delta") + " flip - " + attl + " took over";
+        const double mx = m.aR > 0 ? std::fabs(m.mv) / m.aR : 0; const std::string pw = mag(mx);
+        const std::string dirw = m.mv > 0 ? "up move" : m.mv < 0 ? "down move" : "no move";
+        std::string e = pw.empty() ? std::string(1, (char)std::toupper((unsigned char)dirw[0])) + dirw.substr(1) : pw + " " + dirw;
+        if (m.mv > 0 && m.cpos >= 0.8) e += ", closed at the high"; else if (m.mv < 0 && m.cpos <= 0.2) e += ", closed at the low";
+        else if (psd != 0 && psd != asd) e += " against the flip";
+        r.effect = e; r.cc = asd; r.ec = psd; return r; }
     const bool aggOk = asd == psd, pasOk = m.pi && bsd == psd;
     if (pasOk && (!aggOk || m.bs > m.dr)) { const std::string w = mag(m.bs); r.cause = withMag(m.bs, bsd) + " built " + fx(m.bs, 1) + "x"; r.effect = (w.empty() ? std::string() : w + " ") + "move by limit orders"; r.cc = r.ec = bsd; return r; }
     const std::string w = mag(m.dr); r.cause = att + " hit " + fx(m.dr, 1) + "x"; r.effect = (w.empty() ? std::string() : w + " ") + (asd > 0 ? "buying - buyers in control" : "selling - sellers in control"); r.cc = r.ec = asd; return r;
@@ -145,9 +153,10 @@ inline bool swingHigh(const std::vector<Cdl>& C, int p) { if (p < 2 || p + 2 >= 
     return C[(size_t)p].h > std::max(C[(size_t)p - 1].h, C[(size_t)p - 2].h) && C[(size_t)p].h >= std::max(C[(size_t)p + 1].h, C[(size_t)p + 2].h); }
 struct Local { int k = -1, p = -1, side = 0; double px = 0; };
 // the local swing (low for side -1) the candle k trades through: unbroken since it formed, at most 30 candles old; the one nearest k's close
-inline Local localRun(const std::vector<Cdl>& C, int k) {
+inline Local localRun(const std::vector<Cdl>& C, int k, int only = 0) {   // only = -1 lows, +1 highs, 0 both
     Local best; if (k < 5 || k >= (int)C.size() || !C[(size_t)k].ok) return best;
     for (int p = k - 3; p >= 2 && p >= k - 30; --p) for (int sd = -1; sd <= 1; sd += 2) {
+        if (only != 0 && sd != only) continue;
         if (sd < 0 ? !swingLow(C, p) : !swingHigh(C, p)) continue;
         const double px = sd < 0 ? C[(size_t)p].l : C[(size_t)p].h; bool broken = false;
         for (int j = p + 1; j < k && !broken; ++j) if (C[(size_t)j].ok && (sd < 0 ? C[(size_t)j].l < px : C[(size_t)j].h > px)) broken = true;
@@ -161,29 +170,31 @@ inline bool reclaimed(const std::vector<Cdl>& C, int k, int i, int side, double 
 // i = the candle read; keys[i] = its time key; runs = every key-level run decision (any grade); burst(end, side) = that candle's strongest
 // one-second small-order burst on the side (-1 sellers, +1 buyers) from the journal, < 0 = unknown; clock(i) = "9:00"; tick for points
 template <class Burst, class Clock>
-inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, Burst burst, Clock clock) {
-    Ctx out; if (i < 0 || i >= (int)C.size()) return out;
+// dir = the read's direction (+1 bullish, -1 bearish, 0 none): a bullish read shows only stop runs BELOW lows, a bearish read only ABOVE highs
+// (Rassul 2026-11-27 20:17 CT "obviously you would need a stop run of lows to explain bullish reversals and vice versa"); dir 0 = no line
+inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, Burst burst, Clock clock, int dir) {
+    Ctx out; if (i < 0 || i >= (int)C.size() || dir == 0) return out; const int want = dir > 0 ? -1 : 1;
     // typical key-level run burst: the runs decided before this candle (5+), else 1.0
     std::vector<double> kx; for (const KeyRun& r : runs) if (r.end < keys[(size_t)i] && r.x >= 1.0) kx.push_back(r.x);   // the real key-level stop runs before (burst 1x+)
     const double kTyp = kx.size() >= 5 ? median(kx) : 1.0;
     // the strongest key run (>= 1.5x) of this candle or the 3 before
     const KeyRun* best = nullptr; int bk = -1;
-    for (int k = i; k >= 0 && k >= i - 3; --k) for (const KeyRun& r : runs) if (r.end == keys[(size_t)k] && r.x >= 1.5 && (!best || r.x > best->x)) { best = &r; bk = k; }
+    for (int k = i; k >= 0 && k >= i - 3; --k) for (const KeyRun& r : runs) if (r.end == keys[(size_t)k] && r.side == want && r.x >= 1.5 && (!best || r.x > best->x)) { best = &r; bk = k; }
     if (best) {
         const int sd = best->side; const bool rec = reclaimed(C, bk, i, sd, best->px);
         out.ok = true;
-        out.text = srWord(best->x / (kTyp > 0 ? kTyp : 1.0)) + " stop run " + (sd < 0 ? "below " : "above ") + levelName(best->lvl) + " at " + clock(bk) + " with " + fx(best->x, 1) + "x burst";   // (Rassul 20:11 CT "... with 2.2x burst at <time>")
+        out.text = srWord(best->x / (kTyp > 0 ? kTyp : 1.0)) + (sd < 0 ? " below " : " above ") + levelName(best->lvl) + " at " + clock(bk) + " with " + fx(best->x, 1) + "x burst";   // (Rassul 20:11 CT "... with 2.2x burst at <time>")
         out.col = rec ? (sd < 0 ? 1 : -1) : (sd < 0 ? -1 : 1); return out;
     }
     // a local swing run: this candle or the 3 before (newest first); its word vs the typical local run burst (the local runs before it, 5+)
     for (int k = i; k >= 0 && k >= i - 3; --k) {
-        const Local L = localRun(C, k); if (L.k < 0) continue;
+        const Local L = localRun(C, k, want); if (L.k < 0) continue;
         const double x = burst(keys[(size_t)k], L.side);
         std::vector<double> lx; for (int q = k - 1; q >= 5 && q >= k - 400 && lx.size() < 60; --q) { const Local Q = localRun(C, q); if (Q.k < 0) continue; const double b = burst(keys[(size_t)q], Q.side); if (b > 0) lx.push_back(b); }
         const double lTyp = lx.size() >= 5 ? median(lx) : 1.0;
         const bool rec = reclaimed(C, k, i, L.side, L.px); const double past = L.side < 0 ? L.px - C[(size_t)k].l : C[(size_t)k].h - L.px;
         out.ok = true;
-        out.text = (x > 0 ? srWord(x / (lTyp > 0 ? lTyp : 1.0)) + " local" : std::string("Local")) + " stop run " + (L.side < 0 ? "below the " : "above the ") + clock(L.p) + (L.side < 0 ? " low" : " high")
+        out.text = (x > 0 ? srWord(x / (lTyp > 0 ? lTyp : 1.0)) + " local" : std::string("Local")) + (L.side < 0 ? " below the " : " above the ") + clock(L.p) + (L.side < 0 ? " low" : " high")
             + " at " + clock(k) + (x > 0 ? " with " + fx(x, 1) + "x burst" : std::string());   // (Rassul 20:12 CT "... below HVL at <time> with 2.2x burst")
         (void)past;
         out.col = rec ? (L.side < 0 ? 1 : -1) : (L.side < 0 ? -1 : 1); return out;

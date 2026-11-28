@@ -114,7 +114,9 @@ static const bool RV_DRAW_STRIP = false;  // (0.45.0, Rassul 2026-11-27 15:12 CT
 static const bool TD_ON_CANDLE = false;   // (0.44.2, Rassul 2026-11-27 14:24 CT "add the dots only to the range bar instead of the candle") the thrust dot is drawn only in the Range pane (lsRangeRead); its "TD" lines are still written
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.45.2"   // (0.45.2, Rassul 2026-11-27 20:12 CT "Moderate stop run below HVL at <time> with 2.2x burst" - PressRead 1.0.2)
+#define RVS_VERSION "0.45.4"   // (0.45.4, Rassul 2026-11-27 20:19 CT "call Context: Stop Run instead" - PressRead 1.0.4)
+// was #define RVS_VERSION "0.45.3"   // (0.45.3, Rassul 2026-11-27 20:17 CT stop runs of lows for bullish reads, highs for bearish; flip effect = price - PressRead 1.0.3)
+// was #define RVS_VERSION "0.45.2"   // (0.45.2, Rassul 2026-11-27 20:12 CT "Moderate stop run below HVL at <time> with 2.2x burst" - PressRead 1.0.2)
 // was #define RVS_VERSION "0.45.1"   // (0.45.1, Rassul 2026-11-27 20:11 CT "Moderate stop run below HVL with 2.2x burst at <time>": the stop-run context ends with the run candle's time - PressRead 1.0.1)
 // was #define RVS_VERSION "0.45.0"   // (0.45.0, Rassul 2026-11-27 15:06-19:31 CT, mockup DeltaChange-mockup.html v41, "yes" 19:31) PRESSURE bars (PressRead.h 1.0.0): delta vs normal (bright green / red) + bids net - offers net vs normal (dark green / red), a ratio at 1.9x+; at the top "Cause: ... => Effect: ..." (the one direct cause of the price move) and, near a stop run, "Context: <Light..Huge> [local] stop run below / above ... with N.Nx burst" (key-level runs compared with key-level runs, local with local); gold Delta / DCh / Change / Pts/1k / Icebergs / Book rows over the read; the letter strip not drawn (still computed and published)
 // was #define RVS_VERSION "0.44.2"   // (0.44.2, Rassul 2026-11-27 14:24 CT) the thrust dot only in the Range bar, not on the candle
@@ -153,7 +155,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.45.2");
+    p->setVersion("0.45.4");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -980,7 +982,7 @@ public:
                     for (const srb::RAll& a : e.sr.jf.rall) { prd::KeyRun r; r.end = a.end; r.lvl = a.lvl; r.px = (double)a.px * S.tick; r.side = a.side; r.x = a.x; r.vol = a.vol; r.ovol = a.ovol; r.reach = (double)a.reach * S.tick; runs.push_back(r); }
                     const std::map<long long, sr::JBar>& jb = e.sr.jf.J.bars;
                     auto burst = [&](long long end, int side) -> double { const auto it = jb.find(end); return it == jb.end() ? -1.0 : side < 0 ? it->second.xD : it->second.xU; };
-                    const prd::Ctx cx = prd::context(PC, PK, cbBar, runs, burst, clockOf);
+                    const prd::Ctx cx = prd::context(PC, PK, cbBar, runs, burst, clockOf, pr.ok ? (pr.ec != 0 ? pr.ec : pr.cc) : 0);   // opposite-side runs only (0.45.3)
                     int yy = rowY0;
                     if (pr.ok) { const std::string a = "Cause: ", b = "  =>  Effect: ";
                         setFont(f10b); const int wa = (int)getTextWidth(a.c_str(), -1), wbx = (int)getTextWidth(b.c_str(), -1), we = (int)getTextWidth(pr.effect.c_str(), -1); setFont(f10); const int wc = (int)getTextWidth(pr.cause.c_str(), -1);
@@ -989,10 +991,10 @@ public:
                             setFont(f10b); put(b, xx, yy, rvh::C_WHITE, limTop + 1); xx += wbx; put(pr.effect, xx, yy, colOf(pr.ec), limTop + 1); }
                         else { setFont(f10b); const int w0 = (int)getTextWidth("Effect: ", -1); if (xx + w0 + we <= limTop) { put("Effect: ", xx, yy, rvh::C_WHITE, limTop + 1); put(pr.effect, xx + w0, yy, colOf(pr.ec), limTop + 1); } } }
                     yy += rowH2;   // (0.45.0, Rassul 19:38 CT "put the context line below the cause effect line")
-                    if (cx.ok) { setFont(f10b); const int w1 = (int)getTextWidth("Context: ", -1); setFont(f10); const int w2 = (int)getTextWidth(cx.text.c_str(), -1);
-                        if ((int)pane.left + 6 + w1 + w2 <= limTop) { setFont(f10b); put("Context: ", (int)pane.left + 6, yy, rvh::C_WHITE, limTop + 1); setFont(f10); put(cx.text, (int)pane.left + 6 + w1, yy, colOf(cx.col), limTop + 1); }
+                    if (cx.ok) { setFont(f10b); const int w1 = (int)getTextWidth("Stop Run: ", -1); setFont(f10); const int w2 = (int)getTextWidth(cx.text.c_str(), -1);
+                        if ((int)pane.left + 6 + w1 + w2 <= limTop) { setFont(f10b); put("Stop Run: ", (int)pane.left + 6, yy, rvh::C_WHITE, limTop + 1); setFont(f10); put(cx.text, (int)pane.left + 6 + w1, yy, colOf(cx.col), limTop + 1); }
                         }
-                    e.pressRead = "Cause: " + pr.cause + " => Effect: " + pr.effect + (cx.ok ? " | Context: " + cx.text : std::string());
+                    e.pressRead = "Cause: " + pr.cause + " => Effect: " + pr.effect + (cx.ok ? " | Stop Run: " + cx.text : std::string());
                 }
             }
             else if (dH > 8 && mx > 0 && !D.empty()) { setFont(fb); int lastR = -100000; double lastX = 0;
