@@ -114,7 +114,10 @@ static const bool RV_DRAW_STRIP = false;  // (0.45.0, Rassul 2026-11-27 15:12 CT
 static const bool TD_ON_CANDLE = false;   // (0.44.2, Rassul 2026-11-27 14:24 CT "add the dots only to the range bar instead of the candle") the thrust dot is drawn only in the Range pane (lsRangeRead); its "TD" lines are still written
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.46.0"   // (0.46.0, Rassul 2026-11-27 21:39-22:03 CT: SR only on the first bar since the pivot whose low is below the pivot candle high (PressRead 1.0.6); "add an SR on top of the ratio" (a reclaimed stop run of lows over green ratios / highs over red), "add an A for absorbtion signals on bars", stop runs measured vs their own kind ("1.1x typical", Moderate+, local 2+ ticks) - PressRead 1.0.5)
+#define RVS_VERSION "0.46.2"   // (0.46.2, Rassul 22:19 CT "didn't you find a stop run between 10 and 10:30?": when two ratio labels touch, the one carrying SR stays)
+// was #define RVS_VERSION "0.46.1"   // (0.46.1, Rassul 2026-11-27 22:18 CT "get rid of the A, its making things messy": A not drawn (still computed); 12 px kept over the labels for SR)
+static const bool RV_DRAW_A = false;   // (0.46.1) the A (absorption) marks over the bars - off (Rassul 22:18 CT)
+// was #define RVS_VERSION "0.46.0"   // (0.46.0, Rassul 2026-11-27 21:39-22:03 CT: SR only on the first bar since the pivot whose low is below the pivot candle high (PressRead 1.0.6); "add an SR on top of the ratio" (a reclaimed stop run of lows over green ratios / highs over red), "add an A for absorbtion signals on bars", stop runs measured vs their own kind ("1.1x typical", Moderate+, local 2+ ticks) - PressRead 1.0.5)
 // was #define RVS_VERSION "0.45.4"   // (0.45.4, Rassul 2026-11-27 20:19 CT "call Context: Stop Run instead" - PressRead 1.0.4)
 // was #define RVS_VERSION "0.45.3"   // (0.45.3, Rassul 2026-11-27 20:17 CT stop runs of lows for bullish reads, highs for bearish; flip effect = price - PressRead 1.0.3)
 // was #define RVS_VERSION "0.45.2"   // (0.45.2, Rassul 2026-11-27 20:12 CT "Moderate stop run below HVL at <time> with 2.2x burst" - PressRead 1.0.2)
@@ -156,7 +159,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.46.0");
+    p->setVersion("0.46.2");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -972,7 +975,7 @@ public:
                 auto tagOf = [&](int i) -> prd::Tags {   // the SR / A marks of closed candle i; final (cached) once 3+ candles back
                     const long long k = PK[(size_t)i]; const auto it = e.ptags.find(k); if (it != e.ptags.end()) return it->second;
                     const prd::Tags g = prd::tags(PC, PK, i, runs, e.ltab, clockOf, S.tick); if (i <= lastC - 3) e.ptags[k] = g; return g; };
-                const int rowY0 = (int)pane.top + 2, rowH2 = 15, bTop = rowY0 + 2 * rowH2 + 12 + 24, bBot = (int)pane.bottom - 2, bH = bBot - bTop;   // (0.46.0) bTop +24 px: room over the labels for the A / SR marks
+                const int rowY0 = (int)pane.top + 2, rowH2 = 15, bTop = rowY0 + 2 * rowH2 + 12 + 12, bBot = (int)pane.bottom - 2, bH = bBot - bTop;   // (0.46.0) bTop +24 px: room over the labels for the A / SR marks
                 int limTop = (int)pane.right - 6; if (v1 >= (int)count - 1) { PNT q; q.set((int)count - 1, 0.0f, kBarCenter); limTop = std::min(limTop, (int)q.h + (int)bw); }
                 if (bH > 8) {
                     const int wb = std::max(1, (int)std::lround(bw * 0.36)); const double RMAX = 4.5;
@@ -987,9 +990,9 @@ public:
                             char t[16]; std::snprintf(t, sizeof t, "%.1fx", std::min(99.9, rx)); const int tw2 = (int)getTextWidth(t, -1);
                             const int cx = k == 0 ? x - wb / 2 : x + 1 + wb / 2, top = std::max(bTop - 13, bBot - (k == 0 ? hA : hP) - 13);
                             PL L; L.l = cx - tw2 / 2; L.r = L.l + tw2 + 1; L.t = top; L.x = rx; L.side = k == 0 ? bp.aSide : bp.pSide; L.sr = L.side >= 0 ? tg.srUp : tg.srDn;
-                            if (!labs.empty()) { PL& q = labs.back(); if (L.l < q.r + 2 && L.t < q.t + 12 && q.t < L.t + 12) { if (L.x > q.x) q = L; continue; } }
+                            if (!labs.empty()) { PL& q = labs.back(); if (L.l < q.r + 2 && L.t < q.t + 12 && q.t < L.t + 12) { if ((L.sr && !q.sr) || (L.sr == q.sr && L.x > q.x)) q = L; continue; } }   // (0.46.2) a label with SR wins a collision
                             labs.push_back(L); }
-                        if (tg.a != 0) { AM a; a.x = x; a.yb = bBot - std::max(hA, hP) - 13; a.side = tg.a; ams.push_back(a); } }
+                        if (RV_DRAW_A && tg.a != 0) { AM a; a.x = x; a.yb = bBot - std::max(hA, hP) - 13; a.side = tg.a; ams.push_back(a); } }
                     for (const PL& L : labs) { char t[16]; std::snprintf(t, sizeof t, "%.1fx", std::min(99.9, L.x)); setTextColor(L.side >= 0 ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(L.l), rvh::coord(L.t), rvh::coord(L.r), rvh::coord(L.t + 12)); r.drawText(t, false, false);
                         if (L.sr) { setFont(f10b); const int cx = (L.l + L.r) / 2, w2 = (int)getTextWidth("SR", -1); RCT q; q.set(rvh::coord(cx - w2 / 2), rvh::coord(L.t - 12), rvh::coord(cx - w2 / 2 + w2 + 1), rvh::coord(L.t)); q.drawText("SR", false, false); setFont(f10); } }
                     // (0.46.0) A over the candle: above any ratio / SR label within 22 px, else over its taller bar; never above the bar area's top - 24
