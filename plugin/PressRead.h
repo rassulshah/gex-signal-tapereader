@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace prd {
-static const char* const VERSION = "1.0.6";   // 1.0.6 (22:03 CT): SR only on the first bar since the down / up pivot whose low is below the pivot candle's high (mirror); 1.0.5 1.0.5 (2026-11-27 21:58 CT): each kind of stop run vs its own typical run ("1.1x typical"), Moderate+ only, local 2+ ticks past; Tags (SR / A marks); LocalTable; 1.0.4 1.0.4 (2026-11-27 20:19 CT "call Context: Stop Run instead"): the label is "Stop Run: ", so the text drops the words "stop run"; 1.0.3 1.0.3 (2026-11-27 20:17 CT): context = opposite-side stop runs only (lows for a bullish read, highs for bearish); flip effect = the price move; 1.0.2: 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
+static const char* const VERSION = "1.0.7";   // 1.0.7 (22:22 CT): SR pivot must end a move (low under the 2 lows before), SR candle closes in its direction; 1.0.6 1.0.6 (22:03 CT): SR only on the first bar since the down / up pivot whose low is below the pivot candle's high (mirror); 1.0.5 1.0.5 (2026-11-27 21:58 CT): each kind of stop run vs its own typical run ("1.1x typical"), Moderate+ only, local 2+ ticks past; Tags (SR / A marks); LocalTable; 1.0.4 1.0.4 (2026-11-27 20:19 CT "call Context: Stop Run instead"): the label is "Stop Run: ", so the text drops the words "stop run"; 1.0.3 1.0.3 (2026-11-27 20:17 CT): context = opposite-side stop runs only (lows for a bullish read, highs for bearish); flip effect = the price move; 1.0.2: 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
 static const int NORM_N = 14;
 static const double LABEL_X = 1.9;
 static const double KEY_TYP0 = 1.7;   // the usual key-level stop-run burst when a session has fewer than 5 runs so far
@@ -245,6 +245,11 @@ inline bool srBasic(const std::vector<Cdl>& C, const std::vector<long long>& key
     const Ctx x = context(C, keys, i, runs, T, clock, dir, tick); if (!x.ok || !x.rec || x.k < 0) return false;
     int p = x.k; for (int j = x.k; j <= i; ++j) if (C[(size_t)j].ok && (dir > 0 ? C[(size_t)j].l < C[(size_t)p].l : C[(size_t)j].h > C[(size_t)p].h)) p = j;
     if (pivot) *pivot = p;
+    // 1.0.7 (Rassul 22:22 CT "the point of the stop run is to distinguish the reversals ... coming from the pivot"): the pivot must END a move
+    // (its low under the lows of the 2 candles before it; high over the highs for a bearish SR) and the SR candle must be a reversal candle
+    // (closes up for green, down for red)
+    for (int j = p - 1, n = 0; j >= 0 && n < 2; --j) { if (!C[(size_t)j].ok) continue; ++n; if (dir > 0 ? C[(size_t)j].l <= C[(size_t)p].l : C[(size_t)j].h >= C[(size_t)p].h) return false; }
+    if (dir > 0 ? !(C[(size_t)i].c > C[(size_t)i].o) : !(C[(size_t)i].c < C[(size_t)i].o)) return false;
     return dir > 0 ? C[(size_t)i].l < C[(size_t)p].h : C[(size_t)i].h > C[(size_t)p].l;
 }
 template <class Clock>
