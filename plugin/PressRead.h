@@ -197,7 +197,7 @@ inline LocalTable localTable(const std::vector<Cdl>& C, const std::vector<long l
 // each kind is measured against ITS OWN typical run (key-level runs vs the key-level runs before, local vs local) and the number shown is that
 // ratio ("1.1x typical"); a run needs Moderate+ (0.75x its typical or more) - a key run also passes lsSR's full test (burst 1.5x+), a local run
 // 2+ ticks past the swing with a known burst; rec = price closed back across the run's level by candle i (SR mark only then).
-struct Ctx { bool ok = false; std::string text; int col = 0; bool rec = false; int side = 0; int k = -1; double rel = 0; };   // k = the run candle
+struct Ctx { bool ok = false; std::string text; int col = 0; bool rec = false; int side = 0; int k = -1; double rel = 0; double px = 0; long long vol = 0; bool key = false; std::string lvl; };   // px = the level / swing price; vol = the stop lots (key runs)   // k = the run candle
 template <class Clock>
 inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, const LocalTable& T, Clock clock, int dir, double tick) {
     Ctx out; if (i < 0 || i >= (int)C.size() || dir == 0 || T.lo.size() != C.size()) return out; const int want = dir > 0 ? -1 : 1;
@@ -210,7 +210,7 @@ inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys
         if (r.end == keys[(size_t)k] && r.side == want && r.x >= 1.5 && r.x / kTyp >= 0.75 && (!best || r.x > best->x)) { best = &r; bk = k; }
     if (best) {
         const double rel = best->x / kTyp; const int sd = best->side;
-        out.ok = true; out.side = sd; out.k = bk; out.rel = rel; out.rec = reclaimed(C, bk, i, sd, best->px);
+        out.ok = true; out.side = sd; out.k = bk; out.rel = rel; out.px = best->px; out.vol = best->vol; out.key = true; out.lvl = levelName(best->lvl); out.rec = reclaimed(C, bk, i, sd, best->px);
         out.text = srWord(rel) + (sd < 0 ? " below " : " above ") + levelName(best->lvl) + " at " + clock(bk) + ", " + fx(rel, 1) + "x typical";
         out.col = out.rec ? (sd < 0 ? 1 : -1) : (sd < 0 ? -1 : 1); return out;
     }
@@ -219,7 +219,7 @@ inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys
         const double x = want < 0 ? T.xlo[(size_t)k] : T.xhi[(size_t)k]; if (x <= 0) continue;
         const double typ = T.typ[(size_t)k] > 0 ? T.typ[(size_t)k] : 1.0, rel = x / typ; if (rel < 0.75) continue;
         const double past = L.side < 0 ? L.px - C[(size_t)k].l : C[(size_t)k].h - L.px; if (past < 2 * tick - 1e-9) continue;
-        out.ok = true; out.side = L.side; out.k = k; out.rel = rel; out.rec = reclaimed(C, k, i, L.side, L.px);
+        out.ok = true; out.side = L.side; out.k = k; out.rel = rel; out.px = L.px; out.key = false; out.lvl = "the " + clock(L.p) + (L.side < 0 ? " low" : " high"); out.rec = reclaimed(C, k, i, L.side, L.px);
         out.text = srWord(rel) + " local" + (L.side < 0 ? " below the " : " above the ") + clock(L.p) + (L.side < 0 ? " low" : " high")
             + " at " + clock(k) + ", " + fx(rel, 1) + "x typical";
         out.col = out.rec ? (L.side < 0 ? 1 : -1) : (L.side < 0 ? -1 : 1); return out;

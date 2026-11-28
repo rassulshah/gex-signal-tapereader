@@ -114,12 +114,14 @@ static const bool RV_DRAW_STRIP = false;  // (0.45.0, Rassul 2026-11-27 15:12 CT
 static const bool TD_ON_CANDLE = false;   // (0.44.2, Rassul 2026-11-27 14:24 CT "add the dots only to the range bar instead of the candle") the thrust dot is drawn only in the Range pane (lsRangeRead); its "TD" lines are still written
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.46.5"   // (0.46.5, Rassul 22:51 CT "i don't have the 9:09 signal": SR back to Moderate+ runs - PressRead 1.0.12)
+#define RVS_VERSION "0.47.0"   // (0.47.0, Rassul 2026-11-27 23:11-23:25 CT: the info box = Stops (used up?) / Trapped (fuel) / the winning side (defense) / the losing side - TurnBox.h 1.0.0; the gold rows and the old buy / sell read removed)
+// was #define RVS_VERSION "0.46.5"   // (0.46.5, Rassul 22:51 CT "i don't have the 9:09 signal": SR back to Moderate+ runs - PressRead 1.0.12)
 // was #define RVS_VERSION "0.46.4"   // (0.46.4, Rassul 22:49 CT "yes go": the SR mark needs a Strong+ stop run (1.5x+ its typical) - PressRead 1.0.11)
 // was #define RVS_VERSION "0.46.3"   // (0.46.3, Rassul 22:22 CT: SR only on a reversal candle off a pivot that ended a move - PressRead 1.0.7)
 // was #define RVS_VERSION "0.46.2"   // (0.46.2, Rassul 22:19 CT "didn't you find a stop run between 10 and 10:30?": when two ratio labels touch, the one carrying SR stays)
 // was #define RVS_VERSION "0.46.1"   // (0.46.1, Rassul 2026-11-27 22:18 CT "get rid of the A, its making things messy": A not drawn (still computed); 12 px kept over the labels for SR)
-static const bool RV_DRAW_A = false;   // (0.46.1) the A (absorption) marks over the bars - off (Rassul 22:18 CT)
+static const bool RV_DRAW_A = false;
+static const bool RV_TURN_BOX = true;   // (0.47.0) the info box = TurnBox.h's four lines (the gold rows and the old buy / sell read are not drawn)   // (0.46.1) the A (absorption) marks over the bars - off (Rassul 22:18 CT)
 // was #define RVS_VERSION "0.46.0"   // (0.46.0, Rassul 2026-11-27 21:39-22:03 CT: SR only on the first bar since the pivot whose low is below the pivot candle high (PressRead 1.0.6); "add an SR on top of the ratio" (a reclaimed stop run of lows over green ratios / highs over red), "add an A for absorbtion signals on bars", stop runs measured vs their own kind ("1.1x typical", Moderate+, local 2+ ticks) - PressRead 1.0.5)
 // was #define RVS_VERSION "0.45.4"   // (0.45.4, Rassul 2026-11-27 20:19 CT "call Context: Stop Run instead" - PressRead 1.0.4)
 // was #define RVS_VERSION "0.45.3"   // (0.45.3, Rassul 2026-11-27 20:17 CT stop runs of lows for bullish reads, highs for bearish; flip effect = price - PressRead 1.0.3)
@@ -162,7 +164,7 @@ static const bool RV_DRAW_A = false;   // (0.46.1) the A (absorption) marks over
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.46.5");
+    p->setVersion("0.47.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -301,6 +303,7 @@ struct PocStore {
 #include "SplitText.h"         // (0.13.0) the split read: verdict + sentences left, numbers right (SDK-free)
 #include "AccumLogic.h"        // (0.9.0) accumulation / distribution zones (SDK-free, tests_accum)
 #include "SRBack.h"            // (0.8.0) lsSR in the background: same rules, same journal, nothing drawn
+#include "TurnBox.h"           // (0.47.0) the info box: Stops / Trapped / winning side / losing side (SDK-free, tests_box)
 #include "PressRead.h"         // (0.45.0) the pressure bars + the cause => effect read + the stop-run context
 namespace rvs {
 struct PaneLogic {   // the MboPane contract (the base's own bars / records are not drawn by this pane)
@@ -351,6 +354,8 @@ public:
         rvs::SixRead live; bool haveLive = false;
         acc::Engine ac; bool acLoaded = false; std::string acMkt, acPath, acBody; int acSpb = 0; long long acMs = -100000, acWrites = 0, acFails = 0; std::set<long long> acSeen; std::vector<acc::Abs> acPend;   // (0.9.0)
         srb::Back sr;                                                     // (0.8.0) the stop-run engine in the background
+        tbx::BigTrack big; long long bigThr = 0;                          // (0.47.0) big resting orders followed order by order (the info box's defense line)
+        std::map<long long, std::vector<rvs::VRow> > vrows;               // (0.47.0) IRT volume at price of the closed candles (the Trapped line), newest 1,500
     };
     Ext* ext(S_& S) { if (!S.ext) S.ext.reset(new (std::nothrow) Ext()); return static_cast<Ext*>(S.ext.get()); }
 
@@ -377,11 +382,12 @@ public:
         }
         if (!e->eng) return;
         if (e->reconnects < 0) { e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }
-        if (S.feed.reconnects != e->reconnects || S.symbol != e->symbol) { e->six.reset(); e->eng->reset(); e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }   // the book is re-sent
+        if (S.feed.reconnects != e->reconnects || S.symbol != e->symbol) { e->big.reset(); e->six.reset(); e->eng->reset(); e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }   // the book is re-sent
         const off::Ev x = off::evOf(o, S.tick, 0);
         if (x.action > 3 || x.px <= 0) { ++e->skipped; return; }
         e->six.onEvent(e->stamp, x.action, x.implied ? -1 : x.side, (long long)x.px, x.size, x.id, x.aggr, e->eng->book);   // (0.7.0) before the engine applies it (a MOD needs the order's old price)
         e->eng->onEvent(e->stamp * 1000, x.action, x.implied ? -1 : x.side, (long long)x.px, x.size, x.id, x.aggr); ++e->events;
+        try { e->big.onEvent(e->stamp, (int)S.spb, x.action, x.implied ? -1 : x.side, (long long)x.px, x.size, x.id, e->bigThr); } catch (...) {}   // (0.47.0)
         if (x.action == off::FILL) e->lastPx = (long long)x.px;
         if (!x.implied && x.side >= 0 && x.action != off::MOD) e->ac.onBook(e->stamp, x.action == off::NEW ? 0 : x.action == off::DEL ? 1 : 2, x.side == off::BID, (long long)x.px, x.size);   /* (0.9.1) the book cells of the accumulation zones */
     }
@@ -553,6 +559,7 @@ public:
                 rvs::Poc p = rvs::pocOf(key, rows, lt, ht, ct); { const double o = opn.count >= count ? (double)opn[i] : 0.0; if (std::isfinite(o) && o > 0) p.open = (long long)std::llround(o / tick); } p.maxD = dmm[0]; p.minD = dmm[1];
                 struct tm t; std::memset(&t, 0, sizeof t); const bool tOk = getLocaltime((RTDATE)key - 1, &t) != 0; const std::string cs = tOk ? rvh::sessionOf(t) : std::string(); p.sess = rvs::sessId(cs); rvs::biggestIn(P.poc, p);   // (0.6.0)
                 P.poc[key] = p; P.pv[key] = pv; P.lastKey = key; e.six.setTotal(key, p.total);
+                e.vrows[key] = rows; while (e.vrows.size() > 1500) e.vrows.erase(e.vrows.begin());   // (0.47.0) the Trapped line
                 try { accFeed(S, e, key, p, cs); } catch (...) {}   // (0.9.0) the accumulation zones: this closed candle, once
                 while (P.poc.size() > (size_t)rvh::PocStore::KEEP) { P.pv.erase(P.poc.begin()->first); P.poc.erase(P.poc.begin()); }
                 // the session VWAP from IRT's own volume at price (17:00 CT starts a new one)
@@ -624,7 +631,8 @@ public:
         struct BFc { int x = 0; long long net[2] = { 0, 0 }; double x2[2] = { 0, 0 }; long long t = 0; }; std::vector<BFc> BF;   // (0.21.5) per candle: bid / offer net (added - pulled), signed, and x the side's normal
         flr::In flowIn; bool flowOk = false; int flowBar = -1;   // (0.12.0)
         cbr::In cb; int cbBar = -1;   // (0.15.0) the one read: the candle under the mouse, else the last closed one
-        std::vector<prd::Row> prRows;   // (0.45.0) the gold rows over the read (the read's candle)
+        std::vector<prd::Row> prRows;   // (0.45.0) the gold rows over the read (the read's candle) - (0.47.0) not drawn
+        tbx::Box tbBox;                 // (0.47.0) the info box of the read's candle
         if (RV_SHOW_BOOKFLOW) {
             c.clear(); off::PaneBar lb; bool haveLive = false;                 // the forming candle: its numbers as of now (as lsBookFlow builds them)
             {   const auto it = S.accs.find(S.formingKey);
@@ -1006,8 +1014,9 @@ public:
                         setTextColor(a.side > 0 ? rvh::C_GREEN : rvh::C_RED); RCT q; q.set(rvh::coord(a.x - w2 / 2), rvh::coord(ya), rvh::coord(a.x - w2 / 2 + w2 + 1), rvh::coord(ya + 12)); q.drawText("A", false, false); }
                     setFont(f10);
                 }
+                tbBox = tbx::Box();   // (0.47.0) no read candle = no box
                 if (cbBar >= 1 && cbBar <= lastC) {
-                    const prd::Metrics pm = prd::metrics(PC, cbBar); const prd::Read pr = prd::read(pm); prRows = prd::rows(pm);
+                    const prd::Metrics pm = prd::metrics(PC, cbBar); const prd::Read pr = prd::read(pm); prRows.clear();   // (0.47.0) the gold rows are gone (Rassul 23:25 "dont need them")
                     auto colOf = [](int c) -> COLOR { return c > 0 ? rvh::C_GREEN : c < 0 ? rvh::C_RED : rvh::C_GRAY; };
                     const prd::Ctx cx = prd::context(PC, PK, cbBar, runs, e.ltab, clockOf, pr.ok ? (pr.ec != 0 ? pr.ec : pr.cc) : 0, S.tick);   // opposite-side runs only (0.45.3)
                     int yy = rowY0;
@@ -1022,6 +1031,17 @@ public:
                         if ((int)pane.left + 6 + w1 + w2 <= limTop) { setFont(f10b); put("Stop Run: ", (int)pane.left + 6, yy, rvh::C_WHITE, limTop + 1); setFont(f10); put(cx.text, (int)pane.left + 6 + w1, yy, colOf(cx.col), limTop + 1); }
                         }
                     e.pressRead = "Cause: " + pr.cause + " => Effect: " + pr.effect + (cx.ok ? " | Stop Run: " + cx.text : std::string());
+                    // (0.47.0) the info box of the read's candle (TurnBox.h): the big-lot size in force = the newest record's S20 aggressor tier
+                    try {
+                        for (int q = lastC; q >= 0 && q >= lastC - 5; --q) { const auto ri = S.ser.bars.find((long long)times[q]); if (ri != S.ser.bars.end() && ri->second.ok && ri->second.r.thrAggr > 0) { e.bigThr = ri->second.r.thrAggr; break; } }
+                        std::vector<long long> RTK(PK.size(), 0); for (int q = hist0; q <= lastC && q < (int)RTK.size(); ++q) RTK[(size_t)q] = (long long)times[q];
+                        const int dirB = pr.ok ? (pr.ec != 0 ? pr.ec : pr.cc) : 0; int pvB = -1; if (dirB != 0) prd::srBasic(PC, PK, cbBar, runs, e.ltab, clockOf, S.tick, dirB, &pvB);
+                        auto beyond = [&](long long rtk, long long lvT, int sd, long long& lotsB, double& pxl) -> bool { const auto it = e.vrows.find(rtk); if (it == e.vrows.end()) return false;
+                            for (const rvs::VRow& v : it->second) { if (sd < 0 ? v.tick >= lvT : v.tick <= lvT) continue; const long long side = sd < 0 ? (v.vol - v.dlt) / 2 : (v.vol + v.dlt) / 2; if (side <= 0) continue; lotsB += side; pxl += (double)side * (double)v.tick * S.tick; }
+                            return true; };
+                        auto aggrBig = [&](long long rtk, int side) -> long long { const auto ri = S.ser.bars.find(rtk); if (ri == S.ser.bars.end() || !ri->second.ok) return 0; return ri->second.r.aggrMax[side < 0 ? off::BID : off::ASK]; };
+                        tbBox = tbx::box(PC, PK, RTK, cbBar, cx, pvB, S.tick, burst, beyond, aggrBig, &e.big, e.bigThr, clockOf);
+                    } catch (...) { tbBox = tbx::Box(); }
                 }
             }
             else if (dH > 8 && mx > 0 && !D.empty()) { setFont(fb); int lastR = -100000; double lastX = 0;
@@ -1216,6 +1236,25 @@ public:
                 FONT f10 = fp; f10.size = 10; setFont(f10);
                 for (const prd::Row& r : prRows) { if (y0 + rowH > (int)pane.bottom) break; put(r.t, xT, y0, r.col == 2 ? rvh::C_LEVEL : r.col > 0 ? rvh::C_GREEN : rvh::C_RED, lim + 1); y0 += rowH; }
                 setFont(fb); }
+            if (RV_TURN_BOX) {   // (0.47.0, Rassul 23:11-23:25 CT) the info box: Stops / Trapped / the winning side / the losing side, nothing else
+                FONT f10 = fp; f10.size = 10; f10.style = PLAIN; FONT f10b = f10; f10b.style = BOLD; FONT f11b = f10b; f11b.size = 11;
+                if (tbBox.ok) {
+                    setFont(f11b); put(tbBox.head, xT, y0, rvh::C_WHITE, lim + 1); y0 += rowH + 2;
+                    for (const tbx::Line& ln : tbBox.lines) {
+                        if (y0 + rowH > (int)pane.bottom) break;
+                        setFont(f10b); const std::string lab = ln.lab + ": "; const int wl2 = (int)getTextWidth(lab.c_str(), -1); put(lab, xT, y0, rvh::C_WHITE, lim + 1);
+                        setFont(f10); const COLOR cc = ln.col > 0 ? rvh::C_GREEN : ln.col < 0 ? rvh::C_RED : rvh::C_WHITE;
+                        // word-wrap the text into the room left of the price axis (continuation lines indented under the text)
+                        std::string rest = ln.text; const int room = std::max(60, lim - (xT + wl2));
+                        while (!rest.empty() && y0 + rowH <= (int)pane.bottom) {
+                            size_t cut = rest.size(); while (cut > 0 && (int)getTextWidth(rest.substr(0, cut).c_str(), -1) > room) { const size_t sp = rest.rfind(' ', cut - 1); if (sp == std::string::npos || sp == 0) break; cut = sp; }
+                            put(rest.substr(0, cut), xT + wl2, y0, cc, lim + 1); y0 += rowH; rest = cut < rest.size() ? rest.substr(cut + 1) : std::string(); }
+                    }
+                    read += " || box " + tbBox.head; for (const tbx::Line& ln : tbBox.lines) read += " | " + ln.lab + ": " + ln.text;
+                }
+                if (!accRead.empty()) read = accRead + " || " + read;
+                e.lastRead = read; ++e.drawn; return;
+            }
             auto tw = [&](const std::string& q) { return (int)getTextWidth(q.c_str(), -1); };
             int wl = 0, wa = 0, wb = 0; for (const cbr::Row& r : fo.rows) { wl = std::max(wl, tw(r.lab)); wa = std::max(wa, tw(r.a)); wb = std::max(wb, tw(r.b)); }
             const int headW = (when.empty() ? 0 : tw(when) + 8) + tw(fo.head) + (fo.why.empty() ? 0 : 6 + tw(fo.why));
