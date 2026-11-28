@@ -22,9 +22,10 @@
 #include <vector>
 
 namespace prd {
-static const char* const VERSION = "1.0.4";   // 1.0.4 (2026-11-27 20:19 CT "call Context: Stop Run instead"): the label is "Stop Run: ", so the text drops the words "stop run"; 1.0.3 1.0.3 (2026-11-27 20:17 CT): context = opposite-side stop runs only (lows for a bullish read, highs for bearish); flip effect = the price move; 1.0.2: 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
+static const char* const VERSION = "1.0.6";   // 1.0.6 (22:03 CT): SR only on the first bar since the down / up pivot whose low is below the pivot candle's high (mirror); 1.0.5 1.0.5 (2026-11-27 21:58 CT): each kind of stop run vs its own typical run ("1.1x typical"), Moderate+ only, local 2+ ticks past; Tags (SR / A marks); LocalTable; 1.0.4 1.0.4 (2026-11-27 20:19 CT "call Context: Stop Run instead"): the label is "Stop Run: ", so the text drops the words "stop run"; 1.0.3 1.0.3 (2026-11-27 20:17 CT): context = opposite-side stop runs only (lows for a bullish read, highs for bearish); flip effect = the price move; 1.0.2: 1.0.2 (2026-11-27 20:12 CT): "... below <level> at <time> with N.Nx burst"; 1.0.1 (20:11): the run candle's time added
 static const int NORM_N = 14;
 static const double LABEL_X = 1.9;
+static const double KEY_TYP0 = 1.7;   // the usual key-level stop-run burst when a session has fewer than 5 runs so far
 
 struct Cdl {                       // one closed candle as the pane sees it
     bool ok = false; double o = 0, h = 0, l = 0, c = 0; long long buy = 0, sell = 0;
@@ -134,7 +135,6 @@ inline std::vector<Row> rows(const Metrics& m) {
 
 // ---- stop runs (context) ----
 struct KeyRun { long long end = 0; std::string lvl; double px = 0; int side = 0; double x = 0; long long vol = 0, ovol = 0; double reach = 0; };   // end = chart time key
-struct Ctx { bool ok = false; std::string text; int col = 0; };
 inline std::string levelName(const std::string& raw) {
     std::string n = raw; size_t p = n.find_first_of("/+"); if (p != std::string::npos) n = n.substr(0, p);
     while (!n.empty() && n.back() == ' ') n.pop_back();
@@ -167,42 +167,100 @@ inline Local localRun(const std::vector<Cdl>& C, int k, int only = 0) {   // onl
 // "reclaimed" when a candle from k to i closes back across px
 inline bool reclaimed(const std::vector<Cdl>& C, int k, int i, int side, double px) { for (int j = k; j <= i && j < (int)C.size(); ++j) if (C[(size_t)j].ok && (side < 0 ? C[(size_t)j].c > px : C[(size_t)j].c < px)) return true; return false; }
 
-// i = the candle read; keys[i] = its time key; runs = every key-level run decision (any grade); burst(end, side) = that candle's strongest
-// one-second small-order burst on the side (-1 sellers, +1 buyers) from the journal, < 0 = unknown; clock(i) = "9:00"; tick for points
-template <class Burst, class Clock>
-// dir = the read's direction (+1 bullish, -1 bearish, 0 none): a bullish read shows only stop runs BELOW lows, a bearish read only ABOVE highs
-// (Rassul 2026-11-27 20:17 CT "obviously you would need a stop run of lows to explain bullish reversals and vice versa"); dir 0 = no line
-inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, Burst burst, Clock clock, int dir) {
-    Ctx out; if (i < 0 || i >= (int)C.size() || dir == 0) return out; const int want = dir > 0 ? -1 : 1;
-    // typical key-level run burst: the runs decided before this candle (5+), else 1.0
-    std::vector<double> kx; for (const KeyRun& r : runs) if (r.end < keys[(size_t)i] && r.x >= 1.0) kx.push_back(r.x);   // the real key-level stop runs before (burst 1x+)
-    const double kTyp = kx.size() >= 5 ? median(kx) : 1.0;
-    // the strongest key run (>= 1.5x) of this candle or the 3 before
-    const KeyRun* best = nullptr; int bk = -1;
-    for (int k = i; k >= 0 && k >= i - 3; --k) for (const KeyRun& r : runs) if (r.end == keys[(size_t)k] && r.side == want && r.x >= 1.5 && (!best || r.x > best->x)) { best = &r; bk = k; }
-    if (best) {
-        const int sd = best->side; const bool rec = reclaimed(C, bk, i, sd, best->px);
-        out.ok = true;
-        out.text = srWord(best->x / (kTyp > 0 ? kTyp : 1.0)) + (sd < 0 ? " below " : " above ") + levelName(best->lvl) + " at " + clock(bk) + " with " + fx(best->x, 1) + "x burst";   // (Rassul 20:11 CT "... with 2.2x burst at <time>")
-        out.col = rec ? (sd < 0 ? 1 : -1) : (sd < 0 ? -1 : 1); return out;
+// The local swing runs of every candle, computed once per pass (the plugin's draw): lo[k] / hi[k] = the run of candle k below a swing low /
+// above a swing high (or none), x[k] = its burst (journal candle line, stops' side), typ[k] = the TYPICAL local run before k = the median burst
+// of the local runs in the 400 candles before (the last 60, 5+ needed, else 1.0).
+struct LocalTable { std::vector<Local> lo, hi; std::vector<double> xlo, xhi, typ; };
+template <class Burst>
+inline LocalTable localTable(const std::vector<Cdl>& C, const std::vector<long long>& keys, Burst burst) {
+    LocalTable T; const size_t n = C.size(); T.lo.resize(n); T.hi.resize(n); T.xlo.assign(n, -1); T.xhi.assign(n, -1); T.typ.assign(n, 1.0);
+    std::vector<std::pair<int, double> > all;   // (candle, burst) of every local run, oldest first
+    for (int k = 0; k < (int)n; ++k) {
+        T.lo[(size_t)k] = localRun(C, k, -1); T.hi[(size_t)k] = localRun(C, k, 1);
+        if (T.lo[(size_t)k].k >= 0) T.xlo[(size_t)k] = burst(keys[(size_t)k], -1);
+        if (T.hi[(size_t)k].k >= 0) T.xhi[(size_t)k] = burst(keys[(size_t)k], 1);
+        // the typical run before k: from the runs already listed (candles < k)
+        std::vector<double> v; for (size_t q = all.size(); q-- > 0 && v.size() < 60;) { if (all[q].first < k - 400) break; v.push_back(all[q].second); }
+        if (v.size() >= 5) T.typ[(size_t)k] = median(v);
+        const Local B = localRun(C, k);   // the run the old rule counted (either side, nearest to the close)
+        if (B.k >= 0) { const double bx = burst(keys[(size_t)k], B.side); if (bx > 0) all.push_back(std::make_pair(k, bx)); }
     }
-    // a local swing run: this candle or the 3 before (newest first); its word vs the typical local run burst (the local runs before it, 5+)
+    return T;
+}
+
+// i = the candle read; keys[i] = its time key; runs = every key-level run decision (any grade); burst(end, side) = that candle's strongest
+// one-second small-order burst on the side (-1 sellers, +1 buyers) from the journal, < 0 = unknown; clock(i) = "9:00"; tick = the tick size.
+// dir = the read's direction (+1 bullish, -1 bearish, 0 none): a bullish read shows only stop runs BELOW lows, a bearish read only ABOVE highs
+// (Rassul 2026-11-27 20:17 CT "obviously you would need a stop run of lows to explain bullish reversals and vice versa"); dir 0 = no line.
+// 1.0.5 (Rassul 21:57-21:58 CT "the measurement of sr against key levels vs local levels .. shouldn't they be measured differently" - "do it"):
+// each kind is measured against ITS OWN typical run (key-level runs vs the key-level runs before, local vs local) and the number shown is that
+// ratio ("1.1x typical"); a run needs Moderate+ (0.75x its typical or more) - a key run also passes lsSR's full test (burst 1.5x+), a local run
+// 2+ ticks past the swing with a known burst; rec = price closed back across the run's level by candle i (SR mark only then).
+struct Ctx { bool ok = false; std::string text; int col = 0; bool rec = false; int side = 0; int k = -1; };   // k = the run candle
+template <class Clock>
+inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, const LocalTable& T, Clock clock, int dir, double tick) {
+    Ctx out; if (i < 0 || i >= (int)C.size() || dir == 0 || T.lo.size() != C.size()) return out; const int want = dir > 0 ? -1 : 1;
+    // typical key-level run: the real key-level runs (burst 1x+) decided before this candle (5+), else 1.0
+    std::vector<double> kx; for (const KeyRun& r : runs) if (r.end < keys[(size_t)i] && r.x >= 1.0) kx.push_back(r.x);
+    while (kx.size() < 5) kx.push_back(KEY_TYP0);   // too few runs yet: pad with the usual key-level run (journals 11-20 / 11-27: ES 1.5-1.7, NQ 1.4)
+    const double kTyp = median(kx);
+    const KeyRun* best = nullptr; int bk = -1;
+    for (int k = i; k >= 0 && k >= i - 3; --k) for (const KeyRun& r : runs)
+        if (r.end == keys[(size_t)k] && r.side == want && r.x >= 1.5 && r.x / kTyp >= 0.75 && (!best || r.x > best->x)) { best = &r; bk = k; }
+    if (best) {
+        const double rel = best->x / kTyp; const int sd = best->side;
+        out.ok = true; out.side = sd; out.k = bk; out.rec = reclaimed(C, bk, i, sd, best->px);
+        out.text = srWord(rel) + (sd < 0 ? " below " : " above ") + levelName(best->lvl) + " at " + clock(bk) + ", " + fx(rel, 1) + "x typical";
+        out.col = out.rec ? (sd < 0 ? 1 : -1) : (sd < 0 ? -1 : 1); return out;
+    }
     for (int k = i; k >= 0 && k >= i - 3; --k) {
-        const Local L = localRun(C, k, want); if (L.k < 0) continue;
-        const double x = burst(keys[(size_t)k], L.side);
-        std::vector<double> lx; for (int q = k - 1; q >= 5 && q >= k - 400 && lx.size() < 60; --q) { const Local Q = localRun(C, q); if (Q.k < 0) continue; const double b = burst(keys[(size_t)q], Q.side); if (b > 0) lx.push_back(b); }
-        const double lTyp = lx.size() >= 5 ? median(lx) : 1.0;
-        const bool rec = reclaimed(C, k, i, L.side, L.px); const double past = L.side < 0 ? L.px - C[(size_t)k].l : C[(size_t)k].h - L.px;
-        out.ok = true;
-        out.text = (x > 0 ? srWord(x / (lTyp > 0 ? lTyp : 1.0)) + " local" : std::string("Local")) + (L.side < 0 ? " below the " : " above the ") + clock(L.p) + (L.side < 0 ? " low" : " high")
-            + " at " + clock(k) + (x > 0 ? " with " + fx(x, 1) + "x burst" : std::string());   // (Rassul 20:12 CT "... below HVL at <time> with 2.2x burst")
-        (void)past;
-        out.col = rec ? (L.side < 0 ? 1 : -1) : (L.side < 0 ? -1 : 1); return out;
+        const Local& L = want < 0 ? T.lo[(size_t)k] : T.hi[(size_t)k]; if (L.k < 0) continue;
+        const double x = want < 0 ? T.xlo[(size_t)k] : T.xhi[(size_t)k]; if (x <= 0) continue;
+        const double typ = T.typ[(size_t)k] > 0 ? T.typ[(size_t)k] : 1.0, rel = x / typ; if (rel < 0.75) continue;
+        const double past = L.side < 0 ? L.px - C[(size_t)k].l : C[(size_t)k].h - L.px; if (past < 2 * tick - 1e-9) continue;
+        out.ok = true; out.side = L.side; out.k = k; out.rec = reclaimed(C, k, i, L.side, L.px);
+        out.text = srWord(rel) + " local" + (L.side < 0 ? " below the " : " above the ") + clock(L.p) + (L.side < 0 ? " low" : " high")
+            + " at " + clock(k) + ", " + fx(rel, 1) + "x typical";
+        out.col = out.rec ? (L.side < 0 ? 1 : -1) : (L.side < 0 ? -1 : 1); return out;
     }
     return out;
 }
 
+// The marks over a candle's ratios (Rassul 21:39 CT "add an SR on top of the ratio", 21:58 "add an A for absorbtion signals on bars where
+// appropriate"): srUp = a reclaimed stop run of LOWS (for a green ratio), srDn = of HIGHS (red ratio); a = +1 / -1 when the read is an
+// absorption (bids / icebergs absorbing the sellers = +1, offers absorbing the buyers = -1), 0 none. Closed candles only.
 // the two bar heights' ratios for candle i (0 = no bar), with the passive side's sign
 struct BarPair { double agg = 0; int aSide = 0; double pas = 0; int pSide = 0; };
 inline BarPair bars(const std::vector<Cdl>& C, int i) { BarPair b; const Metrics m = metrics(C, i); if (!m.ok) return b; b.agg = m.dr; b.aSide = m.d >= 0 ? 1 : -1; if (m.pi) { b.pas = m.bs; b.pSide = m.imb >= 0 ? 1 : -1; } return b; }
+struct Tags { bool srUp = false, srDn = false; int a = 0; };
+// SR on candle i for a bullish ratio (dir +1; bearish = mirror) - Rassul 22:03 CT "the bar low should be below the high of the dn pivot and only
+// one SR on a bar since the dn pivot": a reclaimed stop run of lows (this candle or the 3 before), the candle has a green ratio label (1.9x+),
+// the DOWN PIVOT = the lowest candle from the run candle to i, the candle's low is below that pivot candle's high (still at the turn), and no
+// candle from the pivot to i-1 already qualified (one SR per pivot; a new lower low = a new pivot, a new SR allowed). Decided at i's close.
+template <class Clock>
+inline bool srBasic(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, const LocalTable& T, Clock clock, double tick, int dir, int* pivot) {
+    if (i < 0 || i >= (int)C.size() || !C[(size_t)i].ok) return false;
+    const BarPair bp = bars(C, i);
+    const bool lab = (bp.agg >= LABEL_X && bp.aSide == dir) || (bp.pas >= LABEL_X && bp.pSide == dir); if (!lab) return false;
+    const Ctx x = context(C, keys, i, runs, T, clock, dir, tick); if (!x.ok || !x.rec || x.k < 0) return false;
+    int p = x.k; for (int j = x.k; j <= i; ++j) if (C[(size_t)j].ok && (dir > 0 ? C[(size_t)j].l < C[(size_t)p].l : C[(size_t)j].h > C[(size_t)p].h)) p = j;
+    if (pivot) *pivot = p;
+    return dir > 0 ? C[(size_t)i].l < C[(size_t)p].h : C[(size_t)i].h > C[(size_t)p].l;
+}
+template <class Clock>
+inline bool srMark(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, const LocalTable& T, Clock clock, double tick, int dir) {
+    int p = -1; if (!srBasic(C, keys, i, runs, T, clock, tick, dir, &p)) return false;
+    for (int j = std::max(0, p); j < i; ++j) { int pj = -1; if (srBasic(C, keys, j, runs, T, clock, tick, dir, &pj) && pj == p) return false; }
+    return true;
+}
+// The marks over a candle's ratios (Rassul 21:39 CT "add an SR on top of the ratio", 21:58 "add an A for absorbtion signals on bars where
+// appropriate"): srUp / srDn as srMark above; a = +1 / -1 when the read is an absorption (bids / icebergs absorbing the sellers = +1, offers
+// absorbing the buyers = -1), 0 none. Closed candles only.
+template <class Clock>
+inline Tags tags(const std::vector<Cdl>& C, const std::vector<long long>& keys, int i, const std::vector<KeyRun>& runs, const LocalTable& T, Clock clock, double tick) {
+    Tags g; const Metrics m = metrics(C, i); const Read r = read(m);
+    if (r.ok && r.cause.find("absorbing") != std::string::npos) g.a = r.ec != 0 ? r.ec : r.cc;
+    g.srUp = srMark(C, keys, i, runs, T, clock, tick, 1); g.srDn = srMark(C, keys, i, runs, T, clock, tick, -1); return g;
+}
+
 } // namespace prd

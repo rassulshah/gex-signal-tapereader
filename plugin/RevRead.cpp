@@ -114,7 +114,8 @@ static const bool RV_DRAW_STRIP = false;  // (0.45.0, Rassul 2026-11-27 15:12 CT
 static const bool TD_ON_CANDLE = false;   // (0.44.2, Rassul 2026-11-27 14:24 CT "add the dots only to the range bar instead of the candle") the thrust dot is drawn only in the Range pane (lsRangeRead); its "TD" lines are still written
 static const bool RV_SHOW_I = true;    // (0.21.2, Rassul 2026-11-20 09:20 CT "im thinking of adding I back since it considers levels it should be ok.. add it", 09:24 "build": the I is shown again - strip and price badge - named key levels only (0.19.4); a candle that is also a Sw shows only the Sw)   // was false   // (0.19.5, Rassul 2026-11-19 15:34 CT "i think we should table away I for now. sweep is enough": the I is not shown - not in the letter strip, not on the candles (the wy file carries no I lines, so lsRevReadMarks and lsSDMO show none); the Sw is the mark. Set true to bring it back
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.45.4"   // (0.45.4, Rassul 2026-11-27 20:19 CT "call Context: Stop Run instead" - PressRead 1.0.4)
+#define RVS_VERSION "0.46.0"   // (0.46.0, Rassul 2026-11-27 21:39-22:03 CT: SR only on the first bar since the pivot whose low is below the pivot candle high (PressRead 1.0.6); "add an SR on top of the ratio" (a reclaimed stop run of lows over green ratios / highs over red), "add an A for absorbtion signals on bars", stop runs measured vs their own kind ("1.1x typical", Moderate+, local 2+ ticks) - PressRead 1.0.5)
+// was #define RVS_VERSION "0.45.4"   // (0.45.4, Rassul 2026-11-27 20:19 CT "call Context: Stop Run instead" - PressRead 1.0.4)
 // was #define RVS_VERSION "0.45.3"   // (0.45.3, Rassul 2026-11-27 20:17 CT stop runs of lows for bullish reads, highs for bearish; flip effect = price - PressRead 1.0.3)
 // was #define RVS_VERSION "0.45.2"   // (0.45.2, Rassul 2026-11-27 20:12 CT "Moderate stop run below HVL at <time> with 2.2x burst" - PressRead 1.0.2)
 // was #define RVS_VERSION "0.45.1"   // (0.45.1, Rassul 2026-11-27 20:11 CT "Moderate stop run below HVL with 2.2x burst at <time>": the stop-run context ends with the run candle's time - PressRead 1.0.1)
@@ -155,7 +156,7 @@ static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true =
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.45.4");
+    p->setVersion("0.46.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -330,6 +331,8 @@ public:
         int hDir = 0, hRot = 0; long long hPx = 0, hTop = 0; bool hBroken = false; long hCount = -1;
         long long lastPx = 0, barLo = 0, barHi = 0;                       // the forming candle (ticks)
         long long parMs = -100000; long long parSig = -2; int parKeys = 0; int pbBits = 0; long long pbMs = -100000;
+        std::map<long long, prd::Tags> ptags; size_t ptagRuns = 0;   // (0.46.0) the SR / A marks of candles 3+ back (final), and the run count they saw
+        prd::LocalTable ltab; long long ltabKey = 0; int ltabN = -1; size_t ltabJ = 0;   // (0.46.0) the local swing runs, rebuilt when a candle closes or the journal grows
         long long drawn = 0; std::string lastRead; std::string pressRead;   // (0.45.0) the top rows' text as last drawn (the status file)
         long long wySig = -1; wyr::Out wy; int wyBars = 0;
         std::map<long long, std::pair<int, int> > bsv; bool bsvDirty = false; long long bsvMs = -1; std::string bsvKey;   // (0.31.0) the buy / sell verdict + trapped side of each closed candle, for the Volume read's overall call (RevRead\\bsv-<MKT>-<spb>.txt)
@@ -956,33 +959,51 @@ public:
                     const auto ri = S.ser.bars.find((long long)times[i]);
                     if (ri != S.ser.bars.end() && ri->second.ok) { const off::Rec& r = ri->second.r; c.book = true; c.nb = r.addC[off::BID] - r.pullC[off::BID]; c.na = r.addC[off::ASK] - r.pullC[off::ASK];
                         c.iceB = r.iceTraded[off::BID]; c.iceA = r.iceTraded[off::ASK]; } }
-                const int rowY0 = (int)pane.top + 2, rowH2 = 15, bTop = rowY0 + 2 * rowH2 + 12, bBot = (int)pane.bottom - 2, bH = bBot - bTop;
+                auto clockOf = [&](int k) { struct tm t; std::memset(&t, 0, sizeof t); return k >= 0 && k < (int)count && getLocaltime((RTDATE)times[k], &t) ? off::clock12(t.tm_hour, t.tm_min) : std::string(); };
+                std::vector<prd::KeyRun> runs; runs.reserve(e.sr.jf.rall.size());
+                for (const srb::RAll& a : e.sr.jf.rall) { prd::KeyRun r; r.end = a.end; r.lvl = a.lvl; r.px = (double)a.px * S.tick; r.side = a.side; r.x = a.x; r.vol = a.vol; r.ovol = a.ovol; r.reach = (double)a.reach * S.tick; runs.push_back(r); }
+                const std::map<long long, sr::JBar>& jb = e.sr.jf.J.bars;
+                auto burst = [&](long long end, int side) -> double { const auto it = jb.find(end); return it == jb.end() ? -1.0 : side < 0 ? it->second.xD : it->second.xU; };
+                // (0.46.0) the local swing-run table: rebuilt only when a candle closes, the window moves or the journal gets new candle lines
+                { const long long lk = lastC >= 0 && lastC < (int)PK.size() ? PK[(size_t)lastC] : 0;
+                  if (lk != e.ltabKey || hist0 != e.ltabN || jb.size() != e.ltabJ || e.ltab.lo.size() != PC.size()) { e.ltab = prd::localTable(PC, PK, burst); e.ltabKey = lk; e.ltabN = hist0; e.ltabJ = jb.size(); } }
+                if (runs.size() < e.ptagRuns || e.ptags.size() > 6000) e.ptags.clear();   // a new session's journal (or too many): start over
+                e.ptagRuns = runs.size();
+                auto tagOf = [&](int i) -> prd::Tags {   // the SR / A marks of closed candle i; final (cached) once 3+ candles back
+                    const long long k = PK[(size_t)i]; const auto it = e.ptags.find(k); if (it != e.ptags.end()) return it->second;
+                    const prd::Tags g = prd::tags(PC, PK, i, runs, e.ltab, clockOf, S.tick); if (i <= lastC - 3) e.ptags[k] = g; return g; };
+                const int rowY0 = (int)pane.top + 2, rowH2 = 15, bTop = rowY0 + 2 * rowH2 + 12 + 24, bBot = (int)pane.bottom - 2, bH = bBot - bTop;   // (0.46.0) bTop +24 px: room over the labels for the A / SR marks
                 int limTop = (int)pane.right - 6; if (v1 >= (int)count - 1) { PNT q; q.set((int)count - 1, 0.0f, kBarCenter); limTop = std::min(limTop, (int)q.h + (int)bw); }
                 if (bH > 8) {
                     const int wb = std::max(1, (int)std::lround(bw * 0.36)); const double RMAX = 4.5;
-                    struct PL { int l, r, t; double x; int side; }; std::vector<PL> labs; setFont(f10);
+                    struct PL { int l, r, t; double x; int side; bool sr; }; std::vector<PL> labs; setFont(f10);
+                    struct AM { int x, yb, side; }; std::vector<AM> ams;   // (0.46.0) A = an absorption read on the candle, in the absorber's colour
                     for (int i = std::max(v0, hist0); i <= v1 && i <= lastC; ++i) { const prd::BarPair bp = prd::bars(PC, i); if (bp.agg <= 0 && bp.pas <= 0) continue;
-                        PNT pt; pt.set(i, 0.0f, kBarCenter); const int x = (int)pt.h;
+                        PNT pt; pt.set(i, 0.0f, kBarCenter); const int x = (int)pt.h; const prd::Tags tg = tagOf(i);
                         const int hA = bp.agg > 0 ? std::min(bH, std::max(1, (int)std::lround(bp.agg / RMAX * bH))) : 0, hP = bp.pas > 0 ? std::min(bH, std::max(1, (int)std::lround(bp.pas / RMAX * bH))) : 0;
                         if (hA > 0) off::fillFlat(this, x - wb, bBot - hA, x, bBot, bp.aSide >= 0 ? rvh::C_GREEN : rvh::C_RED);
                         if (hP > 0) off::fillFlat(this, x + 1, bBot - hP, x + 1 + wb, bBot, bp.pSide >= 0 ? rvh::C_BAR_GREEN : rvh::C_BAR_RED);
                         for (int k = 0; k < 2; ++k) { const double rx = k == 0 ? bp.agg : bp.pas; if (rx < prd::LABEL_X) continue;
                             char t[16]; std::snprintf(t, sizeof t, "%.1fx", std::min(99.9, rx)); const int tw2 = (int)getTextWidth(t, -1);
                             const int cx = k == 0 ? x - wb / 2 : x + 1 + wb / 2, top = std::max(bTop - 13, bBot - (k == 0 ? hA : hP) - 13);
-                            PL L; L.l = cx - tw2 / 2; L.r = L.l + tw2 + 1; L.t = top; L.x = rx; L.side = k == 0 ? bp.aSide : bp.pSide;
+                            PL L; L.l = cx - tw2 / 2; L.r = L.l + tw2 + 1; L.t = top; L.x = rx; L.side = k == 0 ? bp.aSide : bp.pSide; L.sr = L.side >= 0 ? tg.srUp : tg.srDn;
                             if (!labs.empty()) { PL& q = labs.back(); if (L.l < q.r + 2 && L.t < q.t + 12 && q.t < L.t + 12) { if (L.x > q.x) q = L; continue; } }
-                            labs.push_back(L); } }
-                    for (const PL& L : labs) { char t[16]; std::snprintf(t, sizeof t, "%.1fx", std::min(99.9, L.x)); setTextColor(L.side >= 0 ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(L.l), rvh::coord(L.t), rvh::coord(L.r), rvh::coord(L.t + 12)); r.drawText(t, false, false); }
+                            labs.push_back(L); }
+                        if (tg.a != 0) { AM a; a.x = x; a.yb = bBot - std::max(hA, hP) - 13; a.side = tg.a; ams.push_back(a); } }
+                    for (const PL& L : labs) { char t[16]; std::snprintf(t, sizeof t, "%.1fx", std::min(99.9, L.x)); setTextColor(L.side >= 0 ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(L.l), rvh::coord(L.t), rvh::coord(L.r), rvh::coord(L.t + 12)); r.drawText(t, false, false);
+                        if (L.sr) { setFont(f10b); const int cx = (L.l + L.r) / 2, w2 = (int)getTextWidth("SR", -1); RCT q; q.set(rvh::coord(cx - w2 / 2), rvh::coord(L.t - 12), rvh::coord(cx - w2 / 2 + w2 + 1), rvh::coord(L.t)); q.drawText("SR", false, false); setFont(f10); } }
+                    // (0.46.0) A over the candle: above any ratio / SR label within 22 px, else over its taller bar; never above the bar area's top - 24
+                    setFont(f10b);
+                    for (const AM& a : ams) { int ya = std::min(a.yb, bBot - 13);
+                        for (const PL& L : labs) if (std::abs((L.l + L.r) / 2 - a.x) < 22) ya = std::min(ya, L.t - (L.sr ? 24 : 12));
+                        ya = std::max(ya, bTop - 13 - 24); const int w2 = (int)getTextWidth("A", -1);
+                        setTextColor(a.side > 0 ? rvh::C_GREEN : rvh::C_RED); RCT q; q.set(rvh::coord(a.x - w2 / 2), rvh::coord(ya), rvh::coord(a.x - w2 / 2 + w2 + 1), rvh::coord(ya + 12)); q.drawText("A", false, false); }
+                    setFont(f10);
                 }
                 if (cbBar >= 1 && cbBar <= lastC) {
                     const prd::Metrics pm = prd::metrics(PC, cbBar); const prd::Read pr = prd::read(pm); prRows = prd::rows(pm);
                     auto colOf = [](int c) -> COLOR { return c > 0 ? rvh::C_GREEN : c < 0 ? rvh::C_RED : rvh::C_GRAY; };
-                    auto clockOf = [&](int k) { struct tm t; std::memset(&t, 0, sizeof t); return k >= 0 && k < (int)count && getLocaltime((RTDATE)times[k], &t) ? off::clock12(t.tm_hour, t.tm_min) : std::string(); };
-                    std::vector<prd::KeyRun> runs; runs.reserve(e.sr.jf.rall.size());
-                    for (const srb::RAll& a : e.sr.jf.rall) { prd::KeyRun r; r.end = a.end; r.lvl = a.lvl; r.px = (double)a.px * S.tick; r.side = a.side; r.x = a.x; r.vol = a.vol; r.ovol = a.ovol; r.reach = (double)a.reach * S.tick; runs.push_back(r); }
-                    const std::map<long long, sr::JBar>& jb = e.sr.jf.J.bars;
-                    auto burst = [&](long long end, int side) -> double { const auto it = jb.find(end); return it == jb.end() ? -1.0 : side < 0 ? it->second.xD : it->second.xU; };
-                    const prd::Ctx cx = prd::context(PC, PK, cbBar, runs, burst, clockOf, pr.ok ? (pr.ec != 0 ? pr.ec : pr.cc) : 0);   // opposite-side runs only (0.45.3)
+                    const prd::Ctx cx = prd::context(PC, PK, cbBar, runs, e.ltab, clockOf, pr.ok ? (pr.ec != 0 ? pr.ec : pr.cc) : 0, S.tick);   // opposite-side runs only (0.45.3)
                     int yy = rowY0;
                     if (pr.ok) { const std::string a = "Cause: ", b = "  =>  Effect: ";
                         setFont(f10b); const int wa = (int)getTextWidth(a.c_str(), -1), wbx = (int)getTextWidth(b.c_str(), -1), we = (int)getTextWidth(pr.effect.c_str(), -1); setFont(f10); const int wc = (int)getTextWidth(pr.cause.c_str(), -1);
