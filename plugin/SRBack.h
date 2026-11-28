@@ -24,7 +24,7 @@
 #include <sys/stat.h>
 
 namespace srb {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-11-27): JFile keeps every R line (rall) for lsRevRead's stop-run context
 static const long long IDLE_MS = 5000;
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 inline void makeDir(const std::string& p) {
@@ -81,17 +81,29 @@ inline std::string sessionOf(const struct tm& t) {               // 17:00 CT sta
 }
 inline long long daysOfTm(const struct tm& t) { long long y = t.tm_year + 1900; const unsigned m = (unsigned)t.tm_mon + 1, d = (unsigned)t.tm_mday; y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
     const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; return era * 146097 + (long long)doe - 719468; }
+// (1.1.0, 2026-11-27, lsRevRead 0.45.0 - Rassul 19:27 CT "it can have a context line that mentions if there was a nearby stoprun") EVERY run
+// decision line (R, gold or not) kept for the Reversal Read's context line: run candle end, level, price (ticks), side, burst x, lots, reach (ticks)
+struct RAll { long long end = 0; std::string lvl; long long px = 0; int side = 0; double x = 0; long long vol = 0, ovol = 0, reach = 0; };
 struct JFile {                                                    // the journal read incrementally (append-only); the model only grows
     std::string path; long long off = 0, mt = -1, sz = -1; sr::Journal J; std::string partial;
+    std::vector<RAll> rall;                                       // (1.1.0) every R line of this session's journal (at most 4,000, oldest dropped)
+    void addR(const std::string& l) {
+        if (l.size() < 3 || l[0] != 'R' || l[1] != '|') return;
+        const std::vector<std::string> c = sr::Journal::split(l); if (c.size() < 15) return;
+        RAll r; r.end = std::atoll(c[3].c_str()); r.lvl = c[4]; r.px = std::atoll(c[5].c_str()); r.side = std::atoi(c[6].c_str()); r.x = std::atof(c[8].c_str());
+        r.vol = std::atoll(c[10].c_str()); r.ovol = std::atoll(c[11].c_str()); r.reach = std::atoll(c[12].c_str());
+        if (r.end <= 0 || r.px <= 0 || (r.side != 1 && r.side != -1) || !(r.x >= 0) || r.x > 1000) return;
+        rall.push_back(r); if (rall.size() > 4000) rall.erase(rall.begin(), rall.begin() + 1000);
+    }
     bool poll() {
         long long m = 0, s = 0; if (path.empty() || !stat2(path, m, s)) return false;
-        if (s < off) { off = 0; J = sr::Journal(); partial.clear(); }
+        if (s < off) { off = 0; J = sr::Journal(); partial.clear(); rall.clear(); }
         if (s == sz && m == mt) return false;
         std::ifstream in(path.c_str(), std::ios::binary); if (!in.is_open()) return false;
         in.seekg(off); std::string chunk((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         off += (long long)chunk.size(); mt = m; sz = s;
         std::string all = partial + chunk; size_t a = 0, nl;
-        while ((nl = all.find('\n', a)) != std::string::npos) { J.add(all.substr(a, nl - a)); a = nl + 1; }
+        while ((nl = all.find('\n', a)) != std::string::npos) { const std::string ln = all.substr(a, nl - a); J.add(ln); addR(ln); a = nl + 1; }
         partial = all.substr(a);
         if (partial.size() > 4096) partial.clear();
         return true;
