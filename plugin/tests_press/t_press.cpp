@@ -11,7 +11,7 @@ int main(){
   std::vector<prd::KeyRun> R; { std::ifstream g("runs.txt"); while(std::getline(g,line)){ std::istringstream s(line); prd::KeyRun r; s>>r.end>>r.lvl>>r.px>>r.side>>r.x>>r.vol>>r.ovol>>r.reach; R.push_back(r);} }
   std::map<long long,std::pair<double,double>> BU; { std::ifstream g("burst.txt"); while(std::getline(g,line)){ std::istringstream s(line); long long e; double u,d; s>>e>>u>>d; BU[e]={u,d}; } }
   auto burst=[&](long long e,int side)->double{ auto it=BU.find(e); if(it==BU.end()) return -1; return side<0?it->second.second:it->second.first; };
-  auto clock=[&](int k){ return L[(size_t)k]; };
+  auto clock=[&](int k){ return L[(size_t)k]+std::string(L[(size_t)k].size()<=5 && std::stoi(L[(size_t)k])>=7 && std::stoi(L[(size_t)k])<12 ? " AM" : " PM"); };
   int n=0;
   for(size_t i=0;i<C.size();++i){ if(i+1<C.size() && false) {}
     const std::string& t=L[i]; bool want = (K[i]>=1795770000-1800) && (t=="10:18"||t=="11:57"||t=="8:33"||t=="9:09"||t=="11:51"||t=="11:54"||t=="10:36");

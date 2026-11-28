@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace prd {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // 1.0.1 (2026-11-27 20:11 CT): the context ends "at <the run candle time>"
 static const int NORM_N = 14;
 static const double LABEL_X = 1.9;
 
@@ -172,7 +172,7 @@ inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys
     if (best) {
         const int sd = best->side; const bool rec = reclaimed(C, bk, i, sd, best->px);
         out.ok = true;
-        out.text = srWord(best->x / (kTyp > 0 ? kTyp : 1.0)) + " stop run " + (sd < 0 ? "below " : "above ") + levelName(best->lvl) + " with " + fx(best->x, 1) + "x burst";
+        out.text = srWord(best->x / (kTyp > 0 ? kTyp : 1.0)) + " stop run " + (sd < 0 ? "below " : "above ") + levelName(best->lvl) + " with " + fx(best->x, 1) + "x burst at " + clock(bk);   // (Rassul 20:11 CT "... with 2.2x burst at <time>")
         out.col = rec ? (sd < 0 ? 1 : -1) : (sd < 0 ? -1 : 1); return out;
     }
     // a local swing run: this candle or the 3 before (newest first); its word vs the typical local run burst (the local runs before it, 5+)
@@ -184,7 +184,7 @@ inline Ctx context(const std::vector<Cdl>& C, const std::vector<long long>& keys
         const bool rec = reclaimed(C, k, i, L.side, L.px); const double past = L.side < 0 ? L.px - C[(size_t)k].l : C[(size_t)k].h - L.px;
         out.ok = true;
         out.text = (x > 0 ? srWord(x / (lTyp > 0 ? lTyp : 1.0)) + " local" : std::string("Local")) + " stop run " + (L.side < 0 ? "below the " : "above the ") + clock(L.p) + (L.side < 0 ? " low" : " high")
-            + (x > 0 ? " with " + fx(x, 1) + "x burst" : std::string());
+            + (x > 0 ? " with " + fx(x, 1) + "x burst" : std::string()) + " at " + clock(k);
         (void)past;
         out.col = rec ? (L.side < 0 ? 1 : -1) : (L.side < 0 ? -1 : 1); return out;
     }
