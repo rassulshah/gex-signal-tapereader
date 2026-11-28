@@ -80,3 +80,10 @@ operator new (all its charts), priv_mb = IRT's private memory.
   (736-1,008 MB); BookFlow 7-39 MB; Breakout1 9-23 MB.
 - Next: find what DeltaProfile keeps allocating in draw (own_draw adds 30-140 MB per 9-minute slice and is never freed) - a
   per-draw cache / vector that is appended to but never cleared. Fix needs a DeltaProfile build (his yes; trading hours rule).
+
+## 2026-11-27 22:41 CT (nightly research) - the growth is inside buildNative
+Source: `Perf\permem2-*-20261127.csv` (half session) + `DeltaProfile.status-NQ-180.txt` (2.38.2 OWN_HEAP / SDK_PROBE).
+- DeltaProfile own_live: 638 MB overnight -> 2.9 GB 08:17 -> 5.4 GB 09:40 -> 9.8 GB at 10:52 (IRT priv 12.0 GB; ~40 MB/min own vs 45 MB/min priv, 08:30-10:30). Gap 10:52 -> 11:21 (IRT down / restarted), then 0.1 GB -> 2.8 GB by 19:16.
+- Others flat: BookFlow 10-58 MB, DealerProfile 18-27, ZzoCombo 10-30, HodLod 16-55, Breakout1 0-30.
+- **OWN_HEAP: KB kept per draw - layout 6.2, build 165.5, render 3.8, mst 1.8, self 0.1, aware 0, status 0 (total 177.4, 16,547 draws). SDK_PROBE: 0 bytes kept by one RTARRAYI / RTARRAY / RTARRAYP.** So ~93% of the kept memory is allocated in `DeltaProfile::buildNative` and never freed. It is not the SDK arrays and not the drawing.
+- Containers in buildNative to check first: bk.journal / bk.carry (lines owed when a record write is pending), the latch vector bk.v (latches.push_back at the F-line paths), bk.tc (past top-3 circles), the intelligent-letters / DeltaIntel store, and bk.raCache (pruned at 1523, so probably fine). Next build: add each container's size to OWN_HEAP, cap / prune the one that grows, mock-SDK test under ASan, version bump (crash / freeze fix, B-20261119-1).
